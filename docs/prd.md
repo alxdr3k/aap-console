@@ -47,7 +47,7 @@
 
 | 용어 | 설명 |
 |------|------|
-| **AAP** | AI Application Platform. AI/LLM 서비스 구축을 위한 공통 플랫폼 |
+| **AAP** | AI Assistant Platform. AI/LLM 서비스 구축을 위한 공통 플랫폼 |
 | **App (App ID)** | 타 팀이 등록하는 프로젝트 단위. 모든 인프라 자원의 격리 단위 |
 | **Organization** | 최상위 관리 단위. 복수의 App을 포함 |
 | **PAK** | Project API Key. 간편 인증을 위한 프로젝트 전용 API 키 |
