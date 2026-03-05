@@ -53,7 +53,8 @@
 | **PAK** | Project API Key. 간편 인증을 위한 프로젝트 전용 API 키 |
 | **LiteLLM** | LLM 모델 라우팅 및 프록시 게이트웨이 |
 | **Langfuse** | LLM 호출에 대한 관측성(Observability) 및 트레이싱 플랫폼 |
-| **SealedSecret** | GitOps 환경에서 Secret을 안전하게 저장하기 위한 암호화된 Kubernetes Secret |
+| **SealedSecret** | K8s 클러스터에서 Secret을 안전하게 관리하기 위한 암호화된 Kubernetes Secret. SS Controller가 복호화하여 각 서비스에 주입 |
+| **aap-helm-charts** | AAP 서비스들의 K8s 배포용 Helm Chart 레포. SealedSecret YAML 파일 포함 |
 | **Terraform Workspace** | App별 독립적인 Terraform 실행 및 상태 관리 단위 |
 
 ---
@@ -61,32 +62,58 @@
 ## 3. 시스템 아키텍처 개요
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    AAP Console (Rails)                   │
-│  ┌───────────────┐  ┌───────────────┐  ┌─────────────┐  │
-│  │   Console UI  │  │   API Server  │  │  Background  │  │
-│  │  (Rails View/ │──│  (Rails API)  │──│    Jobs      │  │
-│  │   Hotwire)    │  │               │  │  (Sidekiq)   │  │
-│  └───────────────┘  └───────┬───────┘  └──────┬──────┘  │
-└─────────────────────────────┼─────────────────┼─────────┘
-                              │                 │
-                    ┌─────────▼─────────────────▼──────┐
-                    │      Terraform Orchestrator      │
-                    │  (Workspace 생성/실행/상태 관리)    │
-                    └─────────┬────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              │               │               │
-     ┌────────▼──────┐ ┌─────▼──────┐ ┌──────▼───────┐
-     │   Keycloak    │ │  Langfuse  │ │   LiteLLM    │
-     │  (인증 체계)   │ │ (관측성)    │ │ (LLM 게이트웨이)│
-     └───────────────┘ └────────────┘ └──────────────┘
-              │               │               │
-     ┌────────▼──────┐ ┌─────▼──────┐ ┌──────▼───────┐
-     │  AWS S3       │ │  GitOps    │ │  SealedSecret│
-     │  (스토리지)    │ │  (버전관리)  │ │  (비밀 관리)  │
-     └───────────────┘ └────────────┘ └──────────────┘
+                        ┌──────────────┐
+                        │  사내 SSO IdP │
+                        └──────┬───────┘
+                               │ (Identity Broker)
+┌──────────────────────────────┼──────────────────────────────┐
+│                    AAP Console (Rails)                       │
+│  ┌───────────────┐  ┌───────────────┐  ┌──────────────┐     │
+│  │   Console UI  │  │   API Server  │  │  Background  │     │
+│  │  (Rails View/ │──│  (Rails API)  │──│    Jobs      │     │
+│  │   Hotwire)    │  │               │  │  (Sidekiq)   │     │
+│  └───────────────┘  └───────┬───────┘  └──────┬───────┘     │
+└──────────────────────────────┼─────────────────┼────────────┘
+                               │                 │
+                     ┌─────────▼─────────────────▼───────┐
+                     │      Terraform Orchestrator       │
+                     │  (Workspace 생성/실행/상태 관리)     │
+                     └─────────┬─────────────────────────┘
+                               │
+               ┌───────────────┼───────────────┐
+               │               │               │
+      ┌────────▼──────┐ ┌─────▼──────┐ ┌──────▼──────┐
+      │   Keycloak    │ │  Langfuse  │ │   LiteLLM   │
+      │ (SSO Broker)  │ │  (관측성)   │ │(LLM Gateway)│
+      └───────────────┘ └─────┬──────┘ └─────────────┘
+                               │
+                        ┌──────▼──────┐
+                        │   AWS S3    │
+                        │ (Langfuse   │
+                        │  스토리지)   │
+                        └─────────────┘
+
+┌─ K8s Cluster (AAP Services) ────────────────────────────────┐
+│                                                              │
+│  ┌──────────────────┐    ┌────────────┐  ┌───────────────┐  │
+│  │ SealedSecret     │───▶│  LiteLLM   │  │   Langfuse    │  │
+│  │ Controller       │───▶│  (Secret)  │  │   (Secret)    │  │
+│  └────────┬─────────┘    └────────────┘  └───────────────┘  │
+│           │                                                  │
+└───────────┼──────────────────────────────────────────────────┘
+            │ (SS YAML 저장)
+   ┌────────▼──────────┐
+   │  aap-helm-charts  │
+   │  (Helm Repo)      │
+   └───────────────────┘
 ```
+
+**구성요소 설명**:
+- **사내 SSO IdP**: 조직의 통합 인증 시스템. Keycloak이 이를 브로커하여 AAP 서비스들에 SSO 제공
+- **Keycloak**: SSO IdP를 브로커하여 사용자가 LiteLLM, Langfuse 등에 인증
+- **Langfuse → S3**: Langfuse가 트레이싱 데이터 저장을 위해 S3 사용
+- **SealedSecret Controller**: K8s 클러스터 내에서 각 서비스(LiteLLM, Langfuse 등)의 시크릿을 복호화하여 주입
+- **aap-helm-charts**: K8s 배포용 Helm Chart 레포. SealedSecret YAML 파일이 이 레포에 저장됨
 
 ---
 
@@ -145,11 +172,11 @@ Organization (조직)
 | **SDK Key 발급** | Public Key, Secret Key 자동 발급 후 Console에 표시 |
 | **트레이싱 연동** | LiteLLM과 Langfuse 간 트레이싱 자동 설정 (LiteLLM 환경변수 업데이트) |
 
-### FR-4. S3 스토리지 경로 및 Retention 정책 설정
+### FR-4. Langfuse용 S3 스토리지 경로 및 Retention 정책 설정
 
 | 항목 | 상세 |
 |------|------|
-| **경로 생성** | App 전용 S3 경로 (bucket/prefix) 자동 생성 |
+| **경로 생성** | Langfuse 트레이싱 데이터 저장을 위한 App 전용 S3 경로 (bucket/prefix) 자동 생성 |
 | **Retention 정책** | App 생성 시 Console에서 데이터 보관 주기 설정 가능 |
 | **정책 적용** | S3 Lifecycle Rule로 Retention 정책 자동 반영 |
 
@@ -161,13 +188,14 @@ Organization (조직)
 | **가드레일** | 사용자 선택 기반의 보안 가드레일 적용 (컨텐츠 필터링, 토큰 제한 등) |
 | **Config 반영** | 생성된 설정을 LiteLLM 서버의 config.yaml에 동적 반영 |
 
-### FR-6. SealedSecret 자동 생성 및 GitOps 연동
+### FR-6. SealedSecret 자동 생성 및 Helm Chart 레포 연동
 
 | 항목 | 상세 |
 |------|------|
-| **자동 생성** | 발급된 모든 키/시크릿을 SealedSecret 형태로 자동 변환 |
-| **GitOps 저장** | 생성된 SealedSecret을 GitOps 레포지토리에 자동 커밋 |
-| **키 대상** | Keycloak Client Secret, Langfuse SDK Key, PAK 등 |
+| **자동 생성** | 발급된 모든 키/시크릿을 SealedSecret YAML로 자동 변환 |
+| **레포 저장** | 생성된 SealedSecret YAML을 `aap-helm-charts` 레포에 자동 커밋 |
+| **K8s 반영** | K8s 클러스터의 SealedSecret Controller가 복호화하여 각 서비스에 Secret 주입 |
+| **키 대상** | Keycloak Client Secret, Langfuse SDK Key, LiteLLM 환경변수, PAK 등 |
 
 ### FR-7. 실시간 Terraform 실행 로그 시각화
 
@@ -260,7 +288,7 @@ Step 2. Terraform Workspace 초기화 (App ID 기반)
         └─ 가드레일 설정 적용
   │
   ▼
-Step 4. SealedSecret 생성 및 GitOps 커밋
+Step 4. SealedSecret YAML 생성 및 aap-helm-charts 레포 커밋
   │
   ▼
 Step 5. Health Check 실행 (정합성 검증)
@@ -314,7 +342,8 @@ s3://aap-terraform-state/{organization_id}/{app_id}/terraform.tfstate
 | **관측성** | Langfuse (API 연동) | LLM 트레이싱 프로젝트 및 키 관리 |
 | **LLM 게이트웨이** | LiteLLM | 모델 라우팅, 가드레일, Rate Limit |
 | **스토리지** | AWS S3 (Terraform Provider) | App별 전용 경로 및 Lifecycle 관리 |
-| **비밀 관리** | SealedSecret + GitOps | 암호화된 시크릿의 버전 관리 |
+| **비밀 관리** | SealedSecret (K8s Controller) | K8s 클러스터 내 서비스별 시크릿 암호화 관리 |
+| **K8s 배포** | aap-helm-charts (Helm Repo) | AAP 서비스 배포용 Chart 및 SealedSecret YAML 저장소 |
 | **테스트** | RSpec + FactoryBot | TDD 기반 개발. 단위/통합/시스템 테스트 |
 | **CI/CD** | (미정) | GitOps 기반 배포 파이프라인 |
 
