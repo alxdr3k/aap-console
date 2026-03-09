@@ -77,39 +77,32 @@
                ▼                ▼                ▼
         ┌────────────┐  ┌────────────┐  ┌──────────────┐
         │ AAP Console│  │  LiteLLM   │  │   Langfuse   │──▶ S3
-        │  (Rails)   │  │(LLM G/W)   │  │  (관측성)     │
-        └──┬──────┬──┘  └─────▲──────┘  └──────────────┘
-           │      │           │
-           │      │    Config │ fetch
-           │      │    ┌──────┴───────┐
-           │      ├───▶│ Config Server│ ← Nginx + Git
-           │      │    │(aap-config-  │   (모델 라우팅, 가드레일,
-           │      │    │  server)     │    S3 경로 등)
-           │      │    └──────────────┘
-           │      │     webhook: reload ↑
-           │      │
-    ┌──────▼──────┘
-    │ Terraform
-    │ Orchestrator
-    │ (Background Jobs)
-    └──────┬──────────┐
-           │          │ Config Server Git에 커밋
-           │          ▼
-           │   ┌──────────────┐
-           │   │ aap-config-  │ ← LiteLLM Config (모델, 가드레일, S3 경로)
-           │   │ server (Git) │   App ID별 config 파일 관리
-           │   └──────────────┘
-           │
-           │ SealedSecret YAML 업데이트
-           ▼
-    ┌───────────────────┐
-    │  aap-helm-charts  │
-    │  (Helm Repo)      │
-    │  · LiteLLM Chart  │ ← Langfuse SK/PK (SealedSecret)
-    │  · Langfuse Chart │ ← Retention 정책 (환경변수)
-    │  · Config Server  │ ← Config Server 배포 Chart
-    │  · SealedSecrets  │ ← Keycloak Client Secret, PAK 등
-    └─────────┬─────────┘
+        │  (Rails)   │  │ (LLM G/W)  │  │  (관측성)     │
+        └─────┬──────┘  └──────┬─────┘  └──────────────┘
+              │         webhook│▲config
+              │                ││ fetch
+    ┌─────────▼────────────┐   ││
+    │ Terraform            │   ││
+    │ Orchestrator         │───┘│
+    │ (Background Jobs)    │────┘
+    └──┬───────────┬───────┘
+       │           │ Git 커밋
+       │           ▼
+       │    ┌───────────────────┐
+       │    │  Config Server    │  Nginx + Git (aap-config-server)
+       │    │  · LiteLLM Config │  모델 라우팅, 가드레일, S3 경로
+       │    │  · Langfuse SK/PK │  LiteLLM→Langfuse 트레이싱 인증
+       │    └───────────────────┘
+       │
+       │ SealedSecret / Chart 값 업데이트
+       ▼
+    ┌────────────────────┐
+    │  aap-helm-charts   │
+    │  (Helm Repo)       │
+    │  · Langfuse Chart  │ ← Retention 정책 (환경변수)
+    │  · Config Server   │ ← Config Server 배포 Chart
+    │  · SealedSecrets   │ ← Keycloak Client Secret, PAK 등
+    └─────────┬──────────┘
               │ 배포
               ▼
 ┌─ K8s Cluster ──────────────────────────────────────────┐
@@ -128,7 +121,7 @@
 - **사용자 인증**: 사용자 → Keycloak(SSO IdP 브로커) → 인증 후 AAP Console / LiteLLM / Langfuse 접근
 - **Project 설정 반영** (3경로):
   1. **리소스 생성 (Terraform)**: Keycloak Client 생성 등 Terraform Provider 기반 리소스
-  2. **동적 Config 반영 (Config Server)**: LiteLLM Config(모델 라우팅, 가드레일, S3 경로)를 Config Server Git에 커밋 → Console이 LiteLLM에 reload webhook 전송 → LiteLLM이 Config Server에서 fetch하여 즉시 반영 (재배포 불필요)
+  2. **동적 Config 반영 (Config Server)**: LiteLLM Config(모델 라우팅, 가드레일, S3 경로, Langfuse SK/PK)를 Config Server Git에 커밋 → Console이 LiteLLM에 reload webhook 전송 → LiteLLM이 Config Server에서 fetch하여 즉시 반영 (재배포 불필요)
   3. **Helm Chart 반영 (aap-helm-charts)**: SealedSecret, Langfuse Retention 환경변수 등 배포 시 반영이 필요한 설정
 
 **Config Server 동작 방식**:
@@ -140,7 +133,7 @@
 
 | Helm Chart | Project 생성 시 업데이트되는 내용 | 비고 |
 |------------|-------------------------------|------|
-| **LiteLLM Chart** | Langfuse SK/PK (SealedSecret) | SK/PK는 LiteLLM이 Langfuse 트레이싱에 인증하기 위한 정보. 모델 Config는 Config Server에서 동적 로드 |
+| **LiteLLM Chart** | (해당 없음 — 동적 설정은 Config Server에서 로드) | 모델 Config, Langfuse SK/PK 등은 Config Server에서 동적 관리 |
 | **Langfuse Chart** | Retention 정책 (환경변수) | 데이터 보관 주기 설정 |
 | **Config Server Chart** | Config Server 배포 설정 | `aap-config-server` 레포의 서버 코드를 배포 |
 
@@ -157,7 +150,7 @@ Organization (조직)
       │
       ├── Langfuse 설정 ─────────── [Langfuse API]
       │    ├── Langfuse Org/Project 생성
-      │    ├── SDK Key 발급 (PK/SK) → LiteLLM Chart (SealedSecret)
+      │    ├── SDK Key 발급 (PK/SK) → Config Server (LiteLLM 동적 로드)
       │    └── Retention 정책 → Langfuse Chart (환경변수)
       │
       ├── LiteLLM 설정 ──────────── [Config Server]
@@ -212,7 +205,7 @@ Organization (조직)
 |------|------|
 | **프로젝트 생성** | Langfuse API를 통해 Project별 독립 Langfuse 프로젝트 자동 생성 |
 | **SDK Key 발급** | Public Key, Secret Key 자동 발급. Console에서의 조회는 **플랫폼 관리자만 가능** |
-| **트레이싱 연동** | 발급된 Langfuse SK/PK를 LiteLLM Chart에 반영하여 트레이싱 자동 연동 |
+| **트레이싱 연동** | 발급된 Langfuse SK/PK를 Config Server에 반영하여 LiteLLM이 동적으로 로드, 트레이싱 자동 연동 |
 
 ### FR-5. S3 경로 및 Retention 정책 설정
 
@@ -238,8 +231,7 @@ Organization (조직)
 | **자동 생성** | 발급된 모든 키/시크릿을 SealedSecret YAML로 자동 변환 |
 | **레포 저장** | 생성된 SealedSecret YAML을 `aap-helm-charts` 레포에 자동 커밋 |
 | **K8s 반영** | K8s 클러스터의 SealedSecret Controller가 복호화하여 각 서비스에 Secret 주입 |
-| **키 대상** | Keycloak Client Secret, Langfuse SK/PK, PAK 등 |
-| **Chart별 매핑** | Langfuse SK/PK → LiteLLM Chart (SealedSecret). 모델 Config 등 동적 설정은 Config Server에서 별도 관리 |
+| **키 대상** | Keycloak Client Secret, PAK 등 (Langfuse SK/PK는 Config Server에서 관리) |
 
 ### FR-8. 실시간 Terraform 실행 로그 시각화
 
@@ -274,7 +266,8 @@ Organization (조직)
 
 ### 6.1 보안
 
-- 발급된 시크릿(Keycloak Client Secret, Langfuse SK/PK, PAK 등)은 SealedSecret으로 암호화하여 관리
+- 발급된 시크릿(Keycloak Client Secret, PAK 등)은 SealedSecret으로 암호화하여 관리
+- Langfuse SK/PK는 Config Server Git에서 관리 (LiteLLM이 동적 로드)
 - Console 접근은 조직 SSO를 통한 인증 필수
 - Project 간 서비스 설정 격리 (테넌트 격리)
 - API 통신 시 TLS 필수
@@ -328,12 +321,12 @@ Step 2. Terraform Workspace 초기화 (App ID 기반)
   │
   ├──▶ Step 4a. Config Server 반영 [Git 커밋 + Webhook]
   │     ├─ LiteLLM Config (모델 라우팅, 가드레일, S3 경로) → Git 커밋
+  │     ├─ Langfuse SK/PK → Git 커밋 (LiteLLM이 동적 로드)
   │     └─ Console → LiteLLM reload webhook → 즉시 반영
   │
   └──▶ Step 4b. aap-helm-charts 반영 [Git 커밋]
-        ├─ Langfuse SK/PK → LiteLLM Chart (SealedSecret)
         ├─ Retention 정책 → Langfuse Chart (환경변수)
-        └─ 기타 Secret → 해당 Chart (SealedSecret)
+        └─ 기타 Secret → 해당 Chart (SealedSecret: Keycloak Client Secret, PAK 등)
   │
   ▼
 Step 5. Health Check 실행 (정합성 검증)
