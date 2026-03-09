@@ -149,12 +149,13 @@ Organization (조직)
       ├── LiteLLM 설정 ──────────── [Config Server]
       │    ├── 모델 라우팅 Config
       │    ├── 가드레일 설정
-      │    └── App별 S3 경로 (prefix)
+      │    ├── App별 S3 경로 (prefix)
+      │    └── App별 S3 Retention 설정
       │
       └── Terraform State (App ID별 분리)
 ```
 
-- **생명주기**: Project 생성(설정 추가) → 운영 → 설정 변경 → 삭제(설정 제거)
+- **생명주기**: Project 생성(설정 추가) → 운영 → 설정 변경 → 삭제(전체 롤백)
 
 ---
 
@@ -164,21 +165,44 @@ Organization (조직)
 
 | 항목 | 상세 |
 |------|------|
-| **생성** | 신규 Organization 등록. 조직명, 설명, 관리자 정보 입력 |
-| **조회** | Organization 목록 및 상세 정보 (소속 Project 현황 포함) 확인 |
-| **수정** | Organization 정보 변경 (이름, 설명, 관리자 등) |
+| **생성** | 신규 Organization 등록. 조직명, 설명 입력. 생성 시 멤버 목록 관리 (초기 관리자 지정) |
+| **조회** | Organization 목록 및 상세 정보 (소속 Project 현황, 멤버 목록 포함) 확인 |
+| **수정** | Organization 정보 변경 (이름, 설명) 및 멤버 추가/제거/권한 변경 |
 | **삭제** | Organization 삭제 시 하위 모든 Project의 설정도 함께 제거 |
 
-### FR-2. Project 관리 (CRUD)
+### FR-2. 접근제어 (RBAC)
+
+Organization 단위로 사용자 접근 권한을 관리한다. 하위 Project에 대한 접근 범위도 Organization 멤버십에 의해 결정된다.
 
 | 항목 | 상세 |
 |------|------|
-| **생성** | Organization 하위에 신규 Project 등록. 이름, 설명, 소유 팀 정보 입력. 생성 시 App ID 자동 발급 |
+| **권한 수준** | `admin` — Org 설정 및 멤버 관리, Project 생성/삭제 가능 <br> `write` — Project 설정 변경 가능 <br> `read` — Project 조회만 가능 |
+| **멤버 관리** | Organization 생성/수정 시 사용자별 권한 수준을 지정하여 멤버 목록 관리 |
+| **권한 상속** | Organization 멤버십이 하위 모든 Project에 동일하게 적용 |
+| **Console UI 제어** | 권한 수준에 따라 UI 요소(버튼, 메뉴 등) 활성/비활성 처리 |
+| **API 제어** | 모든 API 엔드포인트에서 요청자의 권한 수준을 검증 |
+
+### FR-3. Project 관리 (CRUD)
+
+| 항목 | 상세 |
+|------|------|
+| **생성** | Organization 하위에 신규 Project 등록. 이름, 설명 입력. 생성 시 App ID 자동 발급 |
 | **조회** | Project 목록 및 상세 정보 (각 서비스에 추가된 설정 현황, 발급된 App ID) 확인 |
 | **수정** | Project 설정 변경 (인증 방식, 모델 라우팅, Retention 정책 등) |
-| **삭제** | Project 삭제 시 각 서비스에서 해당 App ID 관련 설정 자동 제거 (Terraform destroy) |
+| **삭제** | Project 삭제 시 생성/수정 과정에서 추가된 **모든** 내역을 롤백. 아래 전체 대상 참고 |
 
-### FR-3. 인증 체계 자동 구성
+**삭제 시 롤백 대상**:
+
+| 대상 | 롤백 내용 |
+|------|-----------|
+| **Terraform 리소스** | `terraform destroy` 실행 (Keycloak Client 등) |
+| **Langfuse 리소스** | Langfuse API를 통해 프로젝트 및 SDK Key 삭제 |
+| **Config Server** | 해당 App의 LiteLLM Config, Langfuse SK/PK 설정을 Git에서 제거 후 커밋 → reload webhook |
+| **aap-helm-charts** | 해당 App 관련 SealedSecret, Retention 환경변수 등을 Git에서 제거 후 커밋 |
+
+> **구현 고려사항**: 동일 파일 내에서 여러 Project의 설정이 공존할 수 있으므로, Project별 설정 격리 전략이 필요하다. 삭제 시 다른 Project의 설정을 훼손하지 않도록 App ID 기반의 섹션 분리 또는 파일 분리 방식을 설계해야 한다.
+
+### FR-4. 인증 체계 자동 구성
 
 사용자가 Project 생성 시 인증 방식을 선택하면 자동으로 구성된다.
 
@@ -192,19 +216,13 @@ Organization (조직)
 - Keycloak Terraform Provider를 활용하여 Client 생성을 자동화한다.
 - PAK 선택 시에는 Terraform 없이 Console 자체에서 키를 생성한다.
 
-### FR-4. Langfuse 프로젝트 생성 및 SDK Key 발급
+### FR-5. Langfuse 프로젝트 생성 및 SDK Key 발급
 
 | 항목 | 상세 |
 |------|------|
 | **프로젝트 생성** | Langfuse API를 통해 Project별 독립 Langfuse 프로젝트 자동 생성 |
 | **SDK Key 발급** | Public Key, Secret Key 자동 발급. Console에서의 조회는 **플랫폼 관리자만 가능** |
 | **트레이싱 연동** | 발급된 Langfuse SK/PK를 Config Server에 반영하여 LiteLLM이 동적으로 로드, 트레이싱 자동 연동 |
-
-### FR-5. S3 경로 및 Retention 정책 설정
-
-| 항목 | 상세 |
-|------|------|
-| **S3 경로** | Project 생성 시 App별 S3 버킷 경로 (prefix)를 LiteLLM Config에 추가. 기존 공유 버킷을 사용하며 별도 버킷 생성 불필요 |
 | **Retention 정책** | Project 생성 시 Console에서 데이터 보관 주기 설정. Langfuse Chart의 환경변수로 반영 |
 
 ### FR-6. LiteLLM Config 자동 생성 및 동적 반영
@@ -213,7 +231,8 @@ Organization (조직)
 |------|------|
 | **모델 라우팅** | 사용할 LLM 목록 선택 및 모델별 정책(Rate Limit 등) 구성 |
 | **가드레일** | 사용자 선택 기반의 보안 가드레일 적용 (컨텐츠 필터링, 토큰 제한 등) |
-| **S3 경로** | App별 S3 버킷 경로 (prefix)를 Config에 포함 |
+| **S3 경로** | App별 S3 버킷 경로 (prefix)를 Config에 포함. 기존 공유 버킷을 사용하며 별도 버킷 생성 불필요 |
+| **S3 Retention** | App별 S3 데이터 보관 주기를 LiteLLM Config에 설정 |
 | **Config 반영** | 생성된 Config를 Config Server Git 레포에 커밋. LiteLLM 재배포 없이 동적 반영 |
 | **Reload 방식** | Console → LiteLLM에 reload webhook 전송 → LiteLLM이 Config Server에서 fetch. Polling(5분 주기)을 fallback으로 운용 |
 
@@ -262,6 +281,7 @@ Organization (조직)
 - 발급된 시크릿(Keycloak Client Secret, PAK 등)은 SealedSecret으로 암호화하여 관리
 - Langfuse SK/PK는 Config Server Git에서 관리 (LiteLLM이 동적 로드)
 - Console 접근은 조직 SSO를 통한 인증 필수
+- Organization 단위 RBAC (admin/write/read) 기반 접근제어
 - Project 간 서비스 설정 격리 (테넌트 격리)
 - API 통신 시 TLS 필수
 
@@ -394,26 +414,26 @@ s3://aap-terraform-state/{organization_id}/{app_id}/terraform.tfstate
 ### Phase 1: 핵심 기반 구축 (MVP)
 
 - Rails 프로젝트 초기 설정 및 인증 연동
-- Organization CRUD (생성/조회/수정/삭제)
-- Project CRUD (생성/조회/수정/삭제) + App ID 자동 발급
+- Organization CRUD + 멤버십 관리 (FR-1)
+- 접근제어 RBAC 기본 구현 (FR-2)
+- Project CRUD + App ID 자동 발급 (FR-3)
 - Terraform Workspace 기본 연동 (생성/실행/상태 조회)
-- Keycloak 인증 체계 자동 구성 (OIDC 우선)
+- Keycloak 인증 체계 자동 구성 — OIDC 우선 (FR-4)
 - 기본 UI (Organization/Project 목록, 상세, 생성 폼)
 
 ### Phase 2: 서비스 설정 자동화 확장
 
 - Config Server 구축 (`aap-config-server`) 및 Helm Chart 배포
-- LiteLLM Config 자동 생성 및 동적 반영 (webhook + polling fallback)
-- Langfuse 프로젝트 생성 및 SDK Key 발급
-- S3 경로 설정 (LiteLLM Config 내) 및 Retention 정책 (Langfuse 환경변수)
-- SealedSecret 생성 및 aap-helm-charts 연동
+- LiteLLM Config 자동 생성 및 동적 반영 — S3 경로/Retention 포함 (FR-6)
+- Langfuse 프로젝트 생성, SDK Key 발급 및 Retention 정책 설정 (FR-5)
+- SealedSecret 생성 및 aap-helm-charts 연동 (FR-7)
 
 ### Phase 3: 운영 안정성 강화
 
-- 실시간 Terraform 로그 스트리밍 (ActionCable)
-- 설정 변경 이력 관리 및 버전 롤백
-- Health Check 자동화
-- Project 삭제 시 설정 제거 (destroy) 자동화
+- 실시간 Terraform 로그 스트리밍 — ActionCable (FR-8)
+- 설정 변경 이력 관리 및 버전 롤백 (FR-9)
+- Health Check 자동화 (FR-10)
+- Project 삭제 시 전체 롤백 자동화 (FR-3 삭제 요구사항)
 
 ### Phase 4: 고도화
 
