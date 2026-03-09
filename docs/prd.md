@@ -37,7 +37,7 @@
 
 | 역할 | 설명 |
 |------|------|
-| **팀 관리자** | 신규 App을 생성하고 인프라 설정을 관리하는 타 부서 담당자 |
+| **팀 관리자** | 신규 App을 생성하고 서비스 설정을 관리하는 타 부서 담당자 |
 | **플랫폼 관리자** | AAP 전체 Organization을 관리하고 정책을 설정하는 운영팀 |
 | **개발자** | 발급된 인증 정보 및 SDK Key를 활용하여 서비스를 개발하는 사용자 |
 
@@ -67,52 +67,55 @@
                          └──────┬───────┘
                                 │
                          ┌──────▼───────┐
-                         │   Keycloak   │ ◀─── (B) Terraform이 Client 설정 업데이트
+                         │   Keycloak   │
                          │ (SSO Broker) │
                          └──────┬───────┘
-                    (A) 인증 후  │
+                       인증 후   │
                ┌────────────────┼────────────────┐
                ▼                ▼                ▼
         ┌────────────┐  ┌────────────┐  ┌──────────────┐
-        │ AAP Console│  │  LiteLLM   │  │   Langfuse   │
-        │  (Rails)   │  │(LLM G/W)   │  │  (관측성)     │──▶ S3
+        │ AAP Console│  │  LiteLLM   │  │   Langfuse   │──▶ S3
+        │  (Rails)   │  │(LLM G/W)   │  │  (관측성)     │
         └─────┬──────┘  └────────────┘  └──────────────┘
               │
     ┌─────────▼──────────┐
     │ Terraform          │
-    │ Orchestrator       │──── (B) 각 서비스 설정 업데이트 ──┐
-    │ (Background Jobs)  │                                  │
-    └────────────────────┘                                  │
-              │                                             │
-              ▼                                             ▼
-    ┌─────────────────┐              ┌──────────────────────────────┐
-    │ aap-helm-charts │              │  서비스 설정 업데이트 대상     │
-    │ (Helm Repo)     │              │  · Keycloak: Client 생성     │
-    │ · LiteLLM Chart │              │  · Langfuse: Org/Project 생성│
-    │ · Langfuse Chart│              │  · LiteLLM: Config 추가      │
-    │ · SealedSecrets │              │  · S3: 경로/Retention 설정    │
-    └─────────────────┘              └──────────────────────────────┘
-
-┌─ K8s Cluster ──────────────────────────────────────────────┐
-│                                                             │
-│  ┌──────────────────┐                                       │
-│  │ SealedSecret     │───▶ LiteLLM Pod (Langfuse SK/PK 등)  │
-│  │ Controller       │───▶ Langfuse Pod (S3 접근 정보 등)     │
-│  └──────────────────┘───▶ 기타 서비스 Pods                   │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+    │ Orchestrator       │
+    │ (Background Jobs)  │
+    └─────────┬──────────┘
+              │ Helm Chart / SealedSecret YAML 업데이트
+              ▼
+    ┌───────────────────┐
+    │  aap-helm-charts  │
+    │  (Helm Repo)      │
+    │  · LiteLLM Chart  │ ← Langfuse SK/PK (SealedSecret), 모델 Config
+    │  · Langfuse Chart │ ← S3 버킷 경로 (설정값)
+    │  · SealedSecrets  │ ← Keycloak Client Secret, PAK 등
+    └─────────┬─────────┘
+              │ 배포
+              ▼
+┌─ K8s Cluster ──────────────────────────────────────────┐
+│                                                         │
+│  ┌──────────────────┐                                   │
+│  │ SealedSecret     │───▶ 각 서비스 Pod에 Secret 주입   │
+│  │ Controller       │                                   │
+│  └──────────────────┘                                   │
+│                                                         │
+│  Keycloak · LiteLLM · Langfuse · ...                   │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
 ```
 
-**핵심 흐름**:
-- **(A) 사용자 인증**: 사용자 → Keycloak(SSO IdP 브로커) → 인증 후 AAP Console / LiteLLM / Langfuse 접근
-- **(B) App 프로비저닝**: AAP Console → Terraform Orchestrator → 기존 공유 서비스들의 설정을 업데이트
-  - 새로운 인프라를 생성하는 것이 아니라, 기존 서비스에 App을 위한 설정을 추가하는 방식
+**흐름 설명**:
+- **사용자 인증**: 사용자 → Keycloak(SSO IdP 브로커) → 인증 후 AAP Console / LiteLLM / Langfuse 접근
+- **App 설정 반영**: AAP Console → Terraform Orchestrator → aap-helm-charts 수정 → K8s 배포로 각 서비스에 설정 반영
 
-**Helm Chart와 Secret 매핑**:
-| Helm Chart | 포함되는 Secret/설정 |
-|------------|---------------------|
-| **LiteLLM Chart** | Langfuse SK/PK (트레이싱 인증), 모델 라우팅 Config, 가드레일 설정 |
-| **Langfuse Chart** | S3 접근 정보 (버킷/경로, 인증 정보) |
+**Helm Chart별 업데이트 내용**:
+
+| Helm Chart | App 생성 시 업데이트되는 내용 | 비고 |
+|------------|----------------------------|------|
+| **LiteLLM Chart** | Langfuse SK/PK (SealedSecret), 모델 라우팅 Config, 가드레일 설정 | SK/PK는 LiteLLM이 Langfuse 트레이싱에 인증하기 위한 정보 |
+| **Langfuse Chart** | S3 버킷 경로 (설정값) | S3 인증 정보는 공유 (앱별 경로만 추가) |
 
 ---
 
@@ -134,14 +137,13 @@ Organization (조직)
       │    └── 가드레일 설정
       │
       ├── S3 설정
-      │    ├── Langfuse용 경로 (bucket/prefix) 생성
-      │    └── Retention 정책 → Langfuse Chart에 반영
+      │    ├── Langfuse용 버킷 경로 (prefix) 추가 → Langfuse Chart 설정값 반영
+      │    └── Retention 정책 적용
       │
       └── Terraform State (App별 분리)
 ```
 
-- **설정 업데이트 모델**: App은 독립적인 인프라를 갖는 것이 아니라, 기존 공유 서비스(Keycloak, Langfuse, LiteLLM 등)에 해당 App을 지원하기 위한 설정을 추가하는 방식이다.
-- **생명주기**: App 생성(설정 추가) → 운영 → 설정 변경 → 삭제(설정 제거) 전체 주기를 관리한다.
+- **생명주기**: App 생성(설정 추가) → 운영 → 설정 변경 → 삭제(설정 제거)
 
 ---
 
@@ -182,10 +184,10 @@ Organization (조직)
 
 | 항목 | 상세 |
 |------|------|
-| **경로 생성** | Langfuse 트레이싱 데이터 저장을 위한 App 전용 S3 경로 (bucket/prefix) 자동 생성 |
+| **경로 추가** | App 생성 시 Langfuse용 S3 버킷 경로 (prefix) 추가. S3 인증 정보는 기존 공유 자격증명을 사용 |
 | **Retention 정책** | App 생성 시 Console에서 데이터 보관 주기 설정 가능 |
 | **정책 적용** | S3 Lifecycle Rule로 Retention 정책 자동 반영 |
-| **Chart 반영** | S3 접근 정보는 Langfuse Chart에 반영 (Langfuse가 S3에 접근하기 위한 설정) |
+| **Chart 반영** | 버킷 경로는 Langfuse Chart 설정값으로 반영 (SealedSecret 불필요) |
 
 ### FR-5. LiteLLM Config 자동 생성
 
@@ -193,7 +195,7 @@ Organization (조직)
 |------|------|
 | **모델 라우팅** | 사용할 LLM 목록 선택 및 모델별 정책(Rate Limit 등) 구성 |
 | **가드레일** | 사용자 선택 기반의 보안 가드레일 적용 (컨텐츠 필터링, 토큰 제한 등) |
-| **Config 반영** | 생성된 설정을 LiteLLM 서버의 config.yaml에 동적 반영 |
+| **Config 반영** | 생성된 설정을 aap-helm-charts의 LiteLLM Chart (config.yaml)에 반영 |
 
 ### FR-6. SealedSecret 자동 생성 및 Helm Chart 레포 연동
 
@@ -202,8 +204,8 @@ Organization (조직)
 | **자동 생성** | 발급된 모든 키/시크릿을 SealedSecret YAML로 자동 변환 |
 | **레포 저장** | 생성된 SealedSecret YAML을 `aap-helm-charts` 레포에 자동 커밋 |
 | **K8s 반영** | K8s 클러스터의 SealedSecret Controller가 복호화하여 각 서비스에 Secret 주입 |
-| **키 대상** | Keycloak Client Secret, PAK 등 |
-| **Chart별 매핑** | Langfuse SK/PK → LiteLLM Chart, S3 접근 정보 → Langfuse Chart |
+| **키 대상** | Keycloak Client Secret, Langfuse SK/PK, PAK 등 |
+| **Chart별 매핑** | Langfuse SK/PK → LiteLLM Chart의 SealedSecret으로 반영 |
 
 ### FR-7. 실시간 Terraform 실행 로그 시각화
 
@@ -218,7 +220,7 @@ Organization (조직)
 
 | 항목 | 상세 |
 |------|------|
-| **이력 관리** | App별 인프라 설정 변경 시마다 버전 기록 (GitOps 커밋 기반) |
+| **이력 관리** | App별 설정 변경 시마다 버전 기록 (aap-helm-charts 커밋 기반) |
 | **버전 조회** | Console에서 변경 이력 목록 및 diff 확인 |
 | **롤백** | 이전 안정 버전의 Terraform 구성으로 즉시 복구 가능 |
 | **감사 로그** | 누가, 언제, 어떤 설정을 변경했는지 추적 |
@@ -238,7 +240,7 @@ Organization (조직)
 
 ### 6.1 보안
 
-- 모든 발급된 시크릿은 SealedSecret으로 암호화하여 관리
+- 발급된 시크릿(Keycloak Client Secret, Langfuse SK/PK, PAK 등)은 SealedSecret으로 암호화하여 관리
 - Console 접근은 조직 SSO를 통한 인증 필수
 - App 간 서비스 설정 격리 (테넌트 격리)
 - API 통신 시 TLS 필수
@@ -295,9 +297,10 @@ Step 2. Terraform Workspace 초기화 (App ID 기반)
         └─ 가드레일 설정 적용
   │
   ▼
-Step 4. SealedSecret YAML 생성 및 aap-helm-charts 레포 커밋
+Step 4. aap-helm-charts 레포 업데이트 및 커밋
   │     ├─ Langfuse SK/PK → LiteLLM Chart (SealedSecret)
-  │     └─ S3 접근 정보 → Langfuse Chart (SealedSecret)
+  │     ├─ S3 버킷 경로 → Langfuse Chart (설정값)
+  │     └─ 기타 Secret → 해당 Chart (SealedSecret)
   │
   ▼
 Step 5. Health Check 실행 (정합성 검증)
@@ -344,9 +347,9 @@ s3://aap-terraform-state/{organization_id}/{app_id}/terraform.tfstate
 | **Backend** | Ruby on Rails 7+ | API 서버, 비즈니스 로직, Background Job 처리 |
 | **Frontend** | Rails View + Hotwire (Turbo/Stimulus) | SPA 없이 실시간 UI 업데이트 |
 | **실시간 통신** | ActionCable (WebSocket) | Terraform 로그 스트리밍 |
-| **Background Job** | Sidekiq + Redis | Terraform 실행, 비동기 프로비저닝 |
+| **Background Job** | Sidekiq + Redis | Terraform 실행, 비동기 설정 처리 |
 | **Database** | PostgreSQL | App 메타데이터, 실행 이력, 감사 로그 |
-| **IaC** | Terraform | 인프라 프로비저닝 핵심 도구 |
+| **IaC** | Terraform | aap-helm-charts 업데이트를 통한 서비스 설정 자동화 |
 | **인증** | Keycloak (Terraform Provider) | SAML/OIDC/OAuth Client 자동 구성 |
 | **관측성** | Langfuse (API 연동) | LLM 트레이싱 프로젝트 및 키 관리 |
 | **LLM 게이트웨이** | LiteLLM | 모델 라우팅, 가드레일, Rate Limit |
@@ -377,7 +380,7 @@ s3://aap-terraform-state/{organization_id}/{app_id}/terraform.tfstate
 - Keycloak 인증 체계 자동 구성 (OIDC 우선)
 - 기본 UI (App 목록, 상세, 생성 폼)
 
-### Phase 2: 인프라 자동화 확장
+### Phase 2: 서비스 설정 자동화 확장
 
 - Langfuse 프로젝트 생성 및 SDK Key 발급
 - S3 스토리지 경로 및 Retention 정책
@@ -419,7 +422,7 @@ s3://aap-terraform-state/{organization_id}/{app_id}/terraform.tfstate
 | Keycloak | Terraform Provider + Admin API | 인증 체계 구성 |
 | Langfuse | REST API | 프로젝트/키 관리 |
 | LiteLLM | Config 파일 + API | 모델 라우팅 설정 |
-| S3 | Terraform Provider | Langfuse용 스토리지 관리 |
+| S3 | Terraform Provider | Langfuse용 버킷 경로 관리 (인증 정보는 공유) |
 | aap-helm-charts | Git API | SealedSecret YAML 및 Helm Chart 관리 |
 
 ---
