@@ -323,14 +323,57 @@ Langfuse 웹 UI가 내부적으로 사용하는 tRPC API를 직접 호출한다.
 | **Config 반영** | Console이 Config Server Admin API (`POST /api/v1/admin/configs`)로 설정 데이터 전달. Config Server가 Git commit & push 수행 |
 | **Reload 방식** | Console은 Config Server Admin API 호출까지만 수행. Git 저장, 인메모리 갱신, LiteLLM 전파는 Config Server 모듈이 자동 처리 |
 
-### FR-7. 실시간 프로비저닝 로그 시각화
+### FR-7. 프로비저닝 파이프라인 관리
+
+Project 생성/수정/삭제 시 여러 외부 서비스(Keycloak, Langfuse, Config Server)에 순차/병렬로 리소스를 생성하는 프로비저닝 파이프라인의 실행, 실패 복구, 상태 추적을 관리한다.
+
+#### FR-7.1 프로비저닝 상태 머신
+
+각 프로비저닝 작업은 아래 상태를 거치며, Console DB에 단계별 상태가 기록된다.
+
+```
+pending → in_progress → completed
+                │
+                ├─→ failed → retrying → in_progress
+                │                          │
+                │                          └─→ failed (max retries 초과)
+                │                                │
+                └──────────────────────────────→ rolling_back → rolled_back
+                                                     │
+                                                     └─→ rollback_failed
+```
+
+| 상태 | 설명 |
+|------|------|
+| `pending` | 작업 대기 중 (SolidQueue에 enqueue됨) |
+| `in_progress` | 프로비저닝 단계 실행 중 |
+| `completed` | 모든 단계 성공 |
+| `failed` | 특정 단계 실패. 자동 재시도 대상 |
+| `retrying` | 재시도 진행 중 |
+| `rolling_back` | 보상 트랜잭션 실행 중 (이미 생성된 리소스 정리) |
+| `rolled_back` | 보상 트랜잭션 완료 |
+| `rollback_failed` | 보상 트랜잭션 실패. **플랫폼 관리자 수동 개입 필요** |
+
+#### FR-7.2 단계별 실행 및 실패 처리
+
+프로비저닝은 단계(step)의 순서로 구성되며, 각 단계의 성공/실패가 독립적으로 기록된다.
+
+| 요구사항 | 상세 |
+|----------|------|
+| **단계별 상태 기록** | 각 단계(Keycloak Client 생성, Langfuse 프로젝트 생성, Config Server 설정 반영 등)의 시작/성공/실패 시각과 결과를 Console DB에 기록 |
+| **자동 재시도** | 외부 API 호출 실패 시 자동 재시도. 재시도 횟수 및 정책은 단계별로 설정 가능 |
+| **보상 트랜잭션** | 재시도 한도 초과 시 이미 완료된 단계를 역순으로 롤백 (예: Langfuse 실패 시 → 이미 생성된 Keycloak Client 삭제) |
+| **멱등성** | 각 단계는 멱등하게 설계. 재시도 시 중복 리소스가 생성되지 않아야 함 (생성 전 존재 여부 확인) |
+| **부분 실패 허용** | 독립적인 단계(예: Step 2a/2b)는 하나가 실패해도 다른 단계는 계속 진행. 의존 관계가 있는 단계만 차단 |
+
+#### FR-7.3 실시간 로그 시각화
 
 | 항목 | 상세 |
 |------|------|
-| **로그 스트리밍** | Project 생성/수정/삭제 시 각 단계(Keycloak Client 생성, Langfuse 프로젝트 생성, Config 반영 등)의 진행 상황을 실시간 전송 |
-| **UI 표시** | Console에서 프로비저닝 진행 상황을 실시간으로 확인 가능 (단계별 성공/실패/진행중 표시) |
-| **구현 방식** | ActionCable(WebSocket) 기반 실시간 스트리밍 |
-| **이력 보관** | 완료된 프로비저닝 로그는 저장하여 사후 조회 가능 |
+| **로그 스트리밍** | 프로비저닝 각 단계의 진행 상황을 ActionCable(WebSocket) 기반으로 실시간 전송 |
+| **UI 표시** | Console에서 단계별 성공/실패/진행중/재시도중 상태를 실시간 확인 가능 |
+| **이력 보관** | 완료된 프로비저닝 로그(성공/실패 모두)는 저장하여 사후 조회 가능 |
+| **수동 재시도** | `failed` 또는 `rollback_failed` 상태의 작업을 관리자가 Console에서 수동 재시도 가능 |
 
 ### FR-8. 설정 변경 이력 관리 및 버전 롤백
 
@@ -389,8 +432,8 @@ Console은 Config Server Admin API만 호출한다. Git 접근, kubeseal, kubect
 
 ### 6.4 가용성
 
-- 외부 API 호출 실패 시 자동 재시도 및 롤백 메커니즘 (이미 생성된 리소스 정리)
-- 공유 서비스(Keycloak, Langfuse, LiteLLM) 장애 시 부분 실패 처리 및 재시도
+- 외부 API 호출 실패 시 자동 재시도 및 보상 트랜잭션으로 복구 (FR-7.2 참조)
+- 공유 서비스 장애 시 부분 실패 허용 — 독립 단계는 계속 진행, 의존 단계만 차단 (FR-7.2 참조)
 
 ### 6.5 동시성 제어
 
@@ -398,8 +441,8 @@ Console은 Config Server Admin API만 호출한다. Git 접근, kubeseal, kubect
 
 | 대상 | 동시성 제어 방식 |
 |------|------------------|
-| **Console DB (SQLite)** | SQLite WAL 모드로 동시 읽기 허용, 쓰기는 단일 프로세스 직렬화. 단일 인스턴스 배포이므로 DB 레벨 동시성 문제 최소화. Project 상태를 `pending → provisioning → active → deleting` 등의 상태 머신으로 관리하여 중복 처리 방지 |
-| **외부 API 호출** | SolidQueue Job 직렬화로 동일 Project에 대한 동시 프로비저닝 방지. Keycloak Admin API / Langfuse tRPC API 호출은 멱등성을 고려하여 설계 (생성 전 존재 여부 확인) |
+| **Console DB (SQLite)** | SQLite WAL 모드로 동시 읽기 허용, 쓰기는 단일 프로세스 직렬화. 단일 인스턴스 배포이므로 DB 레벨 동시성 문제 최소화. 프로비저닝 상태 머신(FR-7.1)으로 중복 처리 방지 |
+| **외부 API 호출** | SolidQueue Job 직렬화로 동일 Project에 대한 동시 프로비저닝 방지. 각 단계는 멱등하게 설계 (FR-7.2) |
 | **Config Server API** | 동일 Project에 대한 동시 API 호출은 SolidQueue Job 직렬화로 방지. Config Server 내부의 Git 충돌 처리는 Config Server 모듈 책임 |
 | **Background Job (SolidQueue)** | 동일 Project에 대한 Job은 직렬 실행을 보장 (unique job 또는 큐 기반 직렬화). 서로 다른 Project의 Job은 병렬 실행 가능 |
 
@@ -552,7 +595,7 @@ Pod
 
 ### Phase 3: 운영 안정성 강화
 
-- 실시간 프로비저닝 로그 스트리밍 — ActionCable (FR-7)
+- 프로비저닝 파이프라인 관리 — 상태 머신, 자동 재시도, 보상 트랜잭션, 실시간 로그 (FR-7)
 - 설정 변경 이력 관리 및 버전 롤백 (FR-8)
 - Health Check 자동화 (FR-9)
 - Project 삭제 시 전체 롤백 자동화 (FR-3 삭제 요구사항)
@@ -574,9 +617,9 @@ Pod
 |--------|--------|-----------|
 | Langfuse tRPC API 호환성 | 중간 | 내부 API이므로 Langfuse 버전 업그레이드 시 breaking change 가능. Langfuse 버전 고정 및 업그레이드 전 tRPC 호환성 테스트 필수 |
 | 공유 서비스(Keycloak/Langfuse/LiteLLM) 장애 | 높음 | Circuit Breaker 패턴, 부분 실패 허용, 재시도 로직 |
-| 외부 API 호출 중 부분 실패 (일부 리소스만 생성됨) | 중간 | 보상 트랜잭션 패턴으로 이미 생성된 리소스 자동 정리. Console DB에 프로비저닝 단계별 상태 기록 |
+| 외부 API 호출 중 부분 실패 (일부 리소스만 생성됨) | 중간 | 프로비저닝 파이프라인의 자동 재시도 + 보상 트랜잭션으로 복구 (FR-7.1, FR-7.2) |
 | Config Server 장애 시 LiteLLM config 갱신 불가 | 중간 | LiteLLM은 마지막 설정으로 운영 지속. Config Server 복구 시 자동 재동기화 |
-| Config Server Admin API 장애 시 설정 변경 불가 | 중간 | Console에서 재시도 로직. Config Server 복구 시 재호출 |
+| Config Server Admin API 장애 시 설정 변경 불가 | 중간 | 프로비저닝 파이프라인 자동 재시도 (FR-7.2). Config Server 복구 시 `failed` 상태 작업을 수동 재시도 가능 (FR-7.3) |
 | SQLite 파일 손상 또는 PVC 유실 | 중간 | Litestream이 S3에 실시간 백업. Init Container가 S3에서 자동 복원. RPO ≈ 수초 |
 | 단일 인스턴스 배포로 인한 다운타임 | 낮음 | Recreate 전략 다운타임은 수십 초. 내부 관리 콘솔이므로 허용 가능. Liveness/Readiness Probe로 빠른 복구 보장 |
 
