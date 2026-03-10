@@ -278,10 +278,25 @@ Realm: aap (단일)
 | 항목 | 상세 |
 |------|------|
 | **프로젝트 생성** | Langfuse API를 통해 Project별 독립 Langfuse 프로젝트 자동 생성 |
-| **SDK Key 발급** | Public Key, Secret Key 자동 발급. Console은 SK/PK를 **저장하지 않고** 즉시 처리 |
+| **SDK Key 발급** | 프로젝트 생성 시 반환되는 Public Key, Secret Key 사용. Console은 SK/PK를 **저장하지 않고** 즉시 처리 |
 | **시크릿 메타데이터 커밋** | Console이 SK/PK의 메타데이터(`secret_ref`: ID, K8s Secret 이름/키 등)를 `secrets.yaml`로 작성하여 Config Git Repo에 직접 커밋 (실제 SK/PK 값 미포함) |
 | **K8s Secret 생성** | Console이 `kubectl apply`로 K8s Secret을 생성하여 실제 SK/PK 값을 저장. Config Server Pod에 Volume Mount로 자동 반영 |
+| **프로젝트 삭제** | Langfuse API를 통해 프로젝트 삭제 (`DELETE /api/public/projects/{projectId}`). API Key도 자동 무효화 |
 | **트레이싱 연동** | Config Agent Sidecar가 Config Server API를 호출(`resolve_secrets=true`) → Config Server가 `secret_ref`로 Volume Mount에서 실제 값을 조회하여 mTLS 응답 → Config Agent가 로컬 config 파일에 시크릿 resolve하여 기록 → LiteLLM이 Langfuse 트레이싱 자동 연동 |
+
+**Langfuse API 연동**:
+
+| Console 작업 | Langfuse API | 인증 방식 |
+|---|---|---|
+| Langfuse Org 생성 | `POST /api/admin/organizations` | Bearer `ADMIN_API_KEY` |
+| Langfuse Org 삭제 | `DELETE /api/admin/organizations/{orgId}` | Bearer `ADMIN_API_KEY` |
+| Langfuse Project 생성 | `POST /api/public/projects` | Basic Auth (Org-scoped API Key) |
+| Langfuse Project 삭제 | `DELETE /api/public/projects/{projectId}` | Basic Auth (Org-scoped API Key) |
+| Project API Key 조회 | `GET /api/public/projects/{projectId}/apiKeys` | Basic Auth (Org-scoped API Key) |
+
+> **전제조건**: Langfuse **Enterprise Edition (EE)** 자체 호스팅 배포가 필요하다. 커뮤니티 에디션은 Instance Management API 및 Organization-scoped API를 제공하지 않는다.
+>
+> **API Key 2계층 인증**: Langfuse API는 2단계 인증 구조를 사용한다. (1) Instance Management API는 `ADMIN_API_KEY` 환경변수로 인증. (2) Organization/Project 관리 API는 Organization-scoped API Key로 Basic Auth 인증. Console은 Org 생성 시 발급된 Org-scoped key를 안전하게 관리해야 한다.
 
 > **설계 원칙**: Git에는 시크릿 값이 올라가지 않는다. 실제 SK/PK는 K8s Secret에만 존재하며, `secrets.yaml`의 `secret_ref`를 통해 참조한다. Config Server는 Volume Mount로 읽기만 하고, K8s Secret 생성/삭제는 Console이 수행한다.
 >
@@ -448,7 +463,7 @@ Step 5. 완료 → Console에 결과 표시
 | **Database** | SQLite (WAL 모드) | Organization/Project 메타데이터, 프로비저닝 단계별 상태/설정 스냅샷, 실행 이력, 감사 로그. DB 서버 불필요 — PVC에 단일 파일로 운영 |
 | **DB 백업/복구** | Litestream | SQLite → S3 실시간 스트리밍 백업. Pod 재시작 시 S3에서 자동 복원 |
 | **인증/인가** | Keycloak (Admin REST API + RBAC) | SAML/OIDC/OAuth Client 자동 구성 (Admin API 직접 호출). Organization 단위 RBAC을 Keycloak 그룹으로 관리 (섹션 5 FR-2 참조) |
-| **관측성** | Langfuse (API 연동) | LLM 트레이싱 프로젝트 및 키 관리 |
+| **관측성** | Langfuse (Enterprise Edition, API 연동) | LLM 트레이싱 프로젝트 및 키 관리. EE Admin API로 Org/Project CRUD |
 | **LLM 게이트웨이** | LiteLLM + Config Agent Sidecar | 모델 라우팅, 가드레일, Rate Limit. Config Agent가 Config Server에서 설정 fetch하여 로컬 파일로 제공 |
 | **Config Server** | Go 인메모리 서버 (`aap-config-server`) | Git sync → 인메모리 적재 → REST API 서빙 (읽기 전용). K8s Secret Volume Mount로 시크릿 resolve. mTLS + App ID/Secret 인증. Helm Chart는 `aap-helm-charts`에 포함 |
 | **Config Agent** | Go CLI (Sidecar/Init Container) | Config Server에서 설정 fetch → 네이티브 config 파일 생성. Long polling으로 변경 감지 및 hot reload |
@@ -549,6 +564,7 @@ Pod
 
 | 리스크 | 영향도 | 완화 방안 |
 |--------|--------|-----------|
+| Langfuse Enterprise Edition 의존 | 높음 | Admin API는 EE에서만 제공. EE 라이선스 확보 필수. 대안으로 Headless Initialization(환경변수 기반 초기 설정) 또는 DB 직접 접근 검토 |
 | 공유 서비스(Keycloak/Langfuse/LiteLLM) 장애 | 높음 | Circuit Breaker 패턴, 부분 실패 허용, 재시도 로직 |
 | 외부 API 호출 중 부분 실패 (일부 리소스만 생성됨) | 중간 | 보상 트랜잭션 패턴으로 이미 생성된 리소스 자동 정리. Console DB에 프로비저닝 단계별 상태 기록 |
 | Config Server 장애 시 LiteLLM config 갱신 불가 | 중간 | Config Agent가 마지막으로 기록한 로컬 config 파일로 LiteLLM 운영 지속. Config Server 복구 시 Config Agent long polling이 자동 재연결 |
@@ -561,7 +577,7 @@ Pod
 | 시스템 | 의존 유형 | 비고 |
 |--------|-----------|------|
 | Keycloak | Admin REST API | RBAC 그룹 관리 + SAML/OIDC/OAuth Client 자동 구성 |
-| Langfuse | REST API | 프로젝트/키 관리 |
+| Langfuse | REST API (Enterprise Edition) | Instance Management API + Organization-scoped API. EE 자체 호스팅 필수 |
 | LiteLLM | Config Agent Sidecar → Config Server | 모델 라우팅, 가드레일, S3 경로 설정 |
 | Config Server | Go 인메모리 서버 + Git + K8s Secret Volume (`aap-config-server`) | 읽기 전용 설정 API + 시크릿 resolve 서빙 |
 | Config Git Repo | Git | Console이 설정 파일을 직접 커밋. Config Server가 poll/webhook으로 동기화 |
