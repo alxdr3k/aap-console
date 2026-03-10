@@ -165,7 +165,7 @@ Organization (조직)
 | **생성** | 신규 Organization 등록. 조직명, 설명 입력. 생성 시 멤버 목록 관리 (초기 관리자 지정) |
 | **조회** | Organization 목록 및 상세 정보 (소속 Project 현황, 멤버 목록 포함) 확인 |
 | **수정** | Organization 정보 변경 (이름, 설명) 및 멤버 추가/제거/권한 변경 |
-| **삭제** | Organization 삭제 시 하위 모든 Project의 설정도 함께 제거. **플랫폼 관리자(`super_admin`)만 실행 가능** |
+| **삭제** | Organization 삭제 시 하위 모든 Project를 먼저 개별 삭제(각 Project의 롤백 대상 전체 정리, FR-3 참조)한 뒤, Keycloak Org 그룹을 삭제. **플랫폼 관리자(`super_admin`)만 실행 가능** |
 
 ### FR-2. 접근제어 (RBAC) — Keycloak 위임
 
@@ -357,8 +357,8 @@ Config Server는 읽기 전용 API만 제공한다. 설정 변경은 Console이 
 
 ### 6.3 확장성
 
-- 동시 다수 Project 생성 요청 처리 가능 (Background Job 큐 기반)
-- Organization 및 Project 수 증가에 따른 수평 확장 고려
+- 동시 다수 Project 생성 요청 처리 가능 (Background Job 큐 기반 병렬 처리)
+- 단일 인스턴스 배포 (SQLite 제약)이므로 수평 확장 불가. 내부 관리 콘솔 규모에서는 충분하며, 확장이 필요한 시점에 DB 마이그레이션 검토
 
 ### 6.4 가용성
 
