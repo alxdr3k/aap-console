@@ -56,7 +56,7 @@
 | **Langfuse** | LLM 호출에 대한 관측성(Observability) 및 트레이싱 플랫폼 |
 | **aap-helm-charts** | AAP 서비스들의 K8s 배포용 Helm Chart 레포 |
 | **Config Server** | Go 기반 경량 설정 관리 서버. Git을 source of truth로 사용하여 설정 파일을 인메모리에 적재하고 REST API로 서빙한다 (읽기 전용). 시크릿은 SealedSecret으로 암호화하여 Git에 저장하고, K8s Secret Volume Mount로 실제 값을 resolve한다. K8s Network Policy + `X-App-ID` 헤더로 접근 제어. 별도 레포(`aap-config-server`)로 관리 |
-| **Config Agent** | Config Server에서 설정을 fetch하여 대상 서비스의 K8s ConfigMap/Secret을 업데이트하는 중앙 Deployment (replica=2). 30초 주기 polling으로 변경 감지 후 Deployment annotation 패치로 rolling restart 트리거 |
+| **Config Agent** | Config Server에서 설정을 fetch하여 대상 서비스의 K8s ConfigMap/Secret을 업데이트하는 중앙 Deployment (replica=2, Lease 기반 leader election). Active replica만 polling/업데이트 수행, standby는 HA 대기. 30초 주기 polling으로 변경 감지 후 Deployment annotation 패치로 rolling restart 트리거 |
 | **SealedSecret** | Bitnami SealedSecrets 기반. Console이 `kubeseal`로 시크릿을 암호화하여 Git에 커밋하면, SealedSecret Controller가 K8s Secret으로 복호화. Git에 평문 시크릿이 저장되지 않음 |
 | **Provisioner** | Console 내부의 서비스 객체. Keycloak Admin API, Langfuse tRPC API 등 외부 서비스 API를 직접 호출하여 리소스를 생성/수정/삭제하는 Background Job 단위 |
 
@@ -79,32 +79,34 @@
         ┌────────────┐  ┌────────────┐  ┌──────────────┐       │
         │ AAP Console│  │  LiteLLM   │  │   Langfuse   │──▶ S3 │
         │  (Rails)   │  │ (LLM G/W)  │  │  (관측성)     │       │
-        └─────┬──────┘  └──────┬─────┘  └──────────────┘       │
-              │                │ ConfigMap/Secret 읽기           │
-              │                │                                │
-    ┌─────────▼─────┐  ┌──────┴─────────┐                      │
-    │ Provisioner   │  │ Config Agent   │  중앙 Deployment      │
-    │ (SolidQueue   │  │  (Go CLI)      │  (replica=2)         │
-    │  Bg Jobs)     │  └──────┬─────────┘                      │
-    │               │    poll │ (X-App-ID 헤더)                 │
-    │               │  ┌──────▼──────────┐                      │
-    │               │──│ Config Server   │  Go 인메모리 서버     │
-    │               │  │  · Git Sync     │  (aap-config-server) │
-    │               │  │  · Secret Vol.  │                      │
-    └───┬───┬───┬───┘  └────────────────┘                      │
-        │   │   │             ▲                                 │
-        │   │   │  webhook    │ git poll / volume mount         │
-        │   │   └─────────────┘                                 │
-        │   │  git push                                         │
-        │   ▼                                                   │
-        │  Config Git Repo ── SealedSecrets (암호화)             │
-        │  (설정 YAML)             │                             │
-        │                    SealedSecret Controller             │
-        │                          │ 복호화                      │
-        │                          ▼                             │
-        │                    K8s Secrets (평문)                   │
-        │                                                       │
-        └───────────────────────────────────────────────────────┘
+        └─────┬──────┘  └──────┬─────┘  └───────▲──────┘       │
+              │                │ ConfigMap/          │           │
+              │                │ Secret 읽기         │ tRPC API  │
+    ┌─────────▼─────┐  ┌──────┴─────────┐       │              │
+    │ Provisioner   │  │ Config Agent   │       │              │
+    │ (SolidQueue   │  │  (Go CLI)      │       │              │
+    │  Bg Jobs)     │──┤ Leader Election│       │              │
+    │               │  │ (Lease 기반)   │       │              │
+    │               │  └──────┬─────────┘       │              │
+    │               │    poll │ (X-App-ID)      │              │
+    │               │  ┌──────▼──────────┐      │              │
+    │               │──│ Config Server   │      │              │
+    │               │  │  · Git Sync     │      │              │
+    │               │  │  · Secret Vol.  │      │              │
+    └───┬───┬───┬───┘  └────────────────┘      │              │
+        │   │   │             ▲                 │              │
+        │   │   │  webhook    │ git poll /      │              │
+        │   │   └─────────────┘ volume mount    │              │
+        │   │  git push                         │              │
+        │   ▼                                   │              │
+        │  Config Git Repo ── SealedSecrets     │              │
+        │  (설정 YAML)             │             │              │
+        │                    SealedSecret Ctrl   │              │
+        │                          │ 복호화      │              │
+        │                          ▼             │              │
+        │                    K8s Secrets (평문)   │              │
+        │                                        │              │
+        └────────────────────────────────────────┴──────────────┘
           Keycloak Admin API + Langfuse tRPC + Git 커밋 + SealedSecret
 
 ┌─ K8s Cluster ──────────────────────────────────────────────┐
@@ -135,6 +137,7 @@
 
 **Config Agent 동작 방식**:
 - 중앙 Deployment (replica=2)로 배포. Sidecar가 아닌 독립 Pod으로 운영
+- **Leader Election**: K8s `Lease` 오브젝트 기반 leader election으로 한 시점에 하나의 replica만 active로 동작. 나머지는 standby. Active Pod 장애 시 standby가 자동 승격하여 HA 보장. 이를 통해 ConfigMap/Secret 이중 업데이트 및 중복 rolling restart 방지
 - Config Server를 30초 주기로 polling하여 변경 감지 (`/config/watch`, `/env_vars/watch`)
 - 변경 감지 시 대상 K8s ConfigMap/Secret 업데이트 → Deployment annotation 패치로 rolling restart 트리거
 - Sidecar 대비 장점: thundering herd 방지 (N개 Pod 동시 재시작 없음), 중복 polling 제거
@@ -486,7 +489,7 @@ Step 5. 완료 → Console에 결과 표시
 | **관측성** | Langfuse (오픈소스, tRPC API 연동) | LLM 트레이싱 프로젝트 및 키 관리. 내부 tRPC API로 Org/Project CRUD |
 | **LLM 게이트웨이** | LiteLLM + Config Agent | 모델 라우팅, 가드레일, Rate Limit. Config Agent가 Config Server에서 설정 fetch하여 K8s ConfigMap/Secret 업데이트 |
 | **Config Server** | Go 인메모리 서버 (`aap-config-server`) | Git sync → 인메모리 적재 → REST API 서빙 (읽기 전용). K8s Secret Volume Mount로 시크릿 resolve. K8s Network Policy + `X-App-ID` 헤더 인증. Console webhook으로 App Registry/시크릿 변경 수신 |
-| **Config Agent** | Go CLI (중앙 Deployment, replica=2) | Config Server에서 설정 fetch → K8s ConfigMap/Secret 업데이트 → Deployment annotation 패치로 rolling restart 트리거. 30초 주기 polling |
+| **Config Agent** | Go CLI (중앙 Deployment, replica=2, Lease leader election) | Config Server에서 설정 fetch → K8s ConfigMap/Secret 업데이트 → Deployment annotation 패치로 rolling restart 트리거. 30초 주기 polling. Active-Standby로 이중 업데이트 방지 |
 | **시크릿 관리** | Bitnami SealedSecrets | Console이 `kubeseal`로 시크릿 암호화 → Git 커밋 → SealedSecret Controller가 K8s Secret으로 복호화 |
 | **K8s 배포** | Deployment (Recreate 전략) + PVC | 단일 인스턴스 배포. 미리 생성한 PVC에 SQLite 파일 저장. Litestream Sidecar로 백업/복구 |
 | **테스트** | RSpec + FactoryBot | TDD 기반 개발. 단위/통합/시스템 테스트 |
