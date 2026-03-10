@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> 버전: 1.2
+> 버전: 1.3
 > 작성일: 2026-03-05
 > 최종 수정일: 2026-03-10
 > 상태: Draft
@@ -16,11 +16,10 @@
 5. [핵심 기능 요구사항](#5-핵심-기능-요구사항)
 6. [비기능 요구사항](#6-비기능-요구사항)
 7. [신규 Project 생성 워크플로우](#7-신규-project-생성-워크플로우)
-8. [Terraform State 관리 전략](#8-terraform-state-관리-전략)
-9. [기술 스택](#9-기술-스택)
-10. [마일스톤 및 우선순위](#10-마일스톤-및-우선순위)
-11. [리스크 및 의존성](#11-리스크-및-의존성)
-12. [부록](#12-부록)
+8. [기술 스택](#8-기술-스택)
+9. [마일스톤 및 우선순위](#9-마일스톤-및-우선순위)
+10. [리스크 및 의존성](#10-리스크-및-의존성)
+11. [부록](#11-부록)
 
 ---
 
@@ -58,7 +57,7 @@
 | **aap-helm-charts** | AAP 서비스들의 K8s 배포용 Helm Chart 레포 |
 | **Config Server** | Go 기반 경량 설정 관리 서버. Git을 source of truth로 사용하여 설정 파일을 인메모리에 적재하고 REST API로 서빙한다 (읽기 전용). 시크릿은 Git에 메타데이터(secret_ref)만 저장하고, 실제 값은 K8s Secret을 Volume Mount로 읽어 resolve한다. mTLS로 전송 보호. 별도 레포(`aap-config-server`)로 관리 |
 | **Config Agent** | Config Server에서 설정을 fetch하여 클라이언트 서비스(LiteLLM 등)가 읽을 수 있는 로컬 파일로 변환하는 Sidecar 컨테이너. Init Container로 초기 설정 로드, Sidecar로 long polling 기반 변경 감지 및 hot reload 수행 |
-| **Terraform Workspace** | Project(App ID)별 독립적인 Terraform 실행 및 상태 관리 단위 |
+| **Provisioner** | Console 내부의 서비스 객체. Keycloak Admin API, Langfuse API 등 외부 서비스 API를 직접 호출하여 리소스를 생성/수정/삭제하는 Background Job 단위 |
 
 ---
 
@@ -87,17 +86,24 @@
               │         └─────┬──────┘
               │          fetch │ (mTLS + App ID/Secret)
     ┌─────────▼─────┐  ┌─────▼──────────┐
-    │ Terraform     │  │ Config Server  │  Go 인메모리 서버 (aap-config-server)
-    │ Orchestrator  │  │  · Git Sync    │  설정: Git → 인메모리 → REST API 서빙
-    │ (Bg Jobs)     │  │  · Secret Vol. │  시크릿: K8s Secret Volume Mount 읽기
+    │ Provisioner   │  │ Config Server  │  Go 인메모리 서버 (aap-config-server)
+    │ (SolidQueue   │  │  · Git Sync    │  설정: Git → 인메모리 → REST API 서빙
+    │  Bg Jobs)     │  │  · Secret Vol. │  시크릿: K8s Secret Volume Mount 읽기
     └───────────────┘  └────────────────┘
-              │               ▲
-    git push  │    git poll/  │ volume mount
-              │    webhook    │
-    ┌─────────▼───────────────┴─────────────────┐
-    │ Config Git Repo    K8s Secrets            │
-    │ (설정 YAML)         (시크릿 실제 값)        │
-    └───────────────────────────────────────────┘
+         │  │  │              ▲
+  Admin  │  │  │   git poll/  │ volume mount
+  API 호출│  │  │   webhook    │
+         │  │  │              │
+         │  │  └──────────────┼──────────────┐
+         │  │     git push    │              │
+    ┌────┘  └─────────────────┴──────────────┤
+    │                                         │
+    │  Keycloak Admin API                     │
+    │  Langfuse API                           │
+    │  Config Git Repo (설정 YAML)            │
+    │  K8s Secrets (시크릿 실제 값)            │
+    │                                         │
+    └─────────────────────────────────────────┘
 ┌─ K8s Cluster ──────────────────────────────────────────┐
 │                                                         │
 │  Keycloak · LiteLLM · Langfuse · Config Server · ...   │
@@ -108,7 +114,7 @@
 **흐름 설명**:
 - **사용자 인증**: 사용자 → Keycloak(SSO IdP 브로커) → 인증 후 AAP Console / LiteLLM / Langfuse 접근
 - **Project 설정 반영** (2경로):
-  1. **리소스 생성 (Terraform)**: Keycloak Client 생성 등 Terraform Provider 기반 리소스
+  1. **리소스 생성 (Admin API 직접 호출)**: Keycloak Admin REST API로 Client 생성, Langfuse API로 프로젝트 생성 등
   2. **동적 Config 반영 (Config Git + K8s Secret)**:
      - Console이 설정 파일(config.yaml, secrets.yaml 등)을 Config Git Repo에 직접 커밋
      - 시크릿 실제 값은 Console이 `kubectl apply`로 K8s Secret에 저장
@@ -131,7 +137,7 @@
 Organization (조직)
  └── Project (App ID 발급)
       │
-      ├── Keycloak 설정 ─────────── [Terraform]
+      ├── Keycloak 설정 ─────────── [Keycloak Admin REST API]
       │    └── Client 생성 (SAML / OIDC / OAuth / PAK)
       │
       ├── Langfuse 설정 ─────────── [Langfuse API]
@@ -140,13 +146,11 @@ Organization (조직)
       │         ├── 메타데이터(secret_ref) → Config Git Repo에 커밋
       │         └── 실제 SK/PK → K8s Secret (Console이 kubectl apply)
       │
-      ├── LiteLLM 설정 ──────────── [Config Git Repo]
-      │    ├── 모델 라우팅 Config
-      │    ├── 가드레일 설정
-      │    ├── App별 S3 경로 (prefix)
-      │    └── App별 S3 Retention 설정
-      │
-      └── Terraform State (App ID별 분리)
+      └── LiteLLM 설정 ──────────── [Config Git Repo]
+           ├── 모델 라우팅 Config
+           ├── 가드레일 설정
+           ├── App별 S3 경로 (prefix)
+           └── App별 S3 Retention 설정
 ```
 
 - **생명주기**: Project 생성(설정 추가) → 운영 → 설정 변경 → 삭제(전체 롤백)
@@ -189,10 +193,11 @@ Realm: aap (단일)
 
 **Client Scope 분리 원칙**: `console-rbac` Client Scope는 `aap-console` Client에만 할당한다. LiteLLM, Langfuse 등 다른 Client의 토큰에는 Console RBAC용 `groups` 클레임이 포함되지 않는다.
 
-**Service Account 권한**: Console이 Org 생성/멤버 관리 시 Keycloak Admin API를 호출하기 위해, `aap-console` Client의 Service Account에 최소 권한을 부여한다.
+**Service Account 권한**: Console이 Org 생성/멤버 관리 및 Project별 인증 Client 자동 구성을 위해 Keycloak Admin API를 호출한다. `aap-console` Client의 Service Account에 최소 권한을 부여한다.
 
 | Service Account Role | 용도 |
 |---|---|
+| `realm-management: manage-clients` | Client 생성/수정/삭제 (OIDC/SAML/OAuth) 및 Protocol Mapper 관리 |
 | `realm-management: query-groups` | 그룹 목록/상세 조회 |
 | `realm-management: manage-users` | 사용자-그룹 멤버십 변경 |
 | `realm-management: query-users` | 사용자 검색 |
@@ -232,7 +237,7 @@ Realm: aap (단일)
 
 | 대상 | 롤백 내용 |
 |------|-----------|
-| **Terraform 리소스** | `terraform destroy` 실행 (Keycloak Client 등) |
+| **Keycloak 리소스** | Keycloak Admin API로 해당 Project의 Client 삭제 (`DELETE /admin/realms/{realm}/clients/{id}`) |
 | **Langfuse 리소스** | Langfuse API를 통해 프로젝트 및 SDK Key 삭제 |
 | **Config Git Repo** | 해당 App의 LiteLLM Config 및 Langfuse 시크릿 메타데이터를 Git에서 제거 후 커밋 → Config Server가 변경 감지 → Config Agent가 long polling으로 갱신 |
 | **K8s Secret** | 해당 App의 시크릿 값이 저장된 K8s Secret을 Console이 `kubectl delete`로 삭제 |
@@ -250,9 +255,20 @@ Realm: aap (단일)
 | **OAuth** | Keycloak OAuth Client 구성 및 Redirect URI 설정 |
 | **PAK (Project API Key)** | Console에서 API Key 자동 생성 및 발급 |
 
-- Keycloak Terraform Provider를 활용하여 Client 생성을 자동화한다.
-- PAK 선택 시에는 Terraform 없이 Console 자체에서 키를 생성한다.
+- **Keycloak Admin REST API**를 직접 호출하여 Client 생성/수정/삭제를 자동화한다. Console의 Service Account 토큰으로 인증한다.
 - 발급된 Keycloak Client Secret 및 PAK는 생성 시 UI에 **일회성으로만 표시**하며, Console에서는 별도로 저장하지 않는다.
+
+**Keycloak Admin API 연동 (Client 관리)**:
+
+| Console 작업 | Keycloak Admin API |
+|---|---|
+| OIDC Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: openid-connect`, `publicClient: false` |
+| SAML Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: saml`, SAML 설정 attributes 포함 |
+| OAuth Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: openid-connect`, redirect URI 설정 |
+| Client 설정 변경 | `PUT /admin/realms/{realm}/clients/{id}` |
+| Client 삭제 | `DELETE /admin/realms/{realm}/clients/{id}` |
+| Client Secret 재발급 | `POST /admin/realms/{realm}/clients/{id}/client-secret` |
+| Protocol Mapper 추가 | `POST /admin/realms/{realm}/clients/{id}/protocol-mappers/models` |
 
 ### FR-5. Langfuse 프로젝트 생성 및 SDK Key 발급
 
@@ -279,22 +295,22 @@ Realm: aap (단일)
 | **Config 반영** | Console이 생성한 Config를 Config Git Repo에 직접 커밋 (`config.yaml`, `env_vars.yaml`, `secrets.yaml` 등 Config Server 저장소 구조에 맞춰 작성) |
 | **Reload 방식** | Git 커밋 → Config Server가 webhook/poll로 변경 감지 → 인메모리 갱신 → Config Agent Sidecar가 long polling으로 변경 감지 → 로컬 config 파일 atomic write → LiteLLM hot reload (재배포 불필요) |
 
-### FR-7. 실시간 Terraform 실행 로그 시각화
+### FR-7. 실시간 프로비저닝 로그 시각화
 
 | 항목 | 상세 |
 |------|------|
-| **로그 스트리밍** | Terraform plan/apply 실행 중 발생하는 로그를 실시간 전송 |
-| **UI 표시** | Console에서 배포 진행 상황을 실시간으로 확인 가능 |
+| **로그 스트리밍** | Project 생성/수정/삭제 시 각 단계(Keycloak Client 생성, Langfuse 프로젝트 생성, Config 반영 등)의 진행 상황을 실시간 전송 |
+| **UI 표시** | Console에서 프로비저닝 진행 상황을 실시간으로 확인 가능 (단계별 성공/실패/진행중 표시) |
 | **구현 방식** | ActionCable(WebSocket) 기반 실시간 스트리밍 |
-| **이력 보관** | 완료된 실행 로그는 저장하여 사후 조회 가능 |
+| **이력 보관** | 완료된 프로비저닝 로그는 저장하여 사후 조회 가능 |
 
 ### FR-8. 설정 변경 이력 관리 및 버전 롤백
 
 | 항목 | 상세 |
 |------|------|
-| **이력 관리** | Project별 설정 변경 시마다 버전 기록 (Config Server Git 커밋 기반 + Terraform State 버전) |
+| **이력 관리** | Project별 설정 변경 시마다 버전 기록 (Console DB 이력 + Config Git 커밋 기반) |
 | **버전 조회** | Console에서 변경 이력 목록 및 diff 확인 |
-| **롤백 — Terraform** | 이전 안정 버전의 Terraform 구성으로 즉시 복구 가능 (Keycloak Client 등) |
+| **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
 | **롤백 — Config Server** | Config Git Repo 이력을 기반으로 LiteLLM Config 및 Langfuse 메타데이터를 이전 버전으로 복구 (Console이 Git revert 커밋) → Config Server 인메모리 자동 갱신 → Config Agent long polling으로 전파 |
 | **감사 로그** | 누가, 언제, 어떤 설정을 변경했는지 추적 |
 
@@ -335,7 +351,7 @@ Config Server는 읽기 전용 API만 제공한다. 설정 변경은 Console이 
 
 ### 6.2 성능
 
-- Project 생성 요청 후 전체 설정 완료까지 목표: 5분 이내
+- Project 생성 요청 후 전체 설정 완료까지 목표: 1분 이내 (API 직접 호출 방식으로 Terraform 대비 대폭 단축)
 - Console UI 페이지 로드 시간: 2초 이내
 - 실시간 로그 스트리밍 지연: 1초 이내
 
@@ -346,7 +362,7 @@ Config Server는 읽기 전용 API만 제공한다. 설정 변경은 Console이 
 
 ### 6.4 가용성
 
-- Terraform 실행 실패 시 자동 재시도 및 롤백 메커니즘
+- 외부 API 호출 실패 시 자동 재시도 및 롤백 메커니즘 (이미 생성된 리소스 정리)
 - 공유 서비스(Keycloak, Langfuse, LiteLLM) 장애 시 부분 실패 처리 및 재시도
 
 ### 6.5 동시성 제어
@@ -356,7 +372,7 @@ Config Server는 읽기 전용 API만 제공한다. 설정 변경은 Console이 
 | 대상 | 동시성 제어 방식 |
 |------|------------------|
 | **Console DB (SQLite)** | SQLite WAL 모드로 동시 읽기 허용, 쓰기는 단일 프로세스 직렬화. 단일 인스턴스 배포이므로 DB 레벨 동시성 문제 최소화. Project 상태를 `pending → provisioning → active → deleting` 등의 상태 머신으로 관리하여 중복 처리 방지 |
-| **Terraform State** | DynamoDB 기반 State Lock으로 동일 Project에 대한 동시 `plan/apply/destroy` 방지 (섹션 8.4 참조) |
+| **외부 API 호출** | SolidQueue Job 직렬화로 동일 Project에 대한 동시 프로비저닝 방지. Keycloak/Langfuse API 호출은 멱등성을 고려하여 설계 (생성 전 존재 여부 확인) |
 | **Config Git Repo** | Console이 Git 커밋 시 App ID 단위 디렉토리 분리로 충돌 최소화. 동일 Project에 대한 동시 커밋은 SolidQueue Job 직렬화로 방지. 충돌 발생 시 자동 rebase 후 재시도 |
 | **Background Job (SolidQueue)** | 동일 Project에 대한 Job은 직렬 실행을 보장 (unique job 또는 큐 기반 직렬화). 서로 다른 Project의 Job은 병렬 실행 가능 |
 
@@ -382,22 +398,19 @@ Config Server는 읽기 전용 API만 제공한다. 설정 변경은 Console이 
   ▼
 Step 1. Project 레코드 생성 (DB) + App ID 발급
   │
-  ▼
-Step 2. Terraform Workspace 초기화 (App ID 기반)
-  │
   │ ── 리소스 생성 (병렬 실행 가능) ──
   │
-  ├──▶ Step 3a. Keycloak 리소스 생성 [Terraform]
+  ├──▶ Step 2a. Keycloak 리소스 생성 [Keycloak Admin API]
   │     └─ 선택한 인증 방식에 따라 Client 생성 또는 PAK 발급
   │
-  └──▶ Step 3b. Langfuse 리소스 생성 [Langfuse API]
+  └──▶ Step 2b. Langfuse 리소스 생성 [Langfuse API]
          ├─ Langfuse Org/Project 생성
          └─ SDK Key (PK/SK) 발급 (Console은 미저장)
   │
-  │ ── Step 3a/3b 완료 대기 후 설정 반영 ──
+  │ ── Step 2a/2b 완료 대기 후 설정 반영 ──
   │
   ▼
-Step 4. Config 반영 [Console이 직접 Git 커밋 + K8s Secret 생성]
+Step 3. Config 반영 [Console이 직접 Git 커밋 + K8s Secret 생성]
   ├─ LiteLLM Config (config.yaml, env_vars.yaml) → Config Git Repo에 커밋
   ├─ Langfuse SK/PK 시크릿 메타데이터 (secrets.yaml) → Config Git Repo에 커밋
   ├─ SK/PK 실제 값 → Console이 kubectl apply로 K8s Secret 생성
@@ -406,60 +419,31 @@ Step 4. Config 반영 [Console이 직접 Git 커밋 + K8s Secret 생성]
        → 로컬 config 파일 갱신 → LiteLLM hot reload
   │
   ▼
-Step 5. Health Check 실행 (정합성 검증)
+Step 4. Health Check 실행 (정합성 검증)
   │
   ▼
-Step 6. 완료 → Console에 결과 표시
+Step 5. 완료 → Console에 결과 표시
 ```
 
 **실행 순서 및 의존성**:
-- Step 3a / 3b: 상호 독립적이므로 **병렬 실행 가능**
-- Step 4: Step 3b의 결과(Langfuse SK/PK)가 필요하므로 **Step 3a/3b 모두 완료 후** 실행
-- Step 4 내의 설정 전파: Git 커밋 → Config Server 자동 감지 → Config Agent 자동 감지 (비동기, Console이 직접 제어하지 않음)
-- Step 5: Step 4 완료 후 실행
+- Step 2a / 2b: 상호 독립적이므로 **병렬 실행 가능**
+- Step 3: Step 2b의 결과(Langfuse SK/PK)가 필요하므로 **Step 2a/2b 모두 완료 후** 실행
+- Step 3 내의 설정 전파: Git 커밋 → Config Server 자동 감지 → Config Agent 자동 감지 (비동기, Console이 직접 제어하지 않음)
+- Step 4: Step 3 완료 후 실행
 
 ---
 
-## 8. Terraform State 관리 전략
-
-### 8.1 State 분리 원칙
-
-- **Project(App ID) 단위 State**: 각 App ID마다 독립적인 Terraform State 파일 유지
-- **영향도 최소화**: 한 Project의 변경이 다른 Project에 영향을 주지 않음
-- **Backend**: S3 + DynamoDB를 활용한 Remote State 관리
-
-### 8.2 State 경로 규칙
-
-```
-s3://aap-terraform-state/{organization_id}/{app_id}/terraform.tfstate
-```
-
-### 8.3 자원 회수 (Destroy)
-
-- Project 삭제 요청 시 해당 App ID의 Terraform Workspace에 대해 `terraform destroy` 자동 실행 (각 서비스에서 관련 설정 제거)
-- Destroy 완료 후 State 파일 아카이브 처리 (감사 목적 보관)
-- Destroy 실패 시 관리자 알림 및 수동 개입 프로세스 제공
-
-### 8.4 Locking
-
-- DynamoDB 기반 State Lock으로 동시 변경 방지
-- Lock Timeout 설정을 통한 교착 상태 방지
-
----
-
-## 9. 기술 스택
+## 8. 기술 스택
 
 | 영역 | 기술 | 비고 |
 |------|------|------|
 | **Backend** | Ruby on Rails 8+ | API 서버, 비즈니스 로직, Background Job 처리. Solid 스택(SolidQueue, SolidCable) 활용 |
 | **Frontend** | Rails View + Hotwire (Turbo/Stimulus) | SPA 없이 실시간 UI 업데이트 |
-| **실시간 통신** | ActionCable + SolidCable | Terraform 로그 스트리밍. SQLite 기반 pub/sub (Redis 불필요) |
+| **실시간 통신** | ActionCable + SolidCable | 프로비저닝 로그 스트리밍. SQLite 기반 pub/sub (Redis 불필요) |
 | **Background Job** | SolidQueue | SQLite 기반 잡 큐 (Rails 8 기본). Sidekiq/Redis 불필요 |
 | **Database** | SQLite (WAL 모드) | Organization/Project 메타데이터, 실행 이력, 감사 로그. DB 서버 불필요 — PVC에 단일 파일로 운영 |
 | **DB 백업/복구** | Litestream | SQLite → S3 실시간 스트리밍 백업. Pod 재시작 시 S3에서 자동 복원 |
-| **Terraform State** | S3 + DynamoDB | Remote State 저장(S3) 및 State Lock(DynamoDB) |
-| **IaC** | Terraform | Keycloak Client 등 서비스 리소스 자동 생성/관리 |
-| **인증/인가** | Keycloak (Terraform Provider + RBAC) | SAML/OIDC/OAuth Client 자동 구성. Organization 단위 RBAC을 Keycloak 그룹으로 관리 (섹션 5 FR-2 참조) |
+| **인증/인가** | Keycloak (Admin REST API + RBAC) | SAML/OIDC/OAuth Client 자동 구성 (Admin API 직접 호출). Organization 단위 RBAC을 Keycloak 그룹으로 관리 (섹션 5 FR-2 참조) |
 | **관측성** | Langfuse (API 연동) | LLM 트레이싱 프로젝트 및 키 관리 |
 | **LLM 게이트웨이** | LiteLLM + Config Agent Sidecar | 모델 라우팅, 가드레일, Rate Limit. Config Agent가 Config Server에서 설정 fetch하여 로컬 파일로 제공 |
 | **Config Server** | Go 인메모리 서버 (`aap-config-server`) | Git sync → 인메모리 적재 → REST API 서빙 (읽기 전용). K8s Secret Volume Mount로 시크릿 resolve. mTLS + App ID/Secret 인증. Helm Chart는 `aap-helm-charts`에 포함 |
@@ -468,16 +452,16 @@ s3://aap-terraform-state/{organization_id}/{app_id}/terraform.tfstate
 | **테스트** | RSpec + FactoryBot | TDD 기반 개발. 단위/통합/시스템 테스트 |
 | **CI/CD** | (미정) | GitOps 기반 배포 파이프라인 |
 
-### 9.1 개발 방법론
+### 8.1 개발 방법론
 
 - **TDD (Test-Driven Development)**: 모든 기능은 테스트 코드 선행 작성 후 구현
 - **테스트 커버리지 목표**: 90% 이상
 - **테스트 유형**:
   - Unit Test: 모델, 서비스 객체 단위 테스트
-  - Integration Test: Terraform 연동, 외부 API 연동 테스트 (Mock 활용)
+  - Integration Test: Keycloak Admin API, Langfuse API 등 외부 API 연동 테스트 (Mock 활용)
   - System Test: E2E 워크플로우 테스트
 
-### 9.2 K8s 배포 전략 (SQLite + Litestream)
+### 8.2 K8s 배포 전략 (SQLite + Litestream)
 
 Console은 **DB 서버 없이** SQLite 파일 하나로 운영되며, Litestream Sidecar가 S3에 실시간 백업하여 데이터 안전성을 보장한다.
 
@@ -520,7 +504,7 @@ Pod
 
 ---
 
-## 10. 마일스톤 및 우선순위
+## 9. 마일스톤 및 우선순위
 
 ### Phase 1: 핵심 기반 구축 (MVP)
 
@@ -529,8 +513,7 @@ Pod
 - Organization CRUD + 멤버십 관리 — Keycloak 그룹 연동 (FR-1)
 - 접근제어 RBAC — Keycloak 그룹 기반 JWT 인가 (FR-2)
 - Project CRUD + App ID 자동 발급 (FR-3)
-- Terraform Workspace 기본 연동 (생성/실행/상태 조회)
-- Keycloak 인증 체계 자동 구성 — OIDC 우선 (FR-4)
+- Keycloak Admin API 연동 — OIDC Client 자동 생성 우선 (FR-4)
 - 기본 UI (Organization/Project 목록, 상세, 생성 폼)
 
 ### Phase 2: 서비스 설정 자동화 확장
@@ -542,7 +525,7 @@ Pod
 
 ### Phase 3: 운영 안정성 강화
 
-- 실시간 Terraform 로그 스트리밍 — ActionCable (FR-7)
+- 실시간 프로비저닝 로그 스트리밍 — ActionCable (FR-7)
 - 설정 변경 이력 관리 및 버전 롤백 (FR-8)
 - Health Check 자동화 (FR-9)
 - Project 삭제 시 전체 롤백 자동화 (FR-3 삭제 요구사항)
@@ -556,25 +539,24 @@ Pod
 
 ---
 
-## 11. 리스크 및 의존성
+## 10. 리스크 및 의존성
 
-### 11.1 리스크
+### 10.1 리스크
 
 | 리스크 | 영향도 | 완화 방안 |
 |--------|--------|-----------|
-| Terraform 실행 시간 초과 | 높음 | 타임아웃 설정, 부분 실패 처리, 재시도 로직 |
-| 공유 서비스(Keycloak/Langfuse/LiteLLM) 장애 | 높음 | Circuit Breaker 패턴, 부분 설정 허용 |
-| Terraform State 충돌 | 중간 | DynamoDB Lock, 직렬 실행 보장 |
+| 공유 서비스(Keycloak/Langfuse/LiteLLM) 장애 | 높음 | Circuit Breaker 패턴, 부분 실패 허용, 재시도 로직 |
+| 외부 API 호출 중 부분 실패 (일부 리소스만 생성됨) | 중간 | 보상 트랜잭션 패턴으로 이미 생성된 리소스 자동 정리. Console DB에 프로비저닝 단계별 상태 기록 |
 | Config Server 장애 시 LiteLLM config 갱신 불가 | 중간 | Config Agent가 마지막으로 기록한 로컬 config 파일로 LiteLLM 운영 지속. Config Server 복구 시 Config Agent long polling이 자동 재연결 |
-| aap-helm-charts 레포 충돌 | 낮음 | Retry with rebase, 충돌 감지 및 알림 |
+| Config Git Repo 충돌 | 낮음 | Retry with rebase, 충돌 감지 및 알림 |
 | SQLite 파일 손상 또는 PVC 유실 | 중간 | Litestream이 S3에 실시간 백업. Init Container가 S3에서 자동 복원. RPO ≈ 수초 |
 | 단일 인스턴스 배포로 인한 다운타임 | 낮음 | Recreate 전략 다운타임은 수십 초. 내부 관리 콘솔이므로 허용 가능. Liveness/Readiness Probe로 빠른 복구 보장 |
 
-### 11.2 외부 의존성
+### 10.2 외부 의존성
 
 | 시스템 | 의존 유형 | 비고 |
 |--------|-----------|------|
-| Keycloak | Terraform Provider + Admin API | 인증 체계 구성 |
+| Keycloak | Admin REST API | RBAC 그룹 관리 + SAML/OIDC/OAuth Client 자동 구성 |
 | Langfuse | REST API | 프로젝트/키 관리 |
 | LiteLLM | Config Agent Sidecar → Config Server | 모델 라우팅, 가드레일, S3 경로 설정 |
 | Config Server | Go 인메모리 서버 + Git + K8s Secret Volume (`aap-config-server`) | 읽기 전용 설정 API + 시크릿 resolve 서빙 |
@@ -583,6 +565,6 @@ Pod
 
 ---
 
-## 12. 부록
+## 11. 부록
 
 - **업무 목표 상세**: [docs/business-objectives.md](./business-objectives.md)
