@@ -382,7 +382,7 @@ pending → in_progress → completed
 | **이력 관리** | Project별 설정 변경 시마다 버전 기록 (Console DB 이력 기반). Config Git 커밋 이력은 Config Server 모듈이 관리 |
 | **버전 조회** | Console에서 변경 이력 목록 및 diff 확인 |
 | **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷(Client 생성 시 파라미터를 버전별로 저장)을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
-| **롤백 — Langfuse** | Console DB에 기록된 이전 스냅샷을 기반으로 Langfuse tRPC API를 호출하여 Org/Project 설정 복구. SDK Key 재발급이 포함된 경우, 이전 키는 복원 불가하므로 새 키로 재발급 후 Config Server에 시크릿 재전달 |
+| **롤백 — Langfuse** | Console DB에 기록된 이전 스냅샷을 기반으로 Langfuse tRPC API를 호출하여 Org/Project 설정 복구. SDK Key는 이전 버전의 키를 그대로 유지하므로 재발급 불필요 — Config Server에 이전 시크릿 데이터를 재전달 |
 | **롤백 — Config Server** | Console이 Config Server Admin API로 이전 설정/시크릿 데이터를 재전달. Config Server가 Git revert + 재적용 수행. 이후 LiteLLM 반영은 자동 전파 |
 | **감사 로그** | 누가, 언제, 어떤 설정을 변경했는지 추적 |
 
