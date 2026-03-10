@@ -385,7 +385,7 @@ Console은 Config Server Admin API만 호출한다. Git 접근, kubeseal, kubect
 ### 6.3 확장성
 
 - 동시 다수 Project 생성 요청 처리 가능 (Background Job 큐 기반 병렬 처리)
-- 단일 인스턴스 배포 (SQLite 제약)이므로 수평 확장 불가. 내부 관리 콘솔 규모에서는 충분하며, 확장이 필요한 시점에 DB 마이그레이션 검토
+- 단일 인스턴스 배포 (SQLite 단일 writer 제약)이므로 쓰기 수평 확장 불가. 내부 관리 콘솔 규모에서는 충분. 읽기 확장이 필요하면 LiteFS 기반 Read Replica 구성 가능 (8.2절 참조)
 
 ### 6.4 가용성
 
@@ -525,6 +525,10 @@ Pod
 - 업그레이드/재배포 시 `Recreate` 전략으로 인한 **짧은 다운타임** (수십 초) → 내부 관리 콘솔이므로 허용 가능
 - 단일 인스턴스 배포로 **수평 확장 불가** → 예상 사용자 수(팀 관리자/플랫폼 관리자) 고려 시 충분
 - SQLite 쓰기 성능 제약 → 관리 콘솔 수준의 쓰기 빈도에는 문제 없음
+
+**향후 확장 옵션 — LiteFS 기반 Read Replica**:
+
+제로 다운타임 배포가 필요해지면, Litestream을 LiteFS로 교체하여 Primary(R/W) + Replica(R) 2-replica 구성이 가능하다. SQLite WAL 모드의 단일 writer 제약은 유지되지만, LiteFS가 각 Pod의 로컬 파일시스템 간 near real-time 복제를 수행하여 읽기 부하 분산 및 rolling update를 지원한다. 단, leader election(Consul 등) 인프라가 추가로 필요하다.
 
 ---
 
