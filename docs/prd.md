@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> 버전: 1.1
+> 버전: 1.2
 > 작성일: 2026-03-05
 > 최종 수정일: 2026-03-10
 > 상태: Draft
@@ -168,15 +168,56 @@ Organization (조직)
 
 Organization 단위로 사용자 접근 권한을 관리한다. **RBAC은 Keycloak 그룹에 위임**하며, Console은 별도의 권한 테이블을 유지하지 않는다. 하위 Project에 대한 접근 범위도 Organization 멤버십에 의해 결정된다.
 
+#### Keycloak 구성 (단일 Realm)
+
+AAP는 **단일 Realm 정책**을 사용한다. Console은 LiteLLM, Langfuse 등과 동일한 레벨의 OIDC Client로 등록되며, Console 전용 RBAC 정보는 **전용 Client Scope**로 격리하여 다른 Client의 토큰에 영향을 주지 않는다.
+
+```
+Realm: aap (단일)
+ ├── Client: litellm           ← 기존 서비스 (기본 scope만)
+ ├── Client: langfuse          ← 기존 서비스 (기본 scope만)
+ ├── Client: {team}-agent      ← 타 팀 서비스 (기본 scope만)
+ └── Client: aap-console       ← Console (기본 scope + console-rbac scope)
+      ├── OIDC Confidential Client (Authorization Code Flow)
+      ├── Service Account 활성화 (Keycloak Admin API 호출용)
+      └── Client Scope: "console-rbac" (aap-console에만 할당)
+           └── Protocol Mapper: Group Membership
+                ├── claim.name: groups
+                ├── full.path: true
+                └── add.to.access.token: true
+```
+
+**Client Scope 분리 원칙**: `console-rbac` Client Scope는 `aap-console` Client에만 할당한다. LiteLLM, Langfuse 등 다른 Client의 토큰에는 Console RBAC용 `groups` 클레임이 포함되지 않는다.
+
+**Service Account 권한**: Console이 Org 생성/멤버 관리 시 Keycloak Admin API를 호출하기 위해, `aap-console` Client의 Service Account에 최소 권한을 부여한다.
+
+| Service Account Role | 용도 |
+|---|---|
+| `realm-management: query-groups` | 그룹 목록/상세 조회 |
+| `realm-management: manage-users` | 사용자-그룹 멤버십 변경 |
+| `realm-management: query-users` | 사용자 검색 |
+
+#### 권한 모델
+
 | 항목 | 상세 |
 |------|------|
 | **권한 수준** | `super_admin` — 플랫폼 전체 관리. Organization 생성/삭제, 전체 현황 조회, 정책 설정 (플랫폼 관리자 전용) <br> `admin` — Org 설정 및 멤버 관리, Project 생성/삭제 가능 <br> `write` — Project 설정 변경 가능 <br> `read` — Project 조회만 가능 |
-| **Keycloak 그룹 구조** | 계층적 그룹으로 Organization별 권한을 관리한다. 구조: `/orgs/{org-id}/super_admin`, `/orgs/{org-id}/admin`, `/orgs/{org-id}/write`, `/orgs/{org-id}/read`. 플랫폼 전체 `super_admin`은 별도 Realm Role로 관리 |
-| **JWT 토큰 클레임** | Keycloak의 Group Membership protocol mapper를 설정하여 JWT `groups` 클레임에 그룹 경로를 포함 (`full.path: true`). 예: `["\/orgs\/acme-corp\/admin"]` |
-| **멤버 관리** | Organization 생성/수정 시 Keycloak Admin API를 통해 사용자를 해당 Org 그룹에 추가/제거/역할 변경. Console은 Keycloak을 단일 진실 공급원(SSOT)으로 사용 |
+| **Keycloak 그룹 구조** | 계층적 그룹으로 Organization별 권한을 관리한다. `/console` prefix로 다른 서비스의 그룹과 충돌을 방지한다. 구조: `/console/orgs/{org-id}/admin`, `/console/orgs/{org-id}/write`, `/console/orgs/{org-id}/read`. 플랫폼 전체 `super_admin`은 별도 **Realm Role**로 관리 |
+| **JWT 토큰 클레임** | `console-rbac` Client Scope의 Group Membership mapper에 의해 `aap-console` Client의 JWT에만 `groups` 클레임이 포함된다 (`full.path: true`). 예: `["\/console\/orgs\/acme-corp\/admin"]` |
+| **멤버 관리** | Organization 생성/수정 시 `aap-console` Service Account로 Keycloak Admin API를 호출하여 사용자를 해당 Org 그룹에 추가/제거/역할 변경. Console은 Keycloak을 단일 진실 공급원(SSOT)으로 사용 |
 | **권한 상속** | Organization 멤버십이 하위 모든 Project에 동일하게 적용 |
 | **Console UI 제어** | JWT 토큰의 `groups` 클레임을 파싱하여 권한 수준에 따라 UI 요소(버튼, 메뉴 등) 활성/비활성 처리 |
 | **API 제어** | 모든 API 엔드포인트에서 JWT 토큰의 `groups` 클레임을 검증하여 요청자의 권한 수준을 확인. DB 조회 없이 토큰만으로 인가 처리 |
+
+#### Keycloak Admin API 연동
+
+| Console 작업 | Keycloak Admin API |
+|---|---|
+| Org 생성 | `POST /admin/realms/{realm}/groups` → `/console/orgs/{org-id}` 하위 그룹(admin/write/read) 자동 생성 |
+| 멤버 추가 | `PUT /admin/realms/{realm}/users/{user-id}/groups/{group-id}` |
+| 멤버 제거 | `DELETE /admin/realms/{realm}/users/{user-id}/groups/{group-id}` |
+| 권한 변경 | 기존 그룹에서 제거 → 새 권한 그룹에 추가 |
+| Org 삭제 | `DELETE /admin/realms/{realm}/groups/{group-id}` (하위 그룹 포함 삭제) |
 
 ### FR-3. Project 관리 (CRUD)
 
@@ -287,7 +328,7 @@ Config Server는 읽기 전용 API만 제공한다. 설정 변경은 Console이 
 
 | 계층 | 검증 주체 | 검증 내용 |
 |------|-----------|-----------|
-| **사용자 권한 검증** | **Console** | API 요청 수신 시 JWT 토큰의 `groups` 클레임(Keycloak 그룹 경로)을 파싱하여 요청 사용자가 대상 Org/Project에 대한 `write` 이상 권한을 보유하는지 검증. DB 조회 없이 토큰만으로 인가 처리. 권한 미달 시 Git 커밋 및 K8s Secret 조작을 수행하지 않음 |
+| **사용자 권한 검증** | **Console** | API 요청 수신 시 JWT 토큰의 `groups` 클레임(`/console/orgs/{org-id}/...` 경로)을 파싱하여 요청 사용자가 대상 Org/Project에 대한 `write` 이상 권한을 보유하는지 검증. DB 조회 없이 토큰만으로 인가 처리. 권한 미달 시 Git 커밋 및 K8s Secret 조작을 수행하지 않음 |
 | **Config Git 접근** | **Console** | Config Git Repo에 대한 쓰기 권한은 Console 서비스 계정에만 부여. 커밋 시 Org/Project 디렉토리 범위 내에서만 파일 변경 |
 | **Config Server API 인증** | **Config Server** | mTLS(TLS 1.3) 상호 인증 + App ID/App Secret 기반 API 인증. AAP Console이 발급한 App Registry를 주기적으로 동기화하여 검증 |
 | **Config Server 접근 범위** | **Config Server** | App Registry의 scope(org/project/service)와 permissions(`config_read`, `resolve_secrets` 등)를 기반으로 요청 범위 제한 |
