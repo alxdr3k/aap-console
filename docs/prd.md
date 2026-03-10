@@ -266,9 +266,12 @@ Realm: aap (단일)
 | SAML Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: saml`, SAML 설정 attributes 포함 |
 | OAuth Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: openid-connect`, `publicClient: true`, PKCE 설정 |
 | Client 설정 변경 | `PUT /admin/realms/{realm}/clients/{id}` |
+| Client Scope 할당 | `PUT /admin/realms/{realm}/clients/{id}/default-client-scopes/{scopeId}` |
 | Client 삭제 | `DELETE /admin/realms/{realm}/clients/{id}` |
 | Client Secret 재발급 | `POST /admin/realms/{realm}/clients/{id}/client-secret` |
 | Protocol Mapper 추가 | `POST /admin/realms/{realm}/clients/{id}/protocol-mappers/models` |
+
+> **주의**: `PUT /clients/{id}` 요청 시 body의 `defaultClientScopes`, `optionalClientScopes` 필드는 **무시된다** ([keycloak#24920](https://github.com/keycloak/keycloak/issues/24920)). Client Scope 변경은 반드시 전용 엔드포인트(`/default-client-scopes/{scopeId}`, `/optional-client-scopes/{scopeId}`)를 사용해야 한다.
 
 ### FR-5. Langfuse 프로젝트 생성 및 SDK Key 발급
 
