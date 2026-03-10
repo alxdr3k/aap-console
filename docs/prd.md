@@ -382,6 +382,7 @@ pending → in_progress → completed
 | **이력 관리** | Project별 설정 변경 시마다 버전 기록 (Console DB 이력 기반). Config Git 커밋 이력은 Config Server 모듈이 관리 |
 | **버전 조회** | Console에서 변경 이력 목록 및 diff 확인 |
 | **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷(Client 생성 시 파라미터를 버전별로 저장)을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
+| **롤백 — Langfuse** | Console DB에 기록된 이전 스냅샷을 기반으로 Langfuse tRPC API를 호출하여 Org/Project 설정 복구. SDK Key 재발급이 포함된 경우, 이전 키는 복원 불가하므로 새 키로 재발급 후 Config Server에 시크릿 재전달 |
 | **롤백 — Config Server** | Console이 Config Server Admin API로 이전 설정/시크릿 데이터를 재전달. Config Server가 Git revert + 재적용 수행. 이후 LiteLLM 반영은 자동 전파 |
 | **감사 로그** | 누가, 언제, 어떤 설정을 변경했는지 추적 |
 
@@ -443,7 +444,7 @@ Console은 Config Server Admin API만 호출한다. Git 접근, kubeseal, kubect
 |------|------------------|
 | **Console DB (SQLite)** | SQLite WAL 모드로 동시 읽기 허용, 쓰기는 단일 프로세스 직렬화. 단일 인스턴스 배포이므로 DB 레벨 동시성 문제 최소화. 프로비저닝 상태 머신(FR-7.1)으로 중복 처리 방지 |
 | **외부 API 호출** | SolidQueue Job 직렬화로 동일 Project에 대한 동시 프로비저닝 방지. 각 단계는 멱등하게 설계 (FR-7.2) |
-| **Config Server API** | 동일 Project에 대한 동시 API 호출은 SolidQueue Job 직렬화로 방지. Config Server 내부의 Git 충돌 처리는 Config Server 모듈 책임 |
+| **Config Server API** | 동일 Project에 대한 동시 API 호출은 SolidQueue Job 직렬화로 방지. **서로 다른 Project 간**: Config Server의 Git 레포가 App ID 기반 디렉토리로 격리되므로 동시 쓰기 시에도 파일 충돌 없음. Git 레벨 동시성은 Config Server 모듈 책임 |
 | **Background Job (SolidQueue)** | 동일 Project에 대한 Job은 직렬 실행을 보장 (unique job 또는 큐 기반 직렬화). 서로 다른 Project의 Job은 병렬 실행 가능 |
 
 **설계 원칙**:
@@ -527,6 +528,7 @@ Step 5. 완료 → Console에 결과 표시
   - Unit Test: 모델, 서비스 객체 단위 테스트
   - Integration Test: Keycloak Admin API, Langfuse API 등 외부 API 연동 테스트 (Mock 활용)
   - System Test: E2E 워크플로우 테스트
+- **개발 프로세스 상세**: [docs/development-process.md](./development-process.md) 참조
 
 ### 8.2 K8s 배포 전략 (SQLite + Litestream)
 
@@ -616,7 +618,7 @@ Pod
 | 리스크 | 영향도 | 완화 방안 |
 |--------|--------|-----------|
 | Langfuse tRPC API 호환성 | 중간 | 내부 API이므로 Langfuse 버전 업그레이드 시 breaking change 가능. Langfuse 버전 고정 및 업그레이드 전 tRPC 호환성 테스트 필수 |
-| 공유 서비스(Keycloak/Langfuse/LiteLLM) 장애 | 높음 | Circuit Breaker 패턴, 부분 실패 허용, 재시도 로직 |
+| 공유 서비스(Keycloak/Langfuse/LiteLLM) 장애 | 높음 | 프로비저닝 파이프라인 자동 재시도 후 복구 불가 시 전체 롤백 (FR-7.2). Circuit Breaker 패턴 적용 |
 | 외부 API 호출 중 부분 실패 (일부 리소스만 생성됨) | 중간 | 프로비저닝 파이프라인의 자동 재시도 + 보상 트랜잭션으로 복구 (FR-7.1, FR-7.2) |
 | Config Server 장애 시 LiteLLM config 갱신 불가 | 중간 | LiteLLM은 마지막 설정으로 운영 지속. Config Server 복구 시 자동 재동기화 |
 | Config Server Admin API 장애 시 설정 변경 불가 | 중간 | 프로비저닝 파이프라인 자동 재시도 (FR-7.2). Config Server 복구 시 `failed` 상태 작업을 수동 재시도 가능 (FR-7.3) |
@@ -631,6 +633,7 @@ Pod
 | Langfuse | 내부 tRPC API (오픈소스) | 웹 UI 내부 tRPC API로 Org/Project/API Key CRUD. NextAuth 세션 쿠키 인증 |
 | LiteLLM | Config Server 경유 설정 전파 | 모델 라우팅, 가드레일, S3 경로 설정 |
 | Config Server | `aap-config-server` Admin API | Console은 Admin API 호출만 수행. Git/kubeseal/kubectl/전파는 Config Server 책임 |
+| S3 (Object Storage) | Litestream 백업 + Langfuse 데이터 | stg/prd: Managed S3 서비스. dev: MinIO (클러스터 내 자체 배포) |
 | aap-helm-charts | Git Repo | AAP 서비스 배포용 Helm Chart 관리 |
 
 ---
