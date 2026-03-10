@@ -133,8 +133,11 @@
 Organization (조직)
  └── Project (App ID 발급)
       │
-      ├── Keycloak 설정 ─────────── [Keycloak Admin REST API]
-      │    └── Client 생성 (SAML / OIDC / OAuth / PAK)
+      ├── 인증 설정
+      │    ├── Keycloak Client ──── [Keycloak Admin REST API]
+      │    │    └── SAML / OIDC / OAuth Client 자동 생성
+      │    └── PAK ──────────────── [Console 자체 생성]
+      │         └── Project API Key 발급 (Keycloak 미사용)
       │
       ├── Langfuse 설정 ─────────── [Langfuse API]
       │    ├── Langfuse Org/Project 생성
@@ -248,9 +251,9 @@ Realm: aap (단일)
 | 인증 방식 | 구성 내용 |
 |-----------|-----------|
 | **SAML** | Keycloak에 SAML Client 자동 생성, SP 메타데이터 제공 |
-| **OIDC** | Keycloak에 OIDC Client 자동 생성, Client ID/Secret 발급 |
-| **OAuth** | Keycloak OAuth Client 구성 및 Redirect URI 설정 |
-| **PAK (Project API Key)** | Console에서 API Key 자동 생성 및 발급 |
+| **OIDC** | Keycloak에 OIDC Confidential Client 자동 생성 (Authorization Code Flow), Client ID/Secret 발급 |
+| **OAuth** | Keycloak에 OAuth 2.0 Public Client 자동 생성 (PKCE 기반, Client Secret 없음), Redirect URI 설정 |
+| **PAK (Project API Key)** | Console에서 API Key 자동 생성 및 발급 (Keycloak 미사용) |
 
 - **Keycloak Admin REST API**를 직접 호출하여 Client 생성/수정/삭제를 자동화한다. Console의 Service Account 토큰으로 인증한다.
 - 발급된 Keycloak Client Secret 및 PAK는 생성 시 UI에 **일회성으로만 표시**하며, Console에서는 별도로 저장하지 않는다.
@@ -259,9 +262,9 @@ Realm: aap (단일)
 
 | Console 작업 | Keycloak Admin API |
 |---|---|
-| OIDC Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: openid-connect`, `publicClient: false` |
+| OIDC Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: openid-connect`, `publicClient: false`, `serviceAccountsEnabled: true` |
 | SAML Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: saml`, SAML 설정 attributes 포함 |
-| OAuth Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: openid-connect`, redirect URI 설정 |
+| OAuth Client 생성 | `POST /admin/realms/{realm}/clients` — `protocol: openid-connect`, `publicClient: true`, PKCE 설정 |
 | Client 설정 변경 | `PUT /admin/realms/{realm}/clients/{id}` |
 | Client 삭제 | `DELETE /admin/realms/{realm}/clients/{id}` |
 | Client Secret 재발급 | `POST /admin/realms/{realm}/clients/{id}/client-secret` |
@@ -348,7 +351,7 @@ Config Server는 읽기 전용 API만 제공한다. 설정 변경은 Console이 
 
 ### 6.2 성능
 
-- Project 생성 요청 후 전체 설정 완료까지 목표: 1분 이내 (API 직접 호출 방식으로 Terraform 대비 대폭 단축)
+- Project 생성 요청 후 전체 설정 완료까지 목표: 1분 이내
 - Console UI 페이지 로드 시간: 2초 이내
 - 실시간 로그 스트리밍 지연: 1초 이내
 
@@ -397,8 +400,9 @@ Step 1. Project 레코드 생성 (DB) + App ID 발급
   │
   │ ── 리소스 생성 (병렬 실행 가능) ──
   │
-  ├──▶ Step 2a. Keycloak 리소스 생성 [Keycloak Admin API]
-  │     └─ 선택한 인증 방식에 따라 Client 생성 또는 PAK 발급
+  ├──▶ Step 2a. 인증 리소스 생성
+  │     ├─ SAML/OIDC/OAuth 선택 시: Keycloak Admin API로 Client 생성
+  │     └─ PAK 선택 시: Console에서 API Key 직접 생성 (Keycloak 불필요)
   │
   └──▶ Step 2b. Langfuse 리소스 생성 [Langfuse API]
          ├─ Langfuse Org/Project 생성
