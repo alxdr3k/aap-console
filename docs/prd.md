@@ -69,41 +69,37 @@
                          └──────┬───────┘
                                 │
                          ┌──────▼───────┐
-                         │   Keycloak   │
-                         │ (SSO Broker) │
-                         └──────┬───────┘
-                       인증 후   │
-               ┌────────────────┼────────────────┐
-               ▼                ▼                ▼
-        ┌────────────┐  ┌────────────┐  ┌──────────────┐
-        │ AAP Console│  │  LiteLLM   │  │   Langfuse   │──▶ S3
-        │  (Rails)   │  │ (LLM G/W)  │  │  (관측성)     │
-        └─────┬──────┘  └────────────┘  └──────────────┘
-              │               ▲ 로컬 파일 읽기
-              │         ┌─────┴──────┐
-              │         │Config Agent│  Sidecar (init + watch)
-              │         │  (Go CLI)  │
-              │         └─────┬──────┘
-              │          fetch │ (mTLS + App ID/Secret)
-    ┌─────────▼─────┐  ┌─────▼──────────┐
-    │ Provisioner   │  │ Config Server  │  Go 인메모리 서버 (aap-config-server)
-    │ (SolidQueue   │  │  · Git Sync    │  설정: Git → 인메모리 → REST API 서빙
-    │  Bg Jobs)     │  │  · Secret Vol. │  시크릿: K8s Secret Volume Mount 읽기
-    └───────────────┘  └────────────────┘
-         │  │  │              ▲
-  Admin  │  │  │   git poll/  │ volume mount
-  API 호출│  │  │   webhook    │
-         │  │  │              │
-         │  │  └──────────────┼──────────────┐
-         │  │     git push    │              │
-    ┌────┘  └─────────────────┴──────────────┤
-    │                                         │
-    │  Keycloak Admin API                     │
-    │  Langfuse API                           │
-    │  Config Git Repo (설정 YAML)            │
-    │  K8s Secrets (시크릿 실제 값)            │
-    │                                         │
-    └─────────────────────────────────────────┘
+                         │   Keycloak   │◄─── Admin REST API ───┐
+                         │ (SSO Broker) │                       │
+                         └──────┬───────┘                       │
+                       인증 후   │                               │
+               ┌────────────────┼────────────────┐              │
+               ▼                ▼                ▼              │
+        ┌────────────┐  ┌────────────┐  ┌──────────────┐       │
+        │ AAP Console│  │  LiteLLM   │  │   Langfuse   │──▶ S3 │
+        │  (Rails)   │  │ (LLM G/W)  │  │  (관측성)     │       │
+        └─────┬──────┘  └────────────┘  └───┬──────────┘       │
+              │               ▲ 로컬 파일 읽기  │ ◄─── Langfuse API
+              │         ┌─────┴──────┐         │                │
+              │         │Config Agent│         │                │
+              │         │  (Go CLI)  │  Sidecar (init + watch)  │
+              │         └─────┬──────┘                          │
+              │          fetch │ (mTLS + App ID/Secret)         │
+    ┌─────────▼─────┐  ┌─────▼──────────┐                      │
+    │ Provisioner   │  │ Config Server  │  Go 인메모리 서버      │
+    │ (SolidQueue   │──│  · Git Sync    │  (aap-config-server)  │
+    │  Bg Jobs)     │  │  · Secret Vol. │                       │
+    └───┬───┬───────┘  └────────────────┘                       │
+        │   │                 ▲                                 │
+        │   │  git push       │ git poll / volume mount         │
+        │   │                 │                                 │
+        │   ▼                 │                                 │
+        │  Config Git Repo    │    K8s Secrets                  │
+        │  (설정 YAML)        │    (시크릿 실제 값)              │
+        │                     │                                 │
+        └─────────────────────┴─────────────────────────────────┘
+              Keycloak / Langfuse API 직접 호출 + Git 커밋 + K8s Secret 관리
+
 ┌─ K8s Cluster ──────────────────────────────────────────┐
 │                                                         │
 │  Keycloak · LiteLLM · Langfuse · Config Server · ...   │
@@ -198,6 +194,7 @@ Realm: aap (단일)
 | Service Account Role | 용도 |
 |---|---|
 | `realm-management: manage-clients` | Client 생성/수정/삭제 (OIDC/SAML/OAuth) 및 Protocol Mapper 관리 |
+| `realm-management: manage-groups` | 그룹 생성/삭제 (Organization 생성/삭제 시 하위 그룹 CRUD) |
 | `realm-management: query-groups` | 그룹 목록/상세 조회 |
 | `realm-management: manage-users` | 사용자-그룹 멤버십 변경 |
 | `realm-management: query-users` | 사용자 검색 |
@@ -310,7 +307,7 @@ Realm: aap (단일)
 |------|------|
 | **이력 관리** | Project별 설정 변경 시마다 버전 기록 (Console DB 이력 + Config Git 커밋 기반) |
 | **버전 조회** | Console에서 변경 이력 목록 및 diff 확인 |
-| **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
+| **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷(Client 생성 시 파라미터를 버전별로 저장)을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
 | **롤백 — Config Server** | Config Git Repo 이력을 기반으로 LiteLLM Config 및 Langfuse 메타데이터를 이전 버전으로 복구 (Console이 Git revert 커밋) → Config Server 인메모리 자동 갱신 → Config Agent long polling으로 전파 |
 | **감사 로그** | 누가, 언제, 어떤 설정을 변경했는지 추적 |
 
@@ -441,7 +438,7 @@ Step 5. 완료 → Console에 결과 표시
 | **Frontend** | Rails View + Hotwire (Turbo/Stimulus) | SPA 없이 실시간 UI 업데이트 |
 | **실시간 통신** | ActionCable + SolidCable | 프로비저닝 로그 스트리밍. SQLite 기반 pub/sub (Redis 불필요) |
 | **Background Job** | SolidQueue | SQLite 기반 잡 큐 (Rails 8 기본). Sidekiq/Redis 불필요 |
-| **Database** | SQLite (WAL 모드) | Organization/Project 메타데이터, 실행 이력, 감사 로그. DB 서버 불필요 — PVC에 단일 파일로 운영 |
+| **Database** | SQLite (WAL 모드) | Organization/Project 메타데이터, 프로비저닝 단계별 상태/설정 스냅샷, 실행 이력, 감사 로그. DB 서버 불필요 — PVC에 단일 파일로 운영 |
 | **DB 백업/복구** | Litestream | SQLite → S3 실시간 스트리밍 백업. Pod 재시작 시 S3에서 자동 복원 |
 | **인증/인가** | Keycloak (Admin REST API + RBAC) | SAML/OIDC/OAuth Client 자동 구성 (Admin API 직접 호출). Organization 단위 RBAC을 Keycloak 그룹으로 관리 (섹션 5 FR-2 참조) |
 | **관측성** | Langfuse (API 연동) | LLM 트레이싱 프로젝트 및 키 관리 |
