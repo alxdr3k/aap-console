@@ -168,10 +168,10 @@ Organization (조직)
 
 | 항목 | 상세 |
 |------|------|
-| **생성** | 신규 Organization 등록. 조직명, 설명 입력. 생성 시 멤버 목록 관리 (초기 관리자 지정) |
+| **생성** | 신규 Organization 등록. 조직명, 설명 입력. 생성 시 멤버 목록 관리 (초기 관리자 지정). Langfuse Org 자동 생성 (tRPC `organizations.create`) |
 | **조회** | Organization 목록 및 상세 정보 (소속 Project 현황, 멤버 목록 포함) 확인 |
 | **수정** | Organization 정보 변경 (이름, 설명) 및 멤버 추가/제거/권한 변경 |
-| **삭제** | Organization 삭제 시 하위 모든 Project를 먼저 개별 삭제(각 Project의 롤백 대상 전체 정리, FR-3 참조)한 뒤, Keycloak Org 그룹을 삭제. **플랫폼 관리자(`super_admin`)만 실행 가능** |
+| **삭제** | Organization 삭제 시 하위 모든 Project를 먼저 개별 삭제(각 Project의 롤백 대상 전체 정리, FR-3 참조)한 뒤, Langfuse Org 삭제 (tRPC `organizations.delete`) + Keycloak Org 그룹 삭제. **플랫폼 관리자(`super_admin`)만 실행 가능** |
 
 ### FR-2. 접근제어 (RBAC) — Keycloak 위임
 
@@ -320,8 +320,8 @@ Langfuse 웹 UI가 내부적으로 사용하는 tRPC API를 직접 호출한다.
 | **가드레일** | 사용자 선택 기반의 보안 가드레일 적용 (컨텐츠 필터링, 토큰 제한 등) |
 | **S3 경로** | App별 S3 버킷 경로 (prefix)를 Config에 포함. 기존 공유 버킷을 사용하며 별도 버킷 생성 불필요 |
 | **S3 Retention** | App별 S3 데이터 보관 주기를 LiteLLM Config 변수로 설정. LiteLLM이 해당 변수를 읽어 커스텀 구현된 Retention 로직을 적용 (S3 Lifecycle Policy가 아닌 애플리케이션 레벨 처리) |
-| **Config 반영** | Console이 Config Server Admin API (`POST /api/v1/admin/changes`)로 설정/시크릿 데이터를 일괄 전달. Config Server가 단일 atomic Git commit & push 수행 |
-| **Reload 방식** | Console은 Config Server Admin API 호출까지만 수행. Git 저장, 인메모리 갱신, LiteLLM 전파는 Config Server 모듈이 자동 처리 |
+| **Config 반영** | Console이 Config Server Admin API (`POST /api/v1/admin/changes`)로 설정/시크릿 데이터를 일괄 전달. Config Server가 atomic하게 처리 후 버전 식별자 반환 |
+| **Reload 방식** | Console은 Config Server Admin API 호출까지만 수행. 저장, 인메모리 갱신, LiteLLM 전파는 Config Server 모듈이 자동 처리 |
 
 ### FR-7. 프로비저닝 파이프라인 관리
 
