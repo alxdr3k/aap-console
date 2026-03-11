@@ -1,9 +1,9 @@
 # AAP Console — High-Level Design (HLD)
 
-> **버전**: 1.3
+> **버전**: 1.4
 > **작성일**: 2026-03-11
 > **상태**: Draft
-> **참조**: [PRD v1.11](./prd.md)
+> **참조**: [PRD v1.12](./prd.md)
 
 ---
 
@@ -89,8 +89,8 @@
 │ description      │   │   │ slug        UNQ* │  * (org_id, slug)
 │ langfuse_org_id  │   │   │ description      │
 │ created_at       │   │   │ app_id      UNQ  │
-│ updated_at       │   │   │ status           │  (active/provisioning/
-└──────────────────┘   │   │ created_at       │   deleting/deleted)
+│ updated_at       │   │   │ status           │  (provisioning/active/
+└──────────────────┘   │   │ created_at       │   update_pending/deleting/deleted)
                        │   │ updated_at       │
                        │   └──────┬───────────┘
                        │          │
@@ -104,12 +104,12 @@
 │ project_id       │  │ project_id    FK  │  │ project_id    FK  │
 │ user_sub         │  │ auth_type         │  │ operation         │
 │ action           │  │ keycloak_client_id│  │ status            │
-│ action           │  │ keycloak_client_  │  │ started_at        │
-│ resource_type    │  │   uuid            │  │ completed_at      │
-│ resource_id      │  │ created_at        │  │ error_message     │
-│ details (JSON)   │  │ updated_at        │  │ created_at        │
-│ created_at       │  └───────────────────┘  │ updated_at        │
-└──────────────────┘                         └────┬──────────────┘
+│ resource_type    │  │ keycloak_client_  │  │ started_at        │
+│ resource_id      │  │   uuid            │  │ completed_at      │
+│ details (JSON)   │  │ created_at        │  │ error_message     │
+│ created_at       │  │ updated_at        │  │ created_at        │
+└──────────────────┘  └───────────────────┘  │ updated_at        │
+                                             └────┬──────────────┘
                                                   │
                          ┌────────────────────────┤
                          │                        │
@@ -125,9 +125,9 @@
                    │ status           │   │ change_summary    │
                    │ started_at       │   │ changed_by_sub    │
                    │ completed_at     │   │ snapshot (JSON)   │
-                   │ error_message    │   │ snapshot (JSON)   │
-                   │ retry_count      │   │ created_at        │
-                   │ max_retries      │   └───────────────────┘
+                   │ error_message    │   │ created_at        │
+                   │ retry_count      │   └───────────────────┘
+                   │ max_retries      │
                    │ result_snapshot  │
                    │   (JSON)         │
                    │ created_at       │
@@ -144,7 +144,6 @@
 │ joined_at            │         │ created_at           │
 │ created_at           │         │ updated_at           │
 │ updated_at           │         └──────────────────────┘
-└──────────────────────┘
 └──────────────────────┘
 ```
 
@@ -222,11 +221,12 @@
 | `id` | integer PK | |
 | `org_membership_id` | integer FK NOT NULL | 소속 Org 멤버십 |
 | `project_id` | integer FK NOT NULL | 대상 Project |
-| `role` | string NOT NULL DEFAULT 'read' | `admin` / `write` / `read` |
+| `role` | string NOT NULL DEFAULT 'read' | `write` / `read` |
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
 
 > **유니크 제약**: `(org_membership_id, project_id)`. 한 멤버십당 한 Project에 하나의 권한만.
+> **Org admin은 이 테이블에 레코드 불필요** — admin 역할 자체가 Org 내 모든 Project에 대한 암묵적 접근 권한을 부여하므로 `project_permissions`는 `read`/`write` 사용자 전용.
 
 **권한 결정 규칙**:
 
@@ -253,7 +253,7 @@
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
 
-**상태 값**: `pending` → `in_progress` → `completed` / `failed` → `retrying` → `rolling_back` → `rolled_back` / `rollback_failed`
+**상태 값**: `pending` → `in_progress` → `completed` / `failed` → `retrying` → `in_progress` (재시도 루프) / `rolling_back` → `rolled_back` / `rollback_failed`
 
 **동시성 제어**: 동일 `project_id`에 대해 `pending` 또는 `in_progress` 상태의 job이 있으면 새 job 생성을 거부한다 (DB 레벨 체크 + 앱 레벨 검증).
 
@@ -362,7 +362,7 @@ add_index :audit_logs, :created_at
 ```
 app/
 ├── controllers/
-│   ├── application_controller.rb         # JWT 인증, RBAC 인가 (FR-2)
+│   ├── application_controller.rb         # 세션 인증, RBAC 인가 (FR-2)
 │   ├── organizations_controller.rb       # FR-1
 │   ├── members_controller.rb             # FR-2
 │   ├── projects_controller.rb            # FR-3
@@ -379,7 +379,7 @@ app/
 │   ├── project.rb                        # FR-3
 │   ├── org_membership.rb                 # FR-2: Org 역할 관리
 │   ├── project_permission.rb             # FR-2: Project ACL
-│   ├── current_user.rb                   # FR-2: JWT + DB 기반 인가 모델
+│   ├── current_user.rb                   # FR-2: 세션 + DB 기반 인가 모델
 │   ├── project_auth_config.rb            # FR-4
 │   ├── provisioning_job.rb               # FR-7.1 (상태 머신)
 │   ├── provisioning_step.rb              # FR-7.2
@@ -421,7 +421,7 @@ app/
 │   └── config_server_client.rb           # FR-6
 │
 ├── jobs/
-│   ├── provisioning_job.rb               # FR-7: SolidQueue Job
+│   ├── provisioning_execute_job.rb        # FR-7: SolidQueue Job
 │   ├── app_registry_webhook_job.rb       # fire-and-forget + async retry
 │   └── health_check_job.rb              # FR-9
 │
@@ -438,80 +438,25 @@ app/
 
 ### 3.2 Service 계층 패턴
 
-모든 Service는 동일한 Result 패턴을 따른다:
+모든 Service는 동일한 패턴을 따른다:
 
-```ruby
-class Projects::CreateService
-  def initialize(organization:, params:, current_user:)
-    @organization = organization
-    @params = params
-    @current_user = current_user
-  end
+- **초기화**: 대상 리소스, 파라미터, `current_user`를 주입받는다
+- **실행** (`call`): 단일 DB 트랜잭션 내에서 레코드 생성 → 프로비저닝 Job enqueue → 감사 로그 기록
+- **결과**: `Result.success(data)` 또는 `Result.failure(message)` 반환
 
-  def call
-    project = nil
-
-    ActiveRecord::Base.transaction do
-      project = @organization.projects.create!(
-        name: @params[:name],
-        slug: @params[:slug],
-        description: @params[:description],
-        app_id: generate_app_id,
-        status: "provisioning"
-      )
-
-      job = project.provisioning_jobs.create!(
-        operation: "create",
-        status: "pending"
-      )
-
-      create_provisioning_steps(job)
-
-      AuditLog.record!(
-        organization: @organization,
-        project: project,
-        user: @current_user,
-        action: "project.create"
-      )
-
-      ProvisioningJob.perform_later(job.id)
-    end
-
-    Result.success(project)
-  rescue ActiveRecord::RecordInvalid => e
-    Result.failure(e.message)
-  end
-end
-```
+예시: `Projects::CreateService#call` → 트랜잭션 내에서 Project 레코드 생성(status: `provisioning`) + ProvisioningJob 생성 + AuditLog 기록 + Job enqueue
 
 ### 3.3 Provisioning Step 인터페이스
 
-```ruby
-# app/services/provisioning/steps/base_step.rb
-class Provisioning::Steps::BaseStep
-  attr_reader :project, :step_record
+모든 프로비저닝 단계는 `Provisioning::Steps::BaseStep`을 상속하며 3개의 메서드를 구현한다:
 
-  def initialize(project:, step_record:)
-    @project = project
-    @step_record = step_record
-  end
+| 메서드 | 역할 | 반환 |
+|--------|------|------|
+| `execute` | 외부 API 호출로 리소스 생성. 성공 시 `result_snapshot` (Hash) 반환, 실패 시 예외 | Hash (생성된 리소스 정보) |
+| `rollback` | `step_record.result_snapshot` 기반으로 생성된 리소스 정리 | — |
+| `already_completed?` | 멱등성 체크. 이미 리소스가 존재하면 `true` → skip | Boolean |
 
-  # 실행. 성공 시 result_snapshot 반환, 실패 시 예외 발생
-  def execute
-    raise NotImplementedError
-  end
-
-  # 롤백. step_record.result_snapshot 기반으로 생성된 리소스 정리
-  def rollback
-    raise NotImplementedError
-  end
-
-  # 멱등성 확인. 이미 완료된 경우 true 반환하여 skip
-  def already_completed?
-    false
-  end
-end
-```
+`BaseStep`은 `project`와 `step_record`를 주입받아 각 단계에서 공통으로 사용한다.
 
 ---
 
@@ -545,38 +490,38 @@ end
 |--------|------|------|------|
 | GET | `/organizations/:org_slug/projects` | 목록 조회 | Org `read`+ |
 | POST | `/organizations/:org_slug/projects` | 생성 (→ 프로비저닝 시작) | Org `admin` |
-| GET | `/organizations/:org_slug/projects/:slug` | 상세 조회 | Org `read`+ |
-| PATCH | `/organizations/:org_slug/projects/:slug` | 수정 | Org `write`+ |
+| GET | `/organizations/:org_slug/projects/:slug` | 상세 조회 | Project `read`+ |
+| PATCH | `/organizations/:org_slug/projects/:slug` | 수정 | Project `write`+ |
 | DELETE | `/organizations/:org_slug/projects/:slug` | 삭제 (→ 프로비저닝 시작) | Org `admin` |
 
 #### 인증 설정 — FR-4
 
 | Method | Path | 설명 | 권한 |
 |--------|------|------|------|
-| GET | `/organizations/:org_slug/projects/:slug/auth_config` | 인증 설정 조회 | Org `read`+ |
-| PATCH | `/organizations/:org_slug/projects/:slug/auth_config` | 인증 방식 변경 | Org `write`+ |
+| GET | `/organizations/:org_slug/projects/:slug/auth_config` | 인증 설정 조회 | Project `read`+ |
+| PATCH | `/organizations/:org_slug/projects/:slug/auth_config` | 인증 방식 변경 | Project `write`+ |
 
 #### LiteLLM Config — FR-6
 
 | Method | Path | 설명 | 권한 |
 |--------|------|------|------|
-| GET | `/organizations/:org_slug/projects/:slug/litellm_config` | Config 조회 | Org `read`+ |
-| PATCH | `/organizations/:org_slug/projects/:slug/litellm_config` | Config 변경 (→ 프로비저닝) | Org `write`+ |
+| GET | `/organizations/:org_slug/projects/:slug/litellm_config` | Config 조회 | Project `read`+ |
+| PATCH | `/organizations/:org_slug/projects/:slug/litellm_config` | Config 변경 (→ 프로비저닝) | Project `write`+ |
 
 #### 프로비저닝 — FR-7.3
 
 | Method | Path | 설명 | 권한 |
 |--------|------|------|------|
-| GET | `/provisioning_jobs/:id` | 현황 화면 (실시간 상태) | Org `read`+ |
+| GET | `/provisioning_jobs/:id` | 현황 화면 (실시간 상태) | Project `read`+ |
 | POST | `/provisioning_jobs/:id/retry` | 수동 재시도 | Org `admin` |
 
 #### 설정 이력 / 롤백 — FR-8
 
 | Method | Path | 설명 | 권한 |
 |--------|------|------|------|
-| GET | `/organizations/:org_slug/projects/:slug/config_versions` | 변경 이력 목록 | Org `read`+ |
-| GET | `/config_versions/:id` | 변경 상세 + diff | Org `read`+ |
-| POST | `/config_versions/:id/rollback` | 해당 버전으로 롤백 | Org `write`+ |
+| GET | `/organizations/:org_slug/projects/:slug/config_versions` | 변경 이력 목록 | Project `read`+ |
+| GET | `/config_versions/:id` | 변경 상세 + diff | Project `read`+ |
+| POST | `/config_versions/:id/rollback` | 해당 버전으로 롤백 | Project `write`+ |
 
 ### 4.2 외부 제공 API (Config Server용)
 
@@ -697,24 +642,8 @@ Orchestrator.run(job)
 
 동일 `step_order`의 단계들은 Ruby Thread로 병렬 실행한다. SolidQueue Job 내부에서의 병렬 처리이므로 별도 Job 분할은 하지 않는다.
 
-```ruby
-class Provisioning::Orchestrator
-  def run_step_group(steps)
-    if steps.size == 1
-      StepRunner.new(steps.first).execute
-    else
-      # 병렬 실행
-      threads = steps.map do |step|
-        Thread.new { StepRunner.new(step).execute }
-      end
-      results = threads.map(&:value)
-      # 하나라도 실패 시 예외 발생
-      failed = results.select(&:failure?)
-      raise StepGroupError, failed if failed.any?
-    end
-  end
-end
-```
+- `Orchestrator#run_step_group(steps)`: 단계가 1개면 직접 실행, 복수면 Thread로 병렬 실행 후 전체 완료 대기
+- 병렬 단계 중 하나라도 실패하면 `StepGroupError` 발생 → 전체 롤백 트리거
 
 ### 5.3 재시도 정책 — FR-7.2
 
@@ -728,41 +657,12 @@ end
 
 ### 5.4 ActionCable 상태 브로드캐스트 — FR-7.3
 
-각 단계 상태 변경 시 ActionCable로 Turbo Stream을 브로드캐스트한다:
+`StepRunner`는 각 단계 상태 변경 시 ActionCable로 Turbo Stream을 브로드캐스트한다:
 
-```ruby
-class Provisioning::StepRunner
-  def execute
-    update_status(:in_progress)
-    result = step_instance.execute
-    update_status(:completed, result_snapshot: result)
-  rescue => e
-    if retriable?
-      update_status(:retrying)
-      retry_later
-    else
-      update_status(:failed, error_message: e.message)
-      raise
-    end
-  end
-
-  private
-
-  def update_status(status, **attrs)
-    @step_record.update!(status: status, **attrs)
-    broadcast_step_update
-  end
-
-  def broadcast_step_update
-    Turbo::StreamsChannel.broadcast_replace_to(
-      "provisioning_job_#{@step_record.provisioning_job_id}",
-      target: "step_#{@step_record.id}",
-      partial: "provisioning_steps/step",
-      locals: { step: @step_record }
-    )
-  end
-end
-```
+1. `execute` → 상태를 `in_progress`로 변경 + 브로드캐스트
+2. 성공 시 → `completed` + `result_snapshot` 저장 + 브로드캐스트
+3. 실패 시 → 재시도 가능하면 `retrying`, 불가하면 `failed` + 예외 전파
+4. 모든 상태 변경은 `Turbo::StreamsChannel.broadcast_replace_to`로 해당 step의 partial을 실시간 교체
 
 ### 5.5 크래시 복구 및 멱등성
 
@@ -797,105 +697,34 @@ Orchestrator.run(job)
 |------|-----------------|------|
 | `app_registry_register` | Config Server App 목록 조회하여 app_id 존재 여부 확인 | GET API 호출 |
 | `keycloak_client_create` | `GET /admin/realms/{realm}/clients?clientId={clientId}`로 Client 존재 확인 | clientId 네이밍 규칙으로 검색 |
-| `langfuse_project_create` | `project_auth_config.langfuse_project_id` 존재 + Langfuse API로 확인 | step_record.result_snapshot 활용 |
+| `langfuse_project_create` | `step_record.result_snapshot`의 `langfuse_project_id` 존재 + Langfuse API로 확인 | 이전 실행의 result_snapshot 활용 |
 | `config_server_apply` | Config Server에서 해당 app의 설정 존재 여부 조회 | GET API 호출 |
 | `health_check` | 항상 재실행 (멱등) | 검증만 수행하므로 부작용 없음 |
 
-```ruby
-# 예시: keycloak_client_create의 멱등성 체크
-class Provisioning::Steps::KeycloakClientCreate < BaseStep
-  def already_completed?
-    return false unless step_record.result_snapshot.present?
-
-    client_id = expected_client_id
-    existing = keycloak_client.find_client_by_client_id(client_id)
-    if existing
-      # result_snapshot 복원 (크래시 전에 저장 못한 경우 대비)
-      step_record.update!(
-        status: "completed",
-        result_snapshot: { keycloak_client_uuid: existing["id"] }
-      )
-      true
-    else
-      false
-    end
-  end
-end
-```
+멱등성 체크 동작 예시 (`KeycloakClientCreate`): `result_snapshot` 또는 네이밍 규칙으로 Keycloak에 Client가 이미 존재하는지 확인 → 존재하면 `result_snapshot` 복원 후 skip.
 
 #### 동시성 제어
 
-```ruby
-# app/models/provisioning_job.rb
-class ProvisioningJob < ApplicationRecord
-  validate :no_active_job_for_project, on: :create
-
-  private
-
-  def no_active_job_for_project
-    active_exists = self.class
-      .where(project_id: project_id)
-      .where(status: %w[pending in_progress retrying rolling_back])
-      .exists?
-
-    if active_exists
-      errors.add(:base, "이 Project에 진행 중인 프로비저닝이 있습니다")
-    end
-  end
-end
-```
+`ProvisioningJob` 모델의 `create` 유효성 검증에서 동일 `project_id`에 대해 `pending`/`in_progress`/`retrying`/`rolling_back` 상태의 기존 job이 있으면 생성을 거부한다.
 
 #### 병렬 단계 부분 실패 처리
 
-```ruby
-class Provisioning::Orchestrator
-  def run_step_group(steps)
-    return StepRunner.new(steps.first).execute if steps.size == 1
+병렬 그룹(동일 `step_order`) 내에서 일부만 실패한 경우:
 
-    results = {}
-    mutex = Mutex.new
-    threads = steps.map do |step|
-      Thread.new do
-        result = StepRunner.new(step).execute
-        mutex.synchronize { results[step.id] = result }
-      rescue => e
-        mutex.synchronize { results[step.id] = e }
-      end
-    end
-    threads.each(&:join)
-
-    # 실패한 단계가 있으면, 이 그룹에서 성공한 단계만 먼저 롤백
-    failed = results.select { |_, v| v.is_a?(Exception) }
-    if failed.any?
-      succeeded_in_group = results.reject { |_, v| v.is_a?(Exception) }
-      rollback_steps(steps.select { |s| succeeded_in_group.key?(s.id) })
-      raise StepGroupError.new(failed.values)
-    end
-  end
-end
-```
+1. 모든 Thread 완료 대기 (Mutex로 결과 수집)
+2. 실패 감지 시 → **이 그룹에서 성공한 단계만** 먼저 롤백
+3. 이후 이전 단계들을 역순으로 롤백 (일반 롤백 플로우와 동일)
 
 #### SolidQueue Job 설정
 
-```ruby
-# app/jobs/provisioning_execute_job.rb
-class ProvisioningExecuteJob < ApplicationJob
-  queue_as :provisioning
-  limits_concurrency to: 1, key: ->(job_id) {
-    ProvisioningJob.find(job_id).project_id
-  }
+`ProvisioningExecuteJob` (`app/jobs/provisioning_execute_job.rb`):
 
-  retry_on StandardError, wait: :polynomially_longer, attempts: 2
-  discard_on ActiveRecord::RecordNotFound
-
-  def perform(job_id)
-    job = ProvisioningJob.find(job_id)
-    Provisioning::Orchestrator.new(job).run
-  end
-end
-```
-
-> `limits_concurrency`로 동일 Project에 대한 Job이 SolidQueue 레벨에서도 직렬 실행되도록 보장한다.
+| 설정 | 값 | 설명 |
+|------|---|------|
+| `queue_as` | `:provisioning` | 전용 큐 |
+| `limits_concurrency` | `to: 1, key: project_id` | 동일 Project Job 직렬 실행 보장 |
+| `retry_on` | `StandardError, attempts: 2` | SolidQueue 레벨 재시도 (크래시 복구용) |
+| `discard_on` | `ActiveRecord::RecordNotFound` | 삭제된 Job은 폐기 |
 
 ### 5.6 Operation별 단계 정의
 
@@ -917,8 +746,9 @@ end
 | 1 | `keycloak_client_delete` | `DELETE /clients/{uuid}` | |
 | 1 | `langfuse_project_delete` | `projects.delete` | |
 | 2 | `app_registry_deregister` | webhook `action: delete` | |
+| 3 | `db_cleanup` | — (Console DB) | `project_permissions` 삭제 + Project status → `deleted` |
 
-> 삭제 시에는 모든 리소스를 병렬로 제거 후 App Registry 해제.
+> 삭제 시에는 외부 리소스를 병렬로 제거 → App Registry 해제 → Console DB 정리.
 
 #### Project Update (설정 변경)
 
@@ -933,63 +763,23 @@ end
 
 ### 6.1 채널 설계 — FR-7.3
 
-```ruby
-# app/channels/provisioning_channel.rb
-class ProvisioningChannel < ApplicationCable::Channel
-  def subscribed
-    job = ProvisioningJob.find(params[:job_id])
-    # 권한 검증: 해당 Project의 Org에 대한 read 이상 권한 필요
-    authorize_org!(job.project.organization)
+`ProvisioningChannel` (`app/channels/provisioning_channel.rb`):
 
-    stream_for job
-    # == Turbo::StreamsChannel 대안으로 직접 구현 시 사용
-    # stream_from "provisioning_job_#{params[:job_id]}"
-  end
-end
-```
+- `subscribed`: `job_id` 파라미터로 Job 조회 → 해당 Project에 대한 `read`+ 권한 검증 → `stream_for job`
+- 클라이언트는 `turbo_stream_from "provisioning_job_#{@job.id}"`로 구독
 
 ### 6.2 Turbo Stream 연동
 
-```erb
-<%# app/views/provisioning_jobs/show.html.erb %>
-<%= turbo_stream_from "provisioning_job_#{@job.id}" %>
+| 뷰 | 역할 |
+|----|------|
+| `provisioning_jobs/show.html.erb` | `turbo_stream_from`으로 채널 구독 + step 목록 렌더링 |
+| `provisioning_steps/_step.html.erb` | `turbo_frame_tag dom_id(step)`으로 개별 step 렌더링. 상태 아이콘/이름/상태/에러 표시 |
 
-<div id="provisioning_steps">
-  <% @job.provisioning_steps.order(:step_order).each do |step| %>
-    <%= render "provisioning_steps/step", step: step %>
-  <% end %>
-</div>
-```
-
-```erb
-<%# app/views/provisioning_steps/_step.html.erb %>
-<%= turbo_frame_tag dom_id(step) do %>
-  <div class="step step--<%= step.status %>">
-    <span class="step__icon"><%= step_status_icon(step) %></span>
-    <span class="step__name"><%= step_display_name(step) %></span>
-    <span class="step__status"><%= step.status.humanize %></span>
-    <% if step.error_message.present? %>
-      <span class="step__error"><%= step.error_message %></span>
-    <% end %>
-  </div>
-<% end %>
-```
+Step 상태 변경 시 서버에서 `broadcast_replace_to`로 해당 step의 partial을 실시간 교체한다.
 
 ### 6.3 Job 완료 시 알림
 
-```ruby
-# Orchestrator에서 job 완료 시
-def complete_job(job, status)
-  job.update!(status: status, completed_at: Time.current)
-
-  Turbo::StreamsChannel.broadcast_replace_to(
-    "provisioning_job_#{job.id}",
-    target: "job_status",
-    partial: "provisioning_jobs/status",
-    locals: { job: job }
-  )
-end
-```
+Job 완료 시 `Orchestrator`가 `job.status`를 갱신하고 `broadcast_replace_to`로 전체 상태 partial을 교체한다.
 
 ---
 
@@ -997,142 +787,57 @@ end
 
 ### 7.1 공통 패턴
 
-모든 외부 API 클라이언트는 동일한 에러 처리/로깅 패턴을 따른다:
+모든 외부 API 클라이언트는 `BaseClient`를 상속하며 동일한 패턴을 따른다:
 
-```ruby
-# app/clients/base_client.rb
-class BaseClient
-  include ActiveSupport::Configurable
+- **HTTP 클라이언트**: Faraday (JSON 요청/응답, 에러 자동 raise)
+- **에러 처리**: `Faraday::Error` → `ApiError` (status, body 포함) 변환
+- **설정**: `ActiveSupport::Configurable`로 base_url 등 환경별 설정 관리
 
-  class ApiError < StandardError
-    attr_reader :status, :body
-    def initialize(status:, body:)
-      @status, @body = status, body
-      super("API error #{status}: #{body}")
-    end
-  end
+### 7.2 KeycloakClient — FR-2, FR-4
 
-  private
+`app/clients/keycloak_client.rb` — Service Account 토큰으로 인증 (캐시 + 자동 갱신)
 
-  def connection
-    @connection ||= Faraday.new(url: base_url) do |f|
-      f.request :json
-      f.response :json
-      f.response :raise_error
-      f.adapter Faraday.default_adapter
-    end
-  end
+| 메서드 | 용도 | 관련 FR |
+|--------|------|---------|
+| `search_users(query:)` | 이메일/이름으로 사용자 검색 | FR-2 |
+| `get_user(user_sub:)` | 사용자 상세 조회 (이름/이메일) | FR-2 |
+| `get_users_by_ids(user_subs:)` | 배치 조회 (멤버 목록용) | FR-2 |
+| `create_user(email:)` | 미등록 사용자 사전 생성 | FR-2 |
+| `create_oidc_client(client_id:, redirect_uris:)` | OIDC Client 생성 | FR-4 |
+| `create_saml_client(client_id:, attributes:)` | SAML Client 생성 | FR-4 |
+| `create_oauth_client(client_id:, redirect_uris:)` | OAuth Client 생성 (PKCE) | FR-4 |
+| `delete_client(uuid:)` | Client 삭제 | FR-4 |
+| `get_client_secret(uuid:)` / `regenerate_client_secret(uuid:)` | Secret 조회/재발급 | FR-4 |
+| `assign_client_scope(client_uuid:, scope_id:)` | Client Scope 할당 | FR-4 |
 
-  def with_error_handling
-    yield
-  rescue Faraday::Error => e
-    raise ApiError.new(
-      status: e.response&.dig(:status),
-      body: e.response&.dig(:body)
-    )
-  end
-end
-```
+### 7.3 LangfuseClient — FR-1, FR-5
 
-### 7.2 Keycloak Client — FR-2, FR-4
+`app/clients/langfuse_client.rb` — NextAuth 세션 쿠키로 인증 (캐시 + 만료 시 자동 갱신). `POST /api/trpc/{procedure}` 형식으로 tRPC 호출.
 
-```ruby
-# app/clients/keycloak_client.rb
-class KeycloakClient < BaseClient
-  # === 사용자 관리 (FR-2) ===
-  def search_users(query:)                         # 멤버 검색
-  def get_user(user_sub:)                          # 사용자 정보 조회 (이름/이메일)
-  def get_users_by_ids(user_subs:)                 # 배치 조회 (멤버 목록용)
-  def create_user(email:)                          # 사전 할당
+| 메서드 | tRPC Procedure | 관련 FR |
+|--------|---------------|---------|
+| `create_organization(name:)` | `organizations.create` | FR-1 |
+| `update_organization(id:, name:)` | `organizations.update` | FR-1 |
+| `delete_organization(id:)` | `organizations.delete` | FR-1 |
+| `create_project(name:, org_id:)` | `projects.create` | FR-5 |
+| `delete_project(id:)` | `projects.delete` | FR-5 |
+| `create_api_key(project_id:)` → `{public_key, secret_key}` | `projectApiKeys.create` | FR-5 |
+| `list_api_keys(project_id:)` | `projectApiKeys.byProjectId` | FR-5 |
+| `delete_api_key(id:)` | `projectApiKeys.delete` | FR-5 |
 
-  # === Client 관리 (FR-4) ===
-  def create_oidc_client(client_id:, redirect_uris:)
-  def create_saml_client(client_id:, attributes:)
-  def create_oauth_client(client_id:, redirect_uris:)
-  def delete_client(uuid:)
-  def get_client_secret(uuid:)
-  def regenerate_client_secret(uuid:)
-  def assign_client_scope(client_uuid:, scope_id:)
+### 7.4 ConfigServerClient — FR-6, FR-8
 
-  private
+`app/clients/config_server_client.rb` — `X-App-ID` 헤더로 인증.
 
-  def service_account_token
-    # aap-console Service Account 토큰 (캐시 + 자동 갱신)
-  end
-end
-```
-
-### 7.3 Langfuse Client — FR-1, FR-5
-
-```ruby
-# app/clients/langfuse_client.rb
-class LangfuseClient < BaseClient
-  # === Organization 관리 (FR-1) ===
-  def create_organization(name:)
-  def update_organization(id:, name:)
-  def delete_organization(id:)
-
-  # === Project 관리 (FR-5) ===
-  def create_project(name:, org_id:)
-  def delete_project(id:)
-
-  # === API Key 관리 (FR-5) ===
-  def create_api_key(project_id:)          # → {public_key, secret_key}
-  def delete_api_key(id:)
-
-  private
-
-  def trpc_call(procedure, input = {})
-    with_error_handling do
-      response = connection.post("/api/trpc/#{procedure}") do |req|
-        req.body = { json: input }
-        req.headers["Cookie"] = session_cookie
-      end
-      response.body.dig("result", "data")
-    end
-  end
-
-  def session_cookie
-    # NextAuth 세션 쿠키 (캐시 + 만료 시 자동 갱신)
-  end
-end
-```
-
-### 7.4 Config Server Client — FR-6, FR-8
-
-```ruby
-# app/clients/config_server_client.rb
-class ConfigServerClient < BaseClient
-  # === Admin API (쓰기) ===
-  def apply_changes(org:, project:, service:, config:, env_vars:, secrets:)
-    # POST /api/v1/admin/changes → {version: "..."}
-  end
-
-  def delete_changes(org:, project:, service:)
-    # DELETE /api/v1/admin/changes → {version: "..."}
-  end
-
-  def revert_changes(org:, project:, service:, target_version:)
-    # POST /api/v1/admin/changes/revert → {version: "..."}
-  end
-
-  # === App Registry webhook ===
-  def notify_app_registry(action:, app_data:)
-    # POST /api/v1/admin/app-registry/webhook
-  end
-
-  # === 읽기 API (조회) ===
-  def get_config(org:, project:, service:)
-  def get_secrets_metadata(org:, project:, service:)
-  def get_history(org:, project:, service:)
-
-  private
-
-  def with_app_id_header(app_id)
-    # X-App-ID 헤더 설정
-  end
-end
-```
+| 메서드 | Config Server API | 관련 FR |
+|--------|------------------|---------|
+| `apply_changes(org:, project:, service:, config:, env_vars:, secrets:)` | `POST /admin/changes` → `{version}` | FR-6 |
+| `delete_changes(org:, project:, service:)` | `DELETE /admin/changes` → `{version}` | FR-3 |
+| `revert_changes(org:, project:, service:, target_version:)` | `POST /admin/changes/revert` → `{version}` | FR-8 |
+| `notify_app_registry(action:, app_data:)` | `POST /admin/app-registry/webhook` | FR-7 |
+| `get_config(org:, project:, service:)` | `GET /config` | FR-6 |
+| `get_secrets_metadata(org:, project:, service:)` | `GET /secrets/metadata` | FR-6 |
+| `get_history(org:, project:, service:)` | `GET /history` | FR-8 |
 
 ---
 
@@ -1140,7 +845,7 @@ end
 
 ### 8.1 역할 분담: Keycloak vs Console DB
 
-> 상세 결정 근거는 [10.3 설계 결정](#103-rbac-keycloak-vs-console-db-hybrid) 참조.
+> 상세 결정 근거는 [10.3 설계 결정](#103-rbac-keycloak-vs-console-db) 참조.
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
@@ -1261,137 +966,36 @@ end
 
 #### ApplicationController (인가 미들웨어)
 
-```ruby
-class ApplicationController < ActionController::Base
-  before_action :authenticate_user!
-  before_action :set_current_user
+`before_action`으로 모든 요청에 인증/인가를 적용한다:
 
-  private
+| 메서드 | 역할 |
+|--------|------|
+| `authenticate_user!` | 세션에 사용자 정보 없으면 Keycloak 로그인으로 리다이렉트 |
+| `set_current_user` | 세션 데이터(`sub`, `realm_roles`)로 `CurrentUser` 생성 |
+| `authorize_org!(org, minimum_role:)` | `super_admin` → 허용. 아니면 `org_memberships`에서 역할 확인 |
+| `authorize_project!(project, minimum_role:)` | `super_admin` → 허용. 아니면 `project_role()` 결과로 판단 |
+| `require_super_admin!` | `super_admin`이 아니면 403 |
 
-  def authenticate_user!
-    redirect_to auth_keycloak_path unless session[:user_token].present?
-  end
-
-  def set_current_user
-    @current_user = CurrentUser.from_session(session[:user_token])
-  end
-
-  def authorize_org!(organization, minimum_role: :read)
-    return if @current_user.super_admin?
-
-    membership = @current_user.org_membership(organization)
-    unless membership && ROLE_HIERARCHY[membership.role.to_sym] >= ROLE_HIERARCHY[minimum_role]
-      render_forbidden
-    end
-  end
-
-  def authorize_project!(project, minimum_role: :read)
-    return if @current_user.super_admin?
-
-    role = @current_user.project_role(project)
-    unless role && ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[minimum_role]
-      render_forbidden
-    end
-  end
-
-  def require_super_admin!
-    render_forbidden unless @current_user.super_admin?
-  end
-
-  ROLE_HIERARCHY = { read: 1, write: 2, admin: 3 }.freeze
-end
-```
+**역할 계층**: `read(1) < write(2) < admin(3)`. 요청된 최소 역할 이상이면 허용.
 
 #### CurrentUser
 
-```ruby
-class CurrentUser
-  attr_reader :sub, :realm_roles
+`app/models/current_user.rb` — 세션 데이터(`sub`, `realm_roles`)로 생성. DB에서 인가 정보를 조회하는 PORO.
 
-  def self.from_session(token_data)
-    new(
-      sub: token_data["sub"],
-      realm_roles: token_data.dig("realm_access", "roles") || []
-    )
-  end
-
-  def super_admin?
-    realm_roles.include?("super_admin")
-  end
-
-  # Org 멤버십 조회 (요청 내 캐싱)
-  def org_membership(organization)
-    @org_memberships ||= {}
-    @org_memberships[organization.id] ||=
-      OrgMembership.find_by(organization: organization, user_sub: sub)
-  end
-
-  # 소속 Org 목록 (목록 화면용)
-  def organizations
-    org_ids = OrgMembership.where(user_sub: sub).pluck(:organization_id)
-    Organization.where(id: org_ids)
-  end
-
-  # Project 실효 역할 결정
-  def project_role(project)
-    membership = org_membership(project.organization)
-    return nil unless membership
-
-    # Org admin → 모든 Project에 admin 접근
-    return :admin if membership.role == "admin"
-
-    # Project별 권한 확인
-    permission = ProjectPermission.find_by(
-      org_membership: membership,
-      project: project
-    )
-    permission&.role&.to_sym
-  end
-
-  # 접근 가능한 Project 목록 (목록 화면용)
-  def accessible_projects(organization)
-    membership = org_membership(organization)
-    return Project.none unless membership
-
-    if membership.role == "admin"
-      organization.projects.where.not(status: "deleted")
-    else
-      project_ids = ProjectPermission
-        .where(org_membership: membership)
-        .pluck(:project_id)
-      organization.projects.where(id: project_ids).where.not(status: "deleted")
-    end
-  end
-end
-```
+| 메서드 | 역할 |
+|--------|------|
+| `from_session(session_data)` | 세션의 `sub`, `realm_roles`로 인스턴스 생성 |
+| `super_admin?` | `realm_roles`에 `super_admin` 포함 여부 |
+| `org_membership(org)` | `org_memberships` 테이블 조회 (요청 내 캐싱) |
+| `organizations` | 소속 Org 목록 (`org_memberships`에서 `user_sub`로 조회) |
+| `project_role(project)` | Org `admin` → `:admin`. 아니면 `project_permissions` 조회 → 해당 role 반환 |
+| `accessible_projects(org)` | Org `admin`이면 전체 Project. 아니면 `project_permissions`에 있는 Project만 |
 
 #### 사용자 정보 조회 (Keycloak API)
 
-Console DB에 이메일/이름을 저장하지 않으므로, 멤버 목록 등 UI 표시 시 Keycloak Admin API로 조회한다.
+Console DB에 이메일/이름을 저장하지 않으므로, 멤버 목록 등 UI 표시 시 `KeycloakClient`의 사용자 조회 메서드(Section 7.2)를 사용한다.
 
-```ruby
-# app/clients/keycloak_client.rb
-class KeycloakClient < BaseClient
-  # 단일 사용자 조회
-  def get_user(user_sub)
-    # GET /admin/realms/{realm}/users/{id}
-    # → { id: "sub", email: "...", firstName: "...", lastName: "..." }
-  end
-
-  # 멤버 목록용 배치 조회
-  def get_users_by_ids(user_subs)
-    # 개별 조회 병렬 실행 또는 캐싱
-    user_subs.map { |sub| get_user(sub) }
-  end
-
-  # 사용자 검색 (멤버 추가 시)
-  def search_users(query:)
-    # GET /admin/realms/{realm}/users?search={query}
-  end
-end
-```
-
-> **캐싱**: 사용자 정보는 요청 내 캐싱 (`RequestStore` 또는 컨트롤러 인스턴스 변수). 빈번한 Keycloak API 호출을 방지한다. 필요 시 Rails.cache로 단기 캐싱 (TTL 5분) 추가 가능.
+> **캐싱**: 사용자 정보는 요청 내 캐싱 (`RequestStore` 또는 컨트롤러 인스턴스 변수). 필요 시 `Rails.cache`로 단기 캐싱 (TTL 5분) 추가 가능.
 
 ---
 
@@ -1598,9 +1202,9 @@ Health Check 실패는 프로비저닝 전체를 롤백하지 않고 **경고(wa
 
 | FR | 설명 | DB 테이블 | Controller | Service | Client | Job/Channel |
 |----|------|-----------|------------|---------|--------|-------------|
-| **FR-1** | Organization CRUD | `organizations` | `OrganizationsController` | `Organizations::*Service` | `LangfuseClient` (Org) | — |
+| **FR-1** | Organization CRUD | `organizations`, `org_memberships` | `OrganizationsController` | `Organizations::*Service` | `LangfuseClient` (Org) | — |
 | **FR-2** | RBAC | `org_memberships`, `project_permissions` | `MembersController`, `ApplicationController` (인가) | — | `KeycloakClient` (사용자 검색/조회) | — |
-| **FR-3** | Project CRUD | `projects` | `ProjectsController` | `Projects::*Service` | — | `ProvisioningJob` |
+| **FR-3** | Project CRUD | `projects`, `project_auth_configs`, `project_permissions` | `ProjectsController` | `Projects::*Service` | — | `ProvisioningJob` |
 | **FR-4** | 인증 체계 자동 구성 | `project_auth_configs` | `AuthConfigsController` | `Steps::KeycloakClientCreate` | `KeycloakClient` (Client) | — |
 | **FR-5** | Langfuse 프로젝트/Key | — (Console 미저장) | — | `Steps::LangfuseProjectCreate` | `LangfuseClient` | — |
 | **FR-6** | LiteLLM Config | — (Config Server 위임) | `LitellmConfigsController` | `Steps::ConfigServerApply` | `ConfigServerClient` | — |
