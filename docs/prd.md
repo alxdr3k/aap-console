@@ -124,10 +124,9 @@ Console은 Config Server Admin API만 호출한다. Git 레포 구조, kubeseal,
 
 | Console 작업 | Config Server API | 상세 |
 |---|---|---|
-| **설정 변경** | `POST /api/v1/admin/configs` | 설정 데이터(config.yaml, env_vars.yaml 내용)를 전달. Config Server가 Git commit & push 수행 |
-| **설정 삭제** | `DELETE /api/v1/admin/configs` | 지정한 org/project/service의 설정 제거. Config Server가 Git에서 삭제 후 commit & push |
-| **시크릿 생성/변경** | `POST /api/v1/admin/secrets/webhook` | 시크릿 평문 전달. Config Server가 kubeseal 암호화 → Git commit & push → kubectl apply 수행 |
-| **시크릿 삭제** | `POST /api/v1/admin/secrets/webhook` (`action: delete`) | Config Server가 SealedSecret 삭제 (Git + K8s) |
+| **설정/시크릿 일괄 변경** | `POST /api/v1/admin/changes` | 설정 데이터 + 시크릿 평문을 한 번에 전달. Config Server가 단일 atomic Git 커밋으로 처리 후 버전 식별자(Git 커밋 해시) 반환 |
+| **설정/시크릿 일괄 삭제** | `DELETE /api/v1/admin/changes` | 지정한 org/project/service의 설정 및 시크릿 제거. 단일 atomic Git 커밋 |
+| **버전 롤백** | `POST /api/v1/admin/changes/revert` | 버전 식별자(Git 커밋 해시) 지정. Config Server가 해당 커밋 시점으로 revert |
 | **App Registry 변경** | `POST /api/v1/admin/app-registry/webhook` | App 등록/수정/삭제 시 Config Server의 인메모리 인증 캐시 갱신 |
 
 > **설계 원칙 (Console Creates, Server Manages)**: Console은 "무엇을 설정할지"만 결정하고, Config Server는 "어떻게 저장하고 전파할지"를 담당한다. 이를 통해 Console은 Git/kubeseal/kubectl 의존성 없이 순수 관리 UI/API로 유지된다.
@@ -246,7 +245,7 @@ Realm: aap (단일)
 |------|-----------|
 | **Keycloak 리소스** | Keycloak Admin API로 해당 Project의 Client 삭제 (`DELETE /admin/realms/{realm}/clients/{id}`) |
 | **Langfuse 리소스** | Langfuse tRPC API를 통해 프로젝트 및 SDK Key 삭제 |
-| **Config Server** | Config Server Admin API로 해당 App의 설정 삭제 (`DELETE /api/v1/admin/configs`) + 시크릿 삭제 (`POST /api/v1/admin/secrets/webhook`, `action: delete`). Config Server가 Git/K8s 정리 수행 |
+| **Config Server** | Config Server Admin API (`DELETE /api/v1/admin/changes`)로 해당 App의 설정 + 시크릿 일괄 삭제. Config Server가 Git/K8s 정리 수행 |
 
 > **구현 고려사항**: 동일 파일 내에서 여러 Project의 설정이 공존할 수 있으므로, Project별 설정 격리 전략이 필요하다. 삭제 시 다른 Project의 설정을 훼손하지 않도록 App ID 기반의 섹션 분리 또는 파일 분리 방식을 설계해야 한다.
 
@@ -285,8 +284,8 @@ Realm: aap (단일)
 |------|------|
 | **프로젝트 생성** | Langfuse 내부 tRPC API를 통해 Project별 독립 Langfuse 프로젝트 자동 생성 |
 | **SDK Key 발급** | tRPC API로 API Key 생성 후 반환되는 Public Key, Secret Key 사용. Console은 SK/PK를 **저장하지 않고** 즉시 처리 |
-| **시크릿 전달** | Console이 SK/PK 평문을 Config Server Admin API (`POST /api/v1/admin/secrets/webhook`)로 전달. Config Server가 kubeseal 암호화 → Git push → kubectl apply 수행. Console은 kubeseal/Git/kubectl 불필요 |
-| **프로젝트 삭제** | Langfuse tRPC API로 프로젝트 삭제 (`projects.delete`) + Config Server Admin API로 시크릿 삭제 |
+| **시크릿 전달** | Console이 SK/PK 평문을 Config Server Admin API (`POST /api/v1/admin/changes`)로 설정 데이터와 함께 일괄 전달. Config Server가 kubeseal 암호화 → 단일 atomic Git commit & push → kubectl apply 수행. Console은 kubeseal/Git/kubectl 불필요 |
+| **프로젝트 삭제** | Langfuse tRPC API로 프로젝트 삭제 (`projects.delete`) + Config Server Admin API (`DELETE /api/v1/admin/changes`)로 설정/시크릿 일괄 삭제 |
 | **트레이싱 연동** | Console이 Config Server Admin API로 설정/시크릿 전달 후, Config Server → LiteLLM 자동 전파 경로를 통해 Langfuse 트레이싱 자동 연동 |
 
 **Langfuse tRPC API 연동**:
@@ -320,7 +319,7 @@ Langfuse 웹 UI가 내부적으로 사용하는 tRPC API를 직접 호출한다.
 | **가드레일** | 사용자 선택 기반의 보안 가드레일 적용 (컨텐츠 필터링, 토큰 제한 등) |
 | **S3 경로** | App별 S3 버킷 경로 (prefix)를 Config에 포함. 기존 공유 버킷을 사용하며 별도 버킷 생성 불필요 |
 | **S3 Retention** | App별 S3 데이터 보관 주기를 LiteLLM Config 변수로 설정. LiteLLM이 해당 변수를 읽어 커스텀 구현된 Retention 로직을 적용 (S3 Lifecycle Policy가 아닌 애플리케이션 레벨 처리) |
-| **Config 반영** | Console이 Config Server Admin API (`POST /api/v1/admin/configs`)로 설정 데이터 전달. Config Server가 Git commit & push 수행 |
+| **Config 반영** | Console이 Config Server Admin API (`POST /api/v1/admin/changes`)로 설정/시크릿 데이터를 일괄 전달. Config Server가 단일 atomic Git commit & push 수행 |
 | **Reload 방식** | Console은 Config Server Admin API 호출까지만 수행. Git 저장, 인메모리 갱신, LiteLLM 전파는 Config Server 모듈이 자동 처리 |
 
 ### FR-7. 프로비저닝 파이프라인 관리
@@ -379,11 +378,12 @@ pending → in_progress → completed
 
 | 항목 | 상세 |
 |------|------|
-| **이력 관리** | Project별 설정 변경 시마다 버전 기록 (Console DB 이력 기반). Config Git 커밋 이력은 Config Server 모듈이 관리 |
+| **이력 관리** | Project별 설정 변경 시마다 버전 기록. Config Server가 반환하는 버전 식별자(Git 커밋 해시)를 Console DB에 저장하여 변경 이력과 연결 |
 | **버전 조회** | Console에서 변경 이력 목록 및 diff 확인 |
-| **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷(Client 생성 시 파라미터를 버전별로 저장)을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
-| **롤백 — Langfuse** | Console DB에 기록된 이전 스냅샷을 기반으로 Langfuse tRPC API를 호출하여 Org/Project 설정 복구. SDK Key는 이전 버전의 키를 그대로 유지하므로 재발급 불필요 — Config Server에 이전 시크릿 데이터를 재전달 |
-| **롤백 — Config Server** | Console이 Config Server Admin API로 이전 설정/시크릿 데이터를 재전달. Config Server가 Git revert + 재적용 수행. 이후 LiteLLM 반영은 자동 전파 |
+| **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
+| **롤백 — Langfuse** | Console DB에 기록된 이전 스냅샷을 기반으로 Langfuse tRPC API를 호출하여 Org/Project 설정 복구 |
+| **롤백 — Config Server** | Console이 저장된 버전 식별자로 Config Server revert API 호출 (`POST /api/v1/admin/changes/revert`). Config Server가 해당 Git 커밋 시점으로 revert. Console은 시크릿 평문을 재전달할 필요 없음 — Git 이력에서 복원 |
+| **원자적 버전 관리** | Config Server의 설정/시크릿 변경은 단일 atomic Git 커밋으로 처리되므로, 하나의 버전 식별자로 config + secret 모두 식별 가능 |
 | **감사 로그** | 누가, 언제, 어떤 설정을 변경했는지 추적 |
 
 ### FR-9. Health Check 및 정합성 검증
