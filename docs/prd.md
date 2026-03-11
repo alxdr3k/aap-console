@@ -285,8 +285,8 @@ Realm: aap (단일)
 |------|------|
 | **프로젝트 생성** | Langfuse 내부 tRPC API를 통해 Project별 독립 Langfuse 프로젝트 자동 생성 |
 | **SDK Key 발급** | tRPC API로 API Key 생성 후 반환되는 Public Key, Secret Key 사용. Console은 SK/PK를 **저장하지 않고** 즉시 처리 |
-| **시크릿 전달** | Console이 SK/PK 평문을 Config Server Admin API (`POST /api/v1/admin/changes`)로 설정 데이터와 함께 일괄 전달. Config Server가 kubeseal 암호화 → 단일 atomic Git commit & push → kubectl apply 수행. Console은 kubeseal/Git/kubectl 불필요 |
-| **프로젝트 삭제** | Langfuse tRPC API로 프로젝트 삭제 (`projects.delete`) + Config Server Admin API (`DELETE /api/v1/admin/changes`)로 설정/시크릿 일괄 삭제 |
+| **시크릿 전달** | Console이 SK/PK 평문을 Config Server Admin API (`POST /api/v1/admin/changes`)로 설정 데이터와 함께 일괄 전달. Config Server가 암호화/저장/적용을 atomic하게 처리 후 버전 식별자 반환 |
+| **프로젝트 삭제** | FR-3 삭제 시 롤백 대상 참조 |
 | **트레이싱 연동** | Console이 Config Server Admin API로 설정/시크릿 전달 후, Config Server → LiteLLM 자동 전파 경로를 통해 Langfuse 트레이싱 자동 연동 |
 
 **Langfuse tRPC API 연동**:
@@ -403,8 +403,8 @@ pending → in_progress → completed
 ### 6.1 보안
 
 - Keycloak Client Secret, PAK는 생성 시 UI에 일회성 표시 후 Console 미저장
-- Langfuse SK/PK는 Console 미저장. Config Server Admin API로 평문 전달 후 즉시 폐기. Config Server가 kubeseal 암호화 → Git push → kubectl apply 수행
-- Git 레포에는 시크릿 평문이 저장되지 않음 (SealedSecret 암호화 방식). Config 파일에서는 `os.environ/` 참조만 포함
+- Langfuse SK/PK는 Console 미저장. Config Server Admin API로 평문 전달 후 즉시 폐기. 암호화/저장/적용은 Config Server가 수행
+- Git 레포에는 시크릿 평문이 저장되지 않음 (SealedSecret 암호화 방식). 시크릿 저장 형식은 Config Server 내부 관심사
 - Console 접근은 조직 SSO를 통한 인증 필수
 - Organization 단위 RBAC (admin/write/read) 기반 접근제어 — Keycloak 그룹에 위임 (FR-2 참조)
 - Console → Config Server 요청 시 인증/인가 검증 (아래 상세)
@@ -470,6 +470,10 @@ Console은 Config Server Admin API만 호출한다. Git 접근, kubeseal, kubect
   ▼
 Step 1. Project 레코드 생성 (DB) + App ID 발급
   │
+  ▼
+Step 1b. App Registry 등록 [Config Server Admin API]
+  └─ POST /api/v1/admin/app-registry/webhook — App ID 등록 (이후 Config Server API 호출의 인증 전제조건)
+  │
   │ ── 리소스 생성 (병렬 실행 가능) ──
   │
   ├──▶ Step 2a. 인증 리소스 생성
@@ -497,7 +501,7 @@ Step 5. 완료 → Console에 결과 표시
 **실행 순서 및 의존성**:
 - Step 2a / 2b: 상호 독립적이므로 **병렬 실행 가능**
 - Step 3: Step 2b의 결과(Langfuse SK/PK)가 필요하므로 **Step 2a/2b 모두 완료 후** 실행
-- Step 3 내의 설정 전파: Console의 책임은 Config Server Admin API 호출까지. 이후 Git 저장 및 LiteLLM 반영은 Config Server 모듈이 처리
+- Step 3 내의 설정 전파: Console의 책임은 Config Server Admin API 호출까지. 이후 저장 및 LiteLLM 전파는 Config Server 모듈이 처리
 - Step 4: Step 3 완료 후 실행
 
 ---
