@@ -137,6 +137,9 @@ Console은 Config Server Admin API만 호출한다. Git 레포 구조, kubeseal,
 
 ```
 Organization (조직)
+ ├── Keycloak 그룹 ────────────── [Keycloak Admin REST API]
+ ├── Langfuse Org ─────────────── [Langfuse tRPC API]
+ │
  └── Project (App ID 발급)
       │
       ├── 인증 설정
@@ -146,7 +149,7 @@ Organization (조직)
       │         └── Project API Key 발급 (Keycloak 미사용)
       │
       ├── Langfuse 설정 ─────────── [Langfuse tRPC API]
-      │    ├── Langfuse Org/Project 생성
+      │    ├── Langfuse Project 생성 (소속 Langfuse Org 하위)
       │    └── SDK Key 발급 (PK/SK)
       │         └── Console이 Config Server Admin API로 시크릿 전달
       │              → Config Server가 암호화/저장/적용 수행
@@ -382,7 +385,7 @@ pending → in_progress → completed
 | **이력 관리** | Project별 설정 변경 시마다 버전 기록. Config Server가 반환하는 버전 식별자(Git 커밋 해시)를 Console DB에 저장하여 변경 이력과 연결 |
 | **버전 조회** | Console에서 변경 이력 목록 및 diff 확인 |
 | **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
-| **롤백 — Langfuse** | Console DB에 기록된 이전 스냅샷을 기반으로 Langfuse tRPC API를 호출하여 Org/Project 설정 복구 |
+| **롤백 — Langfuse** | Console DB에 기록된 이전 스냅샷을 기반으로 Langfuse tRPC API를 호출하여 Project 설정 복구 |
 | **롤백 — Config Server** | Console이 저장된 버전 식별자로 Config Server revert API 호출 (`POST /api/v1/admin/changes/revert`). Config Server가 해당 Git 커밋 시점으로 revert. Console은 시크릿 평문을 재전달할 필요 없음 — Git 이력에서 복원 |
 | **원자적 버전 관리** | Config Server의 설정/시크릿 변경은 단일 atomic Git 커밋으로 처리되므로, 하나의 버전 식별자로 config + secret 모두 식별 가능 |
 | **감사 로그** | 누가, 언제, 어떤 설정을 변경했는지 추적 |
@@ -481,7 +484,7 @@ Step 1b. App Registry 등록 [Config Server Admin API]
   │     └─ PAK 선택 시: Console에서 API Key 직접 생성 (Keycloak 불필요)
   │
   └──▶ Step 2b. Langfuse 리소스 생성 [Langfuse tRPC API]
-         ├─ Langfuse Org/Project 생성
+         ├─ Langfuse Project 생성 (FR-1에서 생성된 Langfuse Org 하위)
          └─ SDK Key (PK/SK) 발급 (Console은 미저장)
   │
   │ ── Step 2a/2b 완료 대기 후 설정 반영 ──
@@ -587,7 +590,7 @@ Pod
 
 - Rails 8 프로젝트 초기 설정 (SQLite + SolidQueue + SolidCable) 및 Keycloak SSO 인증 연동
 - K8s 배포 구성 (Deployment Recreate + PVC + Litestream Sidecar 백업/복구)
-- Organization CRUD + 멤버십 관리 — Keycloak 그룹 연동 (FR-1)
+- Organization CRUD + 멤버십 관리 — Keycloak 그룹 연동 (FR-1, Langfuse Org 연동은 Phase 2에서 Langfuse tRPC 통합 시 추가)
 - 접근제어 RBAC — Keycloak 그룹 기반 JWT 인가 (FR-2)
 - Project CRUD + App ID 자동 발급 (FR-3)
 - Keycloak Admin API 연동 — OIDC Client 자동 생성 우선 (FR-4)
