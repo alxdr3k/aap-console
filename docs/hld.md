@@ -1,6 +1,6 @@
 # AAP Console — High-Level Design (HLD)
 
-> **버전**: 1.1
+> **버전**: 1.2
 > **작성일**: 2026-03-11
 > **상태**: Draft
 > **참조**: [PRD v1.11](./prd.md)
@@ -133,6 +133,19 @@
                    │ created_at       │
                    │ updated_at       │
                    └──────────────────┘
+┌──────────────────────┐         ┌──────────────────────┐
+│  org_memberships     │         │ project_permissions  │
+├──────────────────────┤         ├──────────────────────┤
+│ id              PK   │         │ id              PK   │
+│ organization_id FK   │───▶ organizations          │
+│ user_sub             │         │ org_membership_id FK │───▶ org_memberships
+│ user_email           │         │ project_id       FK  │───▶ projects
+│ role                 │         │ role                 │
+│ invited_at           │         │ created_at           │
+│ joined_at            │         │ updated_at           │
+│ created_at           │         └──────────────────────┘
+│ updated_at           │
+└──────────────────────┘
 ```
 
 ### 2.2 테이블 상세
@@ -179,6 +192,54 @@
 | `updated_at` | datetime | |
 
 > **시크릿 미저장 원칙**: Keycloak Client Secret, PAK 값은 이 테이블에 저장하지 않는다. 생성 시 UI에 일회성 표시 후 폐기 (PRD 6.1).
+
+#### org_memberships — FR-2
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | integer PK | |
+| `organization_id` | integer FK NOT NULL | 소속 Organization |
+| `user_sub` | string NOT NULL | Keycloak subject (사용자 고유 ID) |
+| `user_email` | string NOT NULL | 표시용. Keycloak에서 동기화 |
+| `role` | string NOT NULL DEFAULT 'read' | `admin` / `write` / `read` |
+| `invited_at` | datetime | 초대 시각 (미등록 사용자 사전 할당 시) |
+| `joined_at` | datetime | 최초 로그인으로 멤버십 활성화된 시각 |
+| `created_at` | datetime | |
+| `updated_at` | datetime | |
+
+> **유니크 제약**: `(organization_id, user_sub)`. 한 사용자는 한 Org에 하나의 멤버십만 가짐.
+
+**역할 계층**:
+
+| 역할 | 설명 | 포함 권한 |
+|------|------|----------|
+| `read` | 조회 전용 | Org/Project 조회, 설정 조회, 이력 조회 |
+| `write` | 설정 변경 | `read` + Project 설정 변경, Config 수정, 롤백 |
+| `admin` | Org 관리 | `write` + Project 생성/삭제, 멤버 관리, 모든 Project 접근 |
+
+#### project_permissions — FR-2
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | integer PK | |
+| `org_membership_id` | integer FK NOT NULL | 소속 Org 멤버십 |
+| `project_id` | integer FK NOT NULL | 대상 Project |
+| `role` | string NOT NULL DEFAULT 'read' | `admin` / `write` / `read` |
+| `created_at` | datetime | |
+| `updated_at` | datetime | |
+
+> **유니크 제약**: `(org_membership_id, project_id)`. 한 멤버십당 한 Project에 하나의 권한만.
+
+**권한 결정 규칙**:
+
+```
+1. super_admin (Keycloak realm role) → 전체 접근
+2. org_membership.role == admin → 해당 Org의 모든 Project 접근 (admin)
+3. project_permissions 레코드 있음 → 해당 role로 접근
+4. project_permissions 레코드 없음 → 접근 불가
+```
+
+> **Org admin은 project_permissions 레코드 불필요**. admin 역할 자체가 Org 내 모든 Project에 대한 암묵적 접근 권한을 부여한다. `project_permissions`는 `read`/`write` 역할의 사용자에게 Project별 세밀한 접근 제어를 위해 사용된다.
 
 #### provisioning_jobs — FR-7.1
 
@@ -272,6 +333,14 @@ add_index :projects, [:organization_id, :status]
 # project_auth_configs
 add_index :project_auth_configs, :project_id, unique: true
 
+# org_memberships
+add_index :org_memberships, [:organization_id, :user_sub], unique: true
+add_index :org_memberships, :user_sub
+
+# project_permissions
+add_index :project_permissions, [:org_membership_id, :project_id], unique: true
+add_index :project_permissions, :project_id
+
 # provisioning_jobs
 add_index :provisioning_jobs, [:project_id, :status]
 add_index :provisioning_jobs, :status
@@ -312,6 +381,9 @@ app/
 ├── models/
 │   ├── organization.rb                   # FR-1
 │   ├── project.rb                        # FR-3
+│   ├── org_membership.rb                 # FR-2: Org 역할 관리
+│   ├── project_permission.rb             # FR-2: Project ACL
+│   ├── current_user.rb                   # FR-2: JWT + DB 기반 인가 모델
 │   ├── project_auth_config.rb            # FR-4
 │   ├── provisioning_job.rb               # FR-7.1 (상태 머신)
 │   ├── provisioning_step.rb              # FR-7.2
@@ -1074,7 +1146,43 @@ end
 
 ## 8. 인증/인가
 
-### 8.1 인증 플로우 (Keycloak OIDC) — FR-2
+### 8.1 역할 분담: Keycloak vs Console DB
+
+> 상세 결정 근거는 [10.3 설계 결정](#103-rbac-keycloak-vs-console-db-hybrid) 참조.
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│  Keycloak (최소 역할)                                          │
+│                                                               │
+│  ● 인증: OIDC Authorization Code Flow                         │
+│  ● JWT 클레임: sub, email, name, realm_roles, groups          │
+│  ● Org 소속: /console/orgs/{slug} 그룹 멤버십 (역할 없이 flat) │
+│  ● super_admin: realm role로 판별                              │
+└────────────────────────┬──────────────────────────────────────┘
+                         │ JWT (소속 Org 목록 + super_admin 여부)
+                         ▼
+┌───────────────────────────────────────────────────────────────┐
+│  Console DB (세밀한 권한 관리)                                  │
+│                                                               │
+│  ● Org 역할: org_memberships.role (admin/write/read)           │
+│  ● Project ACL: project_permissions.role (admin/write/read)    │
+│  ● 향후 확장: 기능별 권한, 감사 로그 등 자유롭게 추가 가능       │
+└───────────────────────────────────────────────────────────────┘
+```
+
+**Keycloak 팀 요청 사항 (최소)**:
+
+| 항목 | 설명 |
+|------|------|
+| OIDC Client 등록 | Console 앱용 Confidential Client |
+| JWT `groups` 클레임 매핑 | 소속 Org 그룹 목록 포함 |
+| JWT `realm_access.roles` 클레임 | `super_admin` 역할 판별용 |
+| Console Service Account | Admin API 접근 (그룹/사용자 관리) |
+| 그룹 계층 허용 | `/console/orgs/{slug}` 구조 생성 허용 |
+
+> Keycloak 그룹에는 **역할 서브그룹 불필요**. `/console/orgs/acme`처럼 flat 그룹만 사용하고, 역할은 Console DB의 `org_memberships.role`에서 관리한다.
+
+### 8.2 인증 플로우 (Keycloak OIDC)
 
 ```
 브라우저                   Console                    Keycloak
@@ -1092,15 +1200,77 @@ end
   │                          ├─ code → token exchange ─▶│
   │                          │◀── {access_token, ...} ──┤
   │                          │                          │
-  │                          ├─ JWT 검증 (groups 포함)   │
+  │                          ├─ JWT 검증                 │
+  │                          ├─ groups → 소속 Org 목록   │
+  │                          ├─ realm_roles → super_admin│
   │                          ├─ Rails 세션에 저장        │
+  │                          ├─ Org 멤버십 동기화 (※)    │
   │◀── 302 /organizations ──┤                          │
 ```
 
-### 8.2 인가 미들웨어 — FR-2
+> **(※) 멤버십 동기화**: 로그인 시 JWT `groups`에 있지만 `org_memberships`에 없는 Org가 있으면 자동으로 `read` 멤버십 레코드를 생성한다. 이는 Keycloak에서 직접 그룹에 추가된 사용자(Console 외부 경로)를 수용하기 위함이다.
+
+### 8.3 인가 모델
+
+#### 권한 결정 흐름
+
+```
+요청: PATCH /organizations/acme/projects/chatbot/litellm_config
+
+  1. 인증 확인
+     └─ 세션에 JWT 정보 있는지?
+         ├─ 없음 → 302 로그인
+         └─ 있음 → CurrentUser 생성
+
+  2. super_admin 확인
+     └─ realm_roles에 "super_admin" 있는지?
+         ├─ 있음 → 허용 (모든 리소스 접근 가능)
+         └─ 없음 → 계속
+
+  3. Org 멤버십 확인
+     └─ org_memberships에서 (org=acme, user_sub) 조회
+         ├─ 없음 → 403 Forbidden
+         └─ 있음 → membership.role 확인
+
+  4. Org 역할 기반 판단
+     └─ membership.role?
+         ├─ admin → 허용 (Org 내 모든 Project 접근)
+         └─ read/write → Project ACL 확인
+
+  5. Project ACL 확인
+     └─ project_permissions에서 (membership, project=chatbot) 조회
+         ├─ 없음 → 403 Forbidden
+         └─ 있음 → permission.role ≥ 요구 역할?
+             ├─ 예 → 허용
+             └─ 아니오 → 403 Forbidden
+```
+
+#### 리소스별 최소 역할
+
+| 리소스 | 액션 | 최소 역할 | 범위 |
+|--------|------|----------|------|
+| Organization | 생성/삭제 | `super_admin` | 전역 |
+| Organization | 조회 | `read` | Org |
+| Organization | 수정 | `admin` | Org |
+| 멤버 | 조회 | `read` | Org |
+| 멤버 | 추가/변경/제거 | `admin` | Org |
+| Project | 조회 | `read` | Project |
+| Project | 생성/삭제 | `admin` | Org |
+| Project | 설정 변경 | `write` | Project |
+| 인증 설정 | 조회 | `read` | Project |
+| 인증 설정 | 변경 | `write` | Project |
+| LiteLLM Config | 조회 | `read` | Project |
+| LiteLLM Config | 변경 | `write` | Project |
+| Config 이력 | 조회 | `read` | Project |
+| Config 이력 | 롤백 | `write` | Project |
+| 프로비저닝 | 현황 조회 | `read` | Project |
+| 프로비저닝 | 수동 재시도 | `admin` | Org |
+
+### 8.4 구현 상세
+
+#### ApplicationController (인가 미들웨어)
 
 ```ruby
-# app/controllers/application_controller.rb
 class ApplicationController < ActionController::Base
   before_action :authenticate_user!
   before_action :set_current_user
@@ -1112,12 +1282,23 @@ class ApplicationController < ActionController::Base
   end
 
   def set_current_user
-    @current_user = CurrentUser.from_token(session[:user_token])
+    @current_user = CurrentUser.from_session(session[:user_token])
   end
 
-  # 권한 검증 헬퍼
   def authorize_org!(organization, minimum_role: :read)
-    unless @current_user.has_org_role?(organization.slug, minimum_role)
+    return if @current_user.super_admin?
+
+    membership = @current_user.org_membership(organization)
+    unless membership && ROLE_HIERARCHY[membership.role.to_sym] >= ROLE_HIERARCHY[minimum_role]
+      render_forbidden
+    end
+  end
+
+  def authorize_project!(project, minimum_role: :read)
+    return if @current_user.super_admin?
+
+    role = @current_user.project_role(project)
+    unless role && ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[minimum_role]
       render_forbidden
     end
   end
@@ -1125,46 +1306,116 @@ class ApplicationController < ActionController::Base
   def require_super_admin!
     render_forbidden unless @current_user.super_admin?
   end
+
+  ROLE_HIERARCHY = { read: 1, write: 2, admin: 3 }.freeze
 end
 ```
 
-### 8.3 CurrentUser 모델
+#### CurrentUser
 
 ```ruby
-# app/models/current_user.rb
 class CurrentUser
-  attr_reader :sub, :email, :name, :groups
+  attr_reader :sub, :email, :name, :org_slugs, :realm_roles
 
-  def self.from_token(token_data)
+  def self.from_session(token_data)
     new(
       sub: token_data["sub"],
       email: token_data["email"],
       name: token_data["name"],
-      groups: token_data["groups"] || []
+      org_slugs: extract_org_slugs(token_data["groups"]),
+      realm_roles: token_data.dig("realm_access", "roles") || []
     )
   end
 
   def super_admin?
-    # Realm Role 확인
-    @realm_roles&.include?("super_admin")
+    realm_roles.include?("super_admin")
   end
 
-  def has_org_role?(org_slug, minimum_role)
-    role = org_role(org_slug)
-    return false unless role
-    ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[minimum_role]
+  # Org 멤버십 조회 (요청 내 캐싱)
+  def org_membership(organization)
+    @org_memberships ||= {}
+    @org_memberships[organization.id] ||=
+      OrgMembership.find_by(organization: organization, user_sub: sub)
   end
 
-  def org_role(org_slug)
-    # groups에서 "/console/orgs/{org_slug}/{role}" 패턴 매칭
-    groups.each do |group|
-      match = group.match(%r{/console/orgs/#{Regexp.escape(org_slug)}/(\w+)})
-      return match[1].to_sym if match
+  # Project 실효 역할 결정
+  def project_role(project)
+    membership = org_membership(project.organization)
+    return nil unless membership
+
+    # Org admin → 모든 Project에 admin 접근
+    return :admin if membership.role == "admin"
+
+    # Project별 권한 확인
+    permission = ProjectPermission.find_by(
+      org_membership: membership,
+      project: project
+    )
+    permission&.role&.to_sym
+  end
+
+  # 접근 가능한 Project 목록 (목록 화면용)
+  def accessible_projects(organization)
+    membership = org_membership(organization)
+    return Project.none unless membership
+
+    if membership.role == "admin"
+      organization.projects.where.not(status: "deleted")
+    else
+      project_ids = ProjectPermission
+        .where(org_membership: membership)
+        .pluck(:project_id)
+      organization.projects.where(id: project_ids).where.not(status: "deleted")
     end
-    nil
   end
 
-  ROLE_HIERARCHY = { read: 1, write: 2, admin: 3 }.freeze
+  private
+
+  def self.extract_org_slugs(groups)
+    return [] unless groups
+    groups.filter_map do |group|
+      match = group.match(%r{/console/orgs/([^/]+)$})
+      match[1] if match
+    end
+  end
+end
+```
+
+#### 로그인 시 멤버십 동기화
+
+```ruby
+class SessionsController < ApplicationController
+  skip_before_action :authenticate_user!
+
+  def create
+    token_data = exchange_code_for_token(params[:code])
+    session[:user_token] = token_data
+
+    sync_org_memberships(token_data)
+    redirect_to organizations_path
+  end
+
+  private
+
+  def sync_org_memberships(token_data)
+    user_sub = token_data["sub"]
+    user_email = token_data["email"]
+    org_slugs = CurrentUser.extract_org_slugs(token_data["groups"])
+
+    org_slugs.each do |slug|
+      org = Organization.find_by(slug: slug)
+      next unless org
+
+      OrgMembership.find_or_create_by!(
+        organization: org,
+        user_sub: user_sub
+      ) do |m|
+        m.user_email = user_email
+        m.role = "read"       # 기본 역할
+        m.joined_at = Time.current
+      end
+    end
+  end
 end
 ```
 
@@ -1333,14 +1584,20 @@ end
 
 Thread 수가 2~3개로 적고, 각 Thread는 독립적인 외부 API를 호출하므로 Thread 안전성 이슈가 최소화된다.
 
-### 10.3 RBAC: DB 테이블 vs Keycloak SSOT
+### 10.3 RBAC: Keycloak vs Console DB (Hybrid)
 
 | 방식 | 장점 | 단점 | 결정 |
 |------|------|------|------|
-| **Keycloak SSOT** | 권한 데이터 단일 원천. Console DB 동기화 불필요 | Keycloak 장애 시 멤버 관리 불가 | **채택** |
-| Console DB + 동기화 | 독립적 읽기 가능 | 이중 관리. 동기화 복잡도 | 미채택 |
+| Keycloak SSOT | 권한 데이터 단일 원천. DB 조회 불필요 | Project ACL 불가. 역할 추가 시 그룹 폭발. Keycloak 팀 부담 | 미채택 |
+| Console DB 전체 | 완전한 제어. Keycloak 의존 최소 | 로그인 없이 권한 확인 불가 | 미채택 |
+| **Hybrid (인증=KC, 인가=DB)** | Keycloak 팀 부담 최소. Project ACL 가능. 확장 자유 | DB 조회 필요 (세션 캐싱으로 완화) | **채택** |
 
-JWT 토큰에 `groups` 클레임이 포함되므로 인가 시 DB 조회가 불필요하다. 멤버 관리 시에만 Keycloak Admin API를 호출한다.
+**결정 근거**:
+- Project 레벨 접근 제어가 필요하여 Keycloak 그룹만으로는 부족
+- Keycloak 팀은 인증 + Org 멤버십(flat 그룹)만 담당. 역할 서브그룹 불필요
+- Console DB에 `org_memberships` + `project_permissions` 테이블로 세밀한 RBAC 구현
+- Keycloak 장애 시에도 기존 세션 사용자의 권한 관리는 정상 동작 (로그인만 불가)
+- 향후 기능별 권한, 리소스별 ACL 등 자유롭게 확장 가능
 
 ### 10.4 설정 스냅샷: Config Server 조회 vs Console DB 저장
 
@@ -1367,7 +1624,7 @@ Health Check 실패는 프로비저닝 전체를 롤백하지 않고 **경고(wa
 | FR | 설명 | DB 테이블 | Controller | Service | Client | Job/Channel |
 |----|------|-----------|------------|---------|--------|-------------|
 | **FR-1** | Organization CRUD | `organizations` | `OrganizationsController` | `Organizations::*Service` | `KeycloakClient` (그룹), `LangfuseClient` (Org) | — |
-| **FR-2** | RBAC | — (Keycloak SSOT) | `MembersController`, `ApplicationController` (인가) | — | `KeycloakClient` (그룹/사용자) | — |
+| **FR-2** | RBAC | `org_memberships`, `project_permissions` | `MembersController`, `ApplicationController` (인가) | — | `KeycloakClient` (그룹/사용자) | — |
 | **FR-3** | Project CRUD | `projects` | `ProjectsController` | `Projects::*Service` | — | `ProvisioningJob` |
 | **FR-4** | 인증 체계 자동 구성 | `project_auth_configs` | `AuthConfigsController` | `Steps::KeycloakClientCreate` | `KeycloakClient` (Client) | — |
 | **FR-5** | Langfuse 프로젝트/Key | — (Console 미저장) | — | `Steps::LangfuseProjectCreate` | `LangfuseClient` | — |
