@@ -1,6 +1,6 @@
 # AAP Console — High-Level Design (HLD)
 
-> **버전**: 1.2
+> **버전**: 1.3
 > **작성일**: 2026-03-11
 > **상태**: Draft
 > **참조**: [PRD v1.11](./prd.md)
@@ -87,11 +87,11 @@
 │ name             │   │   │ organization_id FK│───▶ organizations
 │ slug        UNQ  │   │   │ name             │
 │ description      │   │   │ slug        UNQ* │  * (org_id, slug)
-│ keycloak_group_id│   │   │ description      │
-│ langfuse_org_id  │   │   │ app_id      UNQ  │
-│ created_at       │   │   │ status           │  (active/provisioning/
-│ updated_at       │   │   │ created_at       │   deleting/deleted)
-└──────────────────┘   │   │ updated_at       │
+│ langfuse_org_id  │   │   │ description      │
+│ created_at       │   │   │ app_id      UNQ  │
+│ updated_at       │   │   │ status           │  (active/provisioning/
+└──────────────────┘   │   │ created_at       │   deleting/deleted)
+                       │   │ updated_at       │
                        │   └──────┬───────────┘
                        │          │
           ┌────────────┘    ┌─────┴─────────────────┐
@@ -103,7 +103,7 @@
 │ organization_id  │  │ id             PK │  │ id             PK │
 │ project_id       │  │ project_id    FK  │  │ project_id    FK  │
 │ user_sub         │  │ auth_type         │  │ operation         │
-│ user_email       │  │ keycloak_client_id│  │ status            │
+│ action           │  │ keycloak_client_id│  │ status            │
 │ action           │  │ keycloak_client_  │  │ started_at        │
 │ resource_type    │  │   uuid            │  │ completed_at      │
 │ resource_id      │  │ created_at        │  │ error_message     │
@@ -124,7 +124,7 @@
                    │ step_order       │   │ change_type       │
                    │ status           │   │ change_summary    │
                    │ started_at       │   │ changed_by_sub    │
-                   │ completed_at     │   │ changed_by_email  │
+                   │ completed_at     │   │ snapshot (JSON)   │
                    │ error_message    │   │ snapshot (JSON)   │
                    │ retry_count      │   │ created_at        │
                    │ max_retries      │   └───────────────────┘
@@ -139,12 +139,12 @@
 │ id              PK   │         │ id              PK   │
 │ organization_id FK   │───▶ organizations          │
 │ user_sub             │         │ org_membership_id FK │───▶ org_memberships
-│ user_email           │         │ project_id       FK  │───▶ projects
-│ role                 │         │ role                 │
-│ invited_at           │         │ created_at           │
-│ joined_at            │         │ updated_at           │
-│ created_at           │         └──────────────────────┘
-│ updated_at           │
+│ role                 │         │ project_id       FK  │───▶ projects
+│ invited_at           │         │ role                 │
+│ joined_at            │         │ created_at           │
+│ created_at           │         │ updated_at           │
+│ updated_at           │         └──────────────────────┘
+└──────────────────────┘
 └──────────────────────┘
 ```
 
@@ -156,9 +156,8 @@
 |------|------|------|
 | `id` | integer PK | |
 | `name` | string NOT NULL | 조직 표시명 |
-| `slug` | string NOT NULL UNQ | URL-safe 식별자. Keycloak 그룹 경로에 사용 |
+| `slug` | string NOT NULL UNQ | URL-safe 식별자 |
 | `description` | text | 조직 설명 |
-| `keycloak_group_id` | string | Keycloak `/console/orgs/{slug}` 그룹 ID |
 | `langfuse_org_id` | string | Langfuse Organization ID |
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
@@ -199,8 +198,7 @@
 |------|------|------|
 | `id` | integer PK | |
 | `organization_id` | integer FK NOT NULL | 소속 Organization |
-| `user_sub` | string NOT NULL | Keycloak subject (사용자 고유 ID) |
-| `user_email` | string NOT NULL | 표시용. Keycloak에서 동기화 |
+| `user_sub` | string NOT NULL | Keycloak subject (사용자 고유 ID). 이메일/이름은 저장하지 않음 |
 | `role` | string NOT NULL DEFAULT 'read' | `admin` / `write` / `read` |
 | `invited_at` | datetime | 초대 시각 (미등록 사용자 사전 할당 시) |
 | `joined_at` | datetime | 최초 로그인으로 멤버십 활성화된 시각 |
@@ -299,8 +297,7 @@
 | `version_id` | string NOT NULL | Config Server가 반환한 버전 식별자 |
 | `change_type` | string NOT NULL | `create` / `update` / `delete` / `rollback` |
 | `change_summary` | text | 변경 요약 (예: "모델 목록 변경: +claude-sonnet, -gpt-3.5") |
-| `changed_by_sub` | string NOT NULL | 변경 사용자 Keycloak subject |
-| `changed_by_email` | string NOT NULL | 변경 사용자 이메일 |
+| `changed_by_sub` | string NOT NULL | 변경 사용자 Keycloak subject. 이름/이메일은 Keycloak API로 조회 |
 | `snapshot` | JSON | 변경 시점의 설정 스냅샷. Keycloak/Langfuse 롤백 시 사용 |
 | `created_at` | datetime | |
 
@@ -311,8 +308,7 @@
 | `id` | integer PK | |
 | `organization_id` | integer FK | |
 | `project_id` | integer FK | |
-| `user_sub` | string NOT NULL | Keycloak subject |
-| `user_email` | string NOT NULL | |
+| `user_sub` | string NOT NULL | Keycloak subject. 이름/이메일은 Keycloak API로 조회 |
 | `action` | string NOT NULL | `org.create`, `project.create`, `member.add`, `config.update` 등 |
 | `resource_type` | string NOT NULL | `Organization`, `Project`, `Member` 등 |
 | `resource_id` | string | 대상 리소스 ID |
@@ -392,9 +388,9 @@ app/
 │
 ├── services/
 │   ├── organizations/
-│   │   ├── create_service.rb             # FR-1: Org 생성 + Keycloak 그룹 + Langfuse Org
+│   │   ├── create_service.rb             # FR-1: Org 생성 + Langfuse Org + 초기 멤버십
 │   │   ├── update_service.rb             # FR-1
-│   │   └── destroy_service.rb            # FR-1: 하위 Project 전체 삭제 후 Org 삭제
+│   │   └── destroy_service.rb            # FR-1: 하위 Project 전체 삭제 + 멤버십 정리 후 Org 삭제
 │   │
 │   ├── projects/
 │   │   ├── create_service.rb             # FR-3: DB 생성 + 프로비저닝 job enqueue
@@ -1043,14 +1039,10 @@ end
 ```ruby
 # app/clients/keycloak_client.rb
 class KeycloakClient < BaseClient
-  # === 그룹 관리 (FR-2) ===
-  def create_group(parent_id:, name:)             # Org 생성 시
-  def delete_group(group_id:)                      # Org 삭제 시
-  def add_user_to_group(user_id:, group_id:)       # 멤버 추가
-  def remove_user_from_group(user_id:, group_id:)  # 멤버 제거
-
   # === 사용자 관리 (FR-2) ===
   def search_users(query:)                         # 멤버 검색
+  def get_user(user_sub:)                          # 사용자 정보 조회 (이름/이메일)
+  def get_users_by_ids(user_subs:)                 # 배치 조회 (멤버 목록용)
   def create_user(email:)                          # 사전 할당
 
   # === Client 관리 (FR-4) ===
@@ -1152,21 +1144,23 @@ end
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│  Keycloak (최소 역할)                                          │
+│  Keycloak (순수 인증)                                          │
 │                                                               │
 │  ● 인증: OIDC Authorization Code Flow                         │
-│  ● JWT 클레임: sub, email, name, realm_roles, groups          │
-│  ● Org 소속: /console/orgs/{slug} 그룹 멤버십 (역할 없이 flat) │
+│  ● JWT 클레임: sub, email, name, realm_access.roles           │
 │  ● super_admin: realm role로 판별                              │
+│  ● 사용자 검색/조회: Admin API (멤버 추가, 목록 표시)           │
+│  ● 그룹/역할: 미사용 (Console이 자체 관리)                      │
 └────────────────────────┬──────────────────────────────────────┘
-                         │ JWT (소속 Org 목록 + super_admin 여부)
+                         │ JWT (sub + super_admin 여부)
                          ▼
 ┌───────────────────────────────────────────────────────────────┐
-│  Console DB (세밀한 권한 관리)                                  │
+│  Console DB (전체 인가)                                        │
 │                                                               │
-│  ● Org 역할: org_memberships.role (admin/write/read)           │
-│  ● Project ACL: project_permissions.role (admin/write/read)    │
-│  ● 향후 확장: 기능별 권한, 감사 로그 등 자유롭게 추가 가능       │
+│  ● Org 소속 + 역할: org_memberships (user_sub + role)          │
+│  ● Project ACL: project_permissions (role)                     │
+│  ● 사용자 식별: user_sub만 저장 (이메일 미저장)                  │
+│  ● 사용자 정보 표시: Keycloak API로 실시간 조회                  │
 └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -1175,12 +1169,10 @@ end
 | 항목 | 설명 |
 |------|------|
 | OIDC Client 등록 | Console 앱용 Confidential Client |
-| JWT `groups` 클레임 매핑 | 소속 Org 그룹 목록 포함 |
 | JWT `realm_access.roles` 클레임 | `super_admin` 역할 판별용 |
-| Console Service Account | Admin API 접근 (그룹/사용자 관리) |
-| 그룹 계층 허용 | `/console/orgs/{slug}` 구조 생성 허용 |
+| Console Service Account | Admin API 접근 (사용자 검색/조회 + Client 관리) |
 
-> Keycloak 그룹에는 **역할 서브그룹 불필요**. `/console/orgs/acme`처럼 flat 그룹만 사용하고, 역할은 Console DB의 `org_memberships.role`에서 관리한다.
+> **Keycloak 그룹 미사용**. Org 소속, 역할, Project 접근 권한 전부 Console DB에서 관리한다. `groups` 클레임 매핑, Client Scope 등이 불필요하다.
 
 ### 8.2 인증 플로우 (Keycloak OIDC)
 
@@ -1201,14 +1193,13 @@ end
   │                          │◀── {access_token, ...} ──┤
   │                          │                          │
   │                          ├─ JWT 검증                 │
-  │                          ├─ groups → 소속 Org 목록   │
+  │                          ├─ sub, email, name 추출    │
   │                          ├─ realm_roles → super_admin│
   │                          ├─ Rails 세션에 저장        │
-  │                          ├─ Org 멤버십 동기화 (※)    │
   │◀── 302 /organizations ──┤                          │
 ```
 
-> **(※) 멤버십 동기화**: 로그인 시 JWT `groups`에 있지만 `org_memberships`에 없는 Org가 있으면 자동으로 `read` 멤버십 레코드를 생성한다. 이는 Keycloak에서 직접 그룹에 추가된 사용자(Console 외부 경로)를 수용하기 위함이다.
+> **세션에 저장하는 정보**: `sub` (사용자 고유 ID), `realm_roles` (super_admin 판별). 이메일/이름은 세션에만 보관하고 **Console DB에는 저장하지 않는다**. 멤버 목록 등 UI 표시 시 Keycloak Admin API로 실시간 조회한다.
 
 ### 8.3 인가 모델
 
@@ -1315,14 +1306,11 @@ end
 
 ```ruby
 class CurrentUser
-  attr_reader :sub, :email, :name, :org_slugs, :realm_roles
+  attr_reader :sub, :realm_roles
 
   def self.from_session(token_data)
     new(
       sub: token_data["sub"],
-      email: token_data["email"],
-      name: token_data["name"],
-      org_slugs: extract_org_slugs(token_data["groups"]),
       realm_roles: token_data.dig("realm_access", "roles") || []
     )
   end
@@ -1336,6 +1324,12 @@ class CurrentUser
     @org_memberships ||= {}
     @org_memberships[organization.id] ||=
       OrgMembership.find_by(organization: organization, user_sub: sub)
+  end
+
+  # 소속 Org 목록 (목록 화면용)
+  def organizations
+    org_ids = OrgMembership.where(user_sub: sub).pluck(:organization_id)
+    Organization.where(id: org_ids)
   end
 
   # Project 실효 역할 결정
@@ -1368,56 +1362,36 @@ class CurrentUser
       organization.projects.where(id: project_ids).where.not(status: "deleted")
     end
   end
-
-  private
-
-  def self.extract_org_slugs(groups)
-    return [] unless groups
-    groups.filter_map do |group|
-      match = group.match(%r{/console/orgs/([^/]+)$})
-      match[1] if match
-    end
-  end
 end
 ```
 
-#### 로그인 시 멤버십 동기화
+#### 사용자 정보 조회 (Keycloak API)
+
+Console DB에 이메일/이름을 저장하지 않으므로, 멤버 목록 등 UI 표시 시 Keycloak Admin API로 조회한다.
 
 ```ruby
-class SessionsController < ApplicationController
-  skip_before_action :authenticate_user!
-
-  def create
-    token_data = exchange_code_for_token(params[:code])
-    session[:user_token] = token_data
-
-    sync_org_memberships(token_data)
-    redirect_to organizations_path
+# app/clients/keycloak_client.rb
+class KeycloakClient < BaseClient
+  # 단일 사용자 조회
+  def get_user(user_sub)
+    # GET /admin/realms/{realm}/users/{id}
+    # → { id: "sub", email: "...", firstName: "...", lastName: "..." }
   end
 
-  private
+  # 멤버 목록용 배치 조회
+  def get_users_by_ids(user_subs)
+    # 개별 조회 병렬 실행 또는 캐싱
+    user_subs.map { |sub| get_user(sub) }
+  end
 
-  def sync_org_memberships(token_data)
-    user_sub = token_data["sub"]
-    user_email = token_data["email"]
-    org_slugs = CurrentUser.extract_org_slugs(token_data["groups"])
-
-    org_slugs.each do |slug|
-      org = Organization.find_by(slug: slug)
-      next unless org
-
-      OrgMembership.find_or_create_by!(
-        organization: org,
-        user_sub: user_sub
-      ) do |m|
-        m.user_email = user_email
-        m.role = "read"       # 기본 역할
-        m.joined_at = Time.current
-      end
-    end
+  # 사용자 검색 (멤버 추가 시)
+  def search_users(query:)
+    # GET /admin/realms/{realm}/users?search={query}
   end
 end
 ```
+
+> **캐싱**: 사용자 정보는 요청 내 캐싱 (`RequestStore` 또는 컨트롤러 인스턴스 변수). 빈번한 Keycloak API 호출을 방지한다. 필요 시 Rails.cache로 단기 캐싱 (TTL 5분) 추가 가능.
 
 ---
 
@@ -1584,19 +1558,20 @@ end
 
 Thread 수가 2~3개로 적고, 각 Thread는 독립적인 외부 API를 호출하므로 Thread 안전성 이슈가 최소화된다.
 
-### 10.3 RBAC: Keycloak vs Console DB (Hybrid)
+### 10.3 RBAC: Keycloak vs Console DB
 
 | 방식 | 장점 | 단점 | 결정 |
 |------|------|------|------|
 | Keycloak SSOT | 권한 데이터 단일 원천. DB 조회 불필요 | Project ACL 불가. 역할 추가 시 그룹 폭발. Keycloak 팀 부담 | 미채택 |
-| Console DB 전체 | 완전한 제어. Keycloak 의존 최소 | 로그인 없이 권한 확인 불가 | 미채택 |
-| **Hybrid (인증=KC, 인가=DB)** | Keycloak 팀 부담 최소. Project ACL 가능. 확장 자유 | DB 조회 필요 (세션 캐싱으로 완화) | **채택** |
+| Hybrid (인증+Org소속=KC, 인가=DB) | Keycloak의 그룹 기능 활용 | 동기화 로직 필요. 두 원천 관리 | 미채택 |
+| **Console DB 전량 (인증만 KC)** | Keycloak 팀 부담 최소. Project ACL 가능. 확장 자유. 단일 원천 | DB 조회 필요 (세션 캐싱으로 완화) | **채택** |
 
 **결정 근거**:
-- Project 레벨 접근 제어가 필요하여 Keycloak 그룹만으로는 부족
-- Keycloak 팀은 인증 + Org 멤버십(flat 그룹)만 담당. 역할 서브그룹 불필요
-- Console DB에 `org_memberships` + `project_permissions` 테이블로 세밀한 RBAC 구현
-- Keycloak 장애 시에도 기존 세션 사용자의 권한 관리는 정상 동작 (로그인만 불가)
+- Keycloak은 **순수 인증(OIDC 로그인/토큰 발급)만** 담당. 그룹/역할 미사용
+- Org 소속, 역할, Project ACL 전부 Console DB에서 관리 → **단일 원천, 동기화 불필요**
+- Keycloak 팀 요청: OIDC Client 등록 + Service Account 권한 부여. 끝
+- Console DB에 **이메일 미저장** (user_sub만). 사용자 정보 표시 시 Keycloak API 실시간 조회
+- Keycloak 장애 시 로그인만 불가. 기존 세션 사용자의 권한 관리는 정상 동작
 - 향후 기능별 권한, 리소스별 ACL 등 자유롭게 확장 가능
 
 ### 10.4 설정 스냅샷: Config Server 조회 vs Console DB 저장
@@ -1623,8 +1598,8 @@ Health Check 실패는 프로비저닝 전체를 롤백하지 않고 **경고(wa
 
 | FR | 설명 | DB 테이블 | Controller | Service | Client | Job/Channel |
 |----|------|-----------|------------|---------|--------|-------------|
-| **FR-1** | Organization CRUD | `organizations` | `OrganizationsController` | `Organizations::*Service` | `KeycloakClient` (그룹), `LangfuseClient` (Org) | — |
-| **FR-2** | RBAC | `org_memberships`, `project_permissions` | `MembersController`, `ApplicationController` (인가) | — | `KeycloakClient` (그룹/사용자) | — |
+| **FR-1** | Organization CRUD | `organizations` | `OrganizationsController` | `Organizations::*Service` | `LangfuseClient` (Org) | — |
+| **FR-2** | RBAC | `org_memberships`, `project_permissions` | `MembersController`, `ApplicationController` (인가) | — | `KeycloakClient` (사용자 검색/조회) | — |
 | **FR-3** | Project CRUD | `projects` | `ProjectsController` | `Projects::*Service` | — | `ProvisioningJob` |
 | **FR-4** | 인증 체계 자동 구성 | `project_auth_configs` | `AuthConfigsController` | `Steps::KeycloakClientCreate` | `KeycloakClient` (Client) | — |
 | **FR-5** | Langfuse 프로젝트/Key | — (Console 미저장) | — | `Steps::LangfuseProjectCreate` | `LangfuseClient` | — |

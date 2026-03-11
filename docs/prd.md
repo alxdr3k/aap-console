@@ -175,11 +175,11 @@ Organization (조직)
 | **생성** | 신규 Organization 등록. 조직명, 설명 입력. 생성 시 멤버 목록 관리 (초기 관리자 지정). Langfuse Org 자동 생성 (tRPC `organizations.create`) |
 | **조회** | Organization 목록 및 상세 정보 (소속 Project 현황, 멤버 목록 포함) 확인 |
 | **수정** | Organization 정보 변경 (이름, 설명) 및 멤버 추가/제거/권한 변경 |
-| **삭제** | Organization 삭제 시 하위 모든 Project를 먼저 개별 삭제(각 Project의 롤백 대상 전체 정리, FR-3 참조)한 뒤, Langfuse Org 삭제 (tRPC `organizations.delete`) + Keycloak Org 그룹 삭제. **플랫폼 관리자(`super_admin`)만 실행 가능** |
+| **삭제** | Organization 삭제 시 하위 모든 Project를 먼저 개별 삭제(각 Project의 롤백 대상 전체 정리, FR-3 참조)한 뒤, Langfuse Org 삭제 (tRPC `organizations.delete`) + Console DB의 org_memberships/project_permissions 정리. **플랫폼 관리자(`super_admin`)만 실행 가능** |
 
-### FR-2. 접근제어 (RBAC) — Keycloak 위임
+### FR-2. 접근제어 (RBAC) — Console DB 자체 관리
 
-Organization 단위로 사용자 접근 권한을 관리한다. **RBAC은 Keycloak 그룹에 위임**하며, Console은 별도의 권한 테이블을 유지하지 않는다. 하위 Project에 대한 접근 범위도 Organization 멤버십에 의해 결정된다.
+Organization/Project 단위로 사용자 접근 권한을 관리한다. **인증은 Keycloak(OIDC)**에 위임하고, **인가(역할/권한)는 Console DB에서 자체 관리**한다. Keycloak은 그룹/역할 관리에 관여하지 않는다.
 
 #### 접근 모델 (열린 접근)
 
@@ -189,72 +189,63 @@ Console은 **열린 접근 모델**을 사용한다. 사내 SSO를 통해 누구
 |----------|-----------|
 | SSO 로그인 성공, Org 미소속 | 빈 화면. Org 생성 불가, 어떤 리소스도 조회 불가 |
 | `super_admin` | 전체 Organization 생성/삭제, 전체 현황 조회, Org admin 할당 |
-| Org `admin` | 해당 Org의 Project 생성/삭제, 멤버 관리 (read/write/admin 부여) |
-| Org `write` | 해당 Org 하위 Project 설정 변경 |
-| Org `read` | 해당 Org 하위 Project 조회만 가능 |
+| Org `admin` | 해당 Org의 Project 생성/삭제, 멤버 관리, **모든 하위 Project 접근** |
+| Org `write` + Project 권한 | **권한 부여된 Project**의 설정 변경 |
+| Org `read` + Project 권한 | **권한 부여된 Project** 조회만 가능 |
 
 **일반적인 온보딩 플로우**:
 1. `super_admin`이 Organization을 생성
 2. `super_admin`이 특정 사용자를 Org `admin`으로 지정 (사용자 사전 할당 가능 — 아래 참조)
-3. Org `admin`이 Project를 생성하고, 다른 사용자에게 `read`/`write`/`admin` 권한 부여
-4. 권한을 부여받은 사용자가 로그인하면 소속 Org/Project 조회 가능
+3. Org `admin`이 Project를 생성하고, 다른 사용자에게 `read`/`write` 권한 및 **Project별 접근 권한** 부여
+4. 권한을 부여받은 사용자가 로그인하면 소속 Org 및 **접근 권한이 있는 Project만** 조회 가능
 
-#### Keycloak 구성 (단일 Realm)
+#### Keycloak 구성 (순수 인증)
 
-AAP는 **단일 Realm 정책**을 사용한다. Console은 LiteLLM, Langfuse 등과 동일한 레벨의 OIDC Client로 등록되며, Console 전용 RBAC 정보는 **전용 Client Scope**로 격리하여 다른 Client의 토큰에 영향을 주지 않는다.
+AAP는 **단일 Realm 정책**을 사용한다. Console은 OIDC Client로 등록되며, Keycloak은 **인증(로그인/토큰 발급)만** 담당한다. RBAC 관련 그룹/역할은 Keycloak에서 관리하지 않는다.
 
 ```
 Realm: aap (단일)
- ├── Client: litellm           ← 기존 서비스 (기본 scope만)
- ├── Client: langfuse          ← 기존 서비스 (기본 scope만)
- ├── Client: {team}-agent      ← 타 팀 서비스 (기본 scope만)
- └── Client: aap-console       ← Console (기본 scope + console-rbac scope)
+ ├── Client: litellm           ← 기존 서비스
+ ├── Client: langfuse          ← 기존 서비스
+ ├── Client: {team}-agent      ← 타 팀 서비스
+ └── Client: aap-console       ← Console
       ├── OIDC Confidential Client (Authorization Code Flow)
-      ├── Service Account 활성화 (Keycloak Admin API 호출용)
-      └── Client Scope: "console-rbac" (aap-console에만 할당)
-           └── Protocol Mapper: Group Membership
-                ├── claim.name: groups
-                ├── full.path: true
-                └── add.to.access.token: true
+      └── Service Account 활성화 (Keycloak Admin API 호출용)
 ```
 
-**Client Scope 분리 원칙**: `console-rbac` Client Scope는 `aap-console` Client에만 할당한다. LiteLLM, Langfuse 등 다른 Client의 토큰에는 Console RBAC용 `groups` 클레임이 포함되지 않는다.
+> **Keycloak 그룹 미사용**: Console의 Org 소속, 역할, Project 접근 권한은 모두 Console DB에서 관리한다. Keycloak 그룹 구조 생성, Client Scope, Group Membership Mapper 등이 불필요하다.
 
-**Service Account 권한**: Console이 Org 생성/멤버 관리 및 Project별 인증 Client 자동 구성을 위해 Keycloak Admin API를 호출한다. `aap-console` Client의 Service Account에 최소 권한을 부여한다.
+**Service Account 권한**: Console이 Project별 인증 Client 자동 구성(FR-4) 및 사용자 검색을 위해 Keycloak Admin API를 호출한다. `aap-console` Client의 Service Account에 최소 권한을 부여한다.
 
 | Service Account Role | 용도 |
 |---|---|
 | `realm-management: manage-clients` | Client 생성/수정/삭제 (OIDC/SAML/OAuth) 및 Protocol Mapper 관리 |
-| `realm-management: manage-groups` | 그룹 생성/삭제 (Organization 생성/삭제 시 하위 그룹 CRUD) |
-| `realm-management: query-groups` | 그룹 목록/상세 조회 |
-| `realm-management: manage-users` | 사용자-그룹 멤버십 변경 + 사전 할당 시 사용자 레코드 생성 |
 | `realm-management: query-users` | 사용자 검색 (멤버 추가 시 이메일/이름 기반 검색) |
+| `realm-management: manage-users` | 사전 할당 시 사용자 레코드 생성 |
+
+> **이전 대비 축소**: `manage-groups`, `query-groups` 권한이 불필요해졌다. 그룹 관리를 Keycloak에 위임하지 않으므로.
 
 #### 권한 모델
 
 | 항목 | 상세 |
 |------|------|
-| **권한 수준** | `super_admin` — 플랫폼 전체 관리. Organization 생성/삭제, 전체 현황 조회, 정책 설정 (플랫폼 관리자 전용) <br> `admin` — Org 설정 및 멤버 관리, Project 생성/삭제 가능 <br> `write` — Project 설정 변경 가능 <br> `read` — Project 조회만 가능 |
-| **Keycloak 그룹 구조** | 계층적 그룹으로 Organization별 권한을 관리한다. `/console` prefix로 다른 서비스의 그룹과 충돌을 방지한다. 구조: `/console/orgs/{org-id}/admin`, `/console/orgs/{org-id}/write`, `/console/orgs/{org-id}/read`. 플랫폼 전체 `super_admin`은 별도 **Realm Role**로 관리 |
-| **JWT 토큰 클레임** | `console-rbac` Client Scope의 Group Membership mapper에 의해 `aap-console` Client의 JWT에만 `groups` 클레임이 포함된다 (`full.path: true`). 예: `["\/console\/orgs\/acme-corp\/admin"]` |
-| **멤버 관리** | `aap-console` Service Account로 Keycloak Admin API를 호출하여 사용자를 해당 Org 그룹에 추가/제거/역할 변경. Console은 Keycloak을 단일 진실 공급원(SSOT)으로 사용 |
+| **권한 수준** | `super_admin` — 플랫폼 전체 관리. Organization 생성/삭제, 전체 현황 조회 (Keycloak Realm Role) <br> `admin` — Org 설정 및 멤버 관리, Project 생성/삭제, **모든 하위 Project 자동 접근** <br> `write` — 권한 부여된 Project 설정 변경 <br> `read` — 권한 부여된 Project 조회만 가능 |
+| **데이터 저장** | Console DB의 `org_memberships` 테이블에 Org 역할 저장 (user_sub + role). `project_permissions` 테이블에 Project별 접근 권한 저장. **이메일 등 개인정보는 Console DB에 저장하지 않음** — 사용자 식별은 Keycloak `sub`(고유 ID)만 사용 |
+| **사용자 정보 표시** | 멤버 목록 등 UI에서 사용자 이름/이메일이 필요한 경우 Keycloak Admin API로 실시간 조회 |
+| **멤버 관리** | Console UI에서 사용자 검색 → Org 멤버십 생성(Console DB) → Project 권한 부여(Console DB). Keycloak 그룹 변경 없음 |
 | **사용자 검색** | 멤버 추가 시 Keycloak Admin API (`GET /users?search={query}`)로 사용자 검색. 이메일 또는 이름으로 검색 가능 |
-| **사용자 사전 할당** | 아직 Console에 로그인하지 않은 사용자도 권한 할당 가능. Keycloak에 사용자 레코드가 없으면 Admin API (`POST /users`)로 이메일 기반 최소 사용자를 사전 생성한 뒤 그룹 할당. 해당 사용자가 나중에 SSO 로그인 시 Keycloak First Broker Login 플로우가 이메일 매칭으로 기존 레코드에 자동 링크 |
-| **권한 상속** | Organization 멤버십이 하위 모든 Project에 동일하게 적용. **향후 확장**: Project별 세분화된 권한 부여 (예: 특정 Project에만 write, 나머지는 read)가 필요해지면 Keycloak 그룹 구조를 `/console/orgs/{org-id}/projects/{project-id}/write` 형태로 확장 가능. 현재(Phase 1~3)는 Org-level 권한으로 충분하며, 실사용 피드백에 따라 도입 여부 결정 |
-| **Console UI 제어** | JWT 토큰의 `groups` 클레임을 파싱하여 권한 수준에 따라 UI 요소(버튼, 메뉴 등) 활성/비활성 처리 |
-| **API 제어** | 모든 API 엔드포인트에서 JWT 토큰의 `groups` 클레임을 검증하여 요청자의 권한 수준을 확인. DB 조회 없이 토큰만으로 인가 처리 |
+| **사용자 사전 할당** | 아직 Console에 로그인하지 않은 사용자도 권한 할당 가능. Keycloak에 사용자 레코드가 없으면 Admin API (`POST /users`)로 이메일 기반 최소 사용자를 사전 생성. Console DB에 해당 `user_sub`로 멤버십 레코드 생성. 해당 사용자가 나중에 SSO 로그인 시 Keycloak First Broker Login 플로우가 이메일 매칭으로 기존 레코드에 자동 링크 |
+| **권한 범위** | Org `admin`은 해당 Org의 모든 Project에 암묵적 접근 권한. `read`/`write` 사용자는 `project_permissions`에 명시적으로 권한이 부여된 Project만 접근 가능 |
+| **Console UI 제어** | Console DB의 멤버십/권한 정보를 기반으로 UI 요소(버튼, 메뉴 등) 활성/비활성 처리 |
+| **API 제어** | 모든 API 엔드포인트에서 Console DB의 멤버십/권한 레코드를 조회하여 인가 처리 |
 
-#### Keycloak Admin API 연동
+#### Keycloak Admin API 연동 (FR-2 관련)
 
 | Console 작업 | Keycloak Admin API |
 |---|---|
 | 사용자 검색 | `GET /admin/realms/{realm}/users?search={query}` — 이메일/이름으로 사용자 검색 |
+| 사용자 상세 조회 | `GET /admin/realms/{realm}/users/{id}` — sub로 이름/이메일 조회 (멤버 목록 표시용) |
 | 사용자 사전 생성 | `POST /admin/realms/{realm}/users` — Keycloak 미등록 사용자를 이메일 기반으로 사전 생성 (사전 할당용) |
-| Org 생성 | `POST /admin/realms/{realm}/groups` → `/console/orgs/{org-id}` 하위 그룹(admin/write/read) 자동 생성 |
-| 멤버 추가 | `PUT /admin/realms/{realm}/users/{user-id}/groups/{group-id}` |
-| 멤버 제거 | `DELETE /admin/realms/{realm}/users/{user-id}/groups/{group-id}` |
-| 권한 변경 | 기존 그룹에서 제거 → 새 권한 그룹에 추가 |
-| Org 삭제 | `DELETE /admin/realms/{realm}/groups/{group-id}` (하위 그룹 포함 삭제) |
 
 ### FR-3. Project 관리 (CRUD)
 
