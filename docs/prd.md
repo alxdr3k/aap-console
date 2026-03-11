@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> 버전: 1.10
+> 버전: 1.11
 > 작성일: 2026-03-05
 > 최종 수정일: 2026-03-11
 > 상태: Draft
@@ -240,7 +240,7 @@ Realm: aap (단일)
 | **멤버 관리** | `aap-console` Service Account로 Keycloak Admin API를 호출하여 사용자를 해당 Org 그룹에 추가/제거/역할 변경. Console은 Keycloak을 단일 진실 공급원(SSOT)으로 사용 |
 | **사용자 검색** | 멤버 추가 시 Keycloak Admin API (`GET /users?search={query}`)로 사용자 검색. 이메일 또는 이름으로 검색 가능 |
 | **사용자 사전 할당** | 아직 Console에 로그인하지 않은 사용자도 권한 할당 가능. Keycloak에 사용자 레코드가 없으면 Admin API (`POST /users`)로 이메일 기반 최소 사용자를 사전 생성한 뒤 그룹 할당. 해당 사용자가 나중에 SSO 로그인 시 Keycloak First Broker Login 플로우가 이메일 매칭으로 기존 레코드에 자동 링크 |
-| **권한 상속** | Organization 멤버십이 하위 모든 Project에 동일하게 적용 |
+| **권한 상속** | Organization 멤버십이 하위 모든 Project에 동일하게 적용. **향후 확장**: Project별 세분화된 권한 부여 (예: 특정 Project에만 write, 나머지는 read)가 필요해지면 Keycloak 그룹 구조를 `/console/orgs/{org-id}/projects/{project-id}/write` 형태로 확장 가능. 현재(Phase 1~3)는 Org-level 권한으로 충분하며, 실사용 피드백에 따라 도입 여부 결정 |
 | **Console UI 제어** | JWT 토큰의 `groups` 클레임을 파싱하여 권한 수준에 따라 UI 요소(버튼, 메뉴 등) 활성/비활성 처리 |
 | **API 제어** | 모든 API 엔드포인트에서 JWT 토큰의 `groups` 클레임을 검증하여 요청자의 권한 수준을 확인. DB 조회 없이 토큰만으로 인가 처리 |
 
