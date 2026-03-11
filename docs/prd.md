@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> 버전: 1.7
+> 버전: 1.8
 > 작성일: 2026-03-05
 > 최종 수정일: 2026-03-11
 > 상태: Draft
@@ -180,6 +180,24 @@ Organization (조직)
 
 Organization 단위로 사용자 접근 권한을 관리한다. **RBAC은 Keycloak 그룹에 위임**하며, Console은 별도의 권한 테이블을 유지하지 않는다. 하위 Project에 대한 접근 범위도 Organization 멤버십에 의해 결정된다.
 
+#### 접근 모델 (열린 접근)
+
+Console은 **열린 접근 모델**을 사용한다. 사내 SSO를 통해 누구나 Console에 로그인할 수 있지만, 어떤 Organization에도 소속되지 않은 사용자는 **접근 가능한 리소스가 없는 빈 화면**만 보게 된다.
+
+| 시나리오 | 접근 범위 |
+|----------|-----------|
+| SSO 로그인 성공, Org 미소속 | 빈 화면. Org 생성 불가, 어떤 리소스도 조회 불가 |
+| `super_admin` | 전체 Organization 생성/삭제, 전체 현황 조회, Org admin 할당 |
+| Org `admin` | 해당 Org의 Project 생성/삭제, 멤버 관리 (read/write/admin 부여) |
+| Org `write` | 해당 Org 하위 Project 설정 변경 |
+| Org `read` | 해당 Org 하위 Project 조회만 가능 |
+
+**일반적인 온보딩 플로우**:
+1. `super_admin`이 Organization을 생성
+2. `super_admin`이 특정 사용자를 Org `admin`으로 지정 (사용자 사전 할당 가능 — 아래 참조)
+3. Org `admin`이 Project를 생성하고, 다른 사용자에게 `read`/`write`/`admin` 권한 부여
+4. 권한을 부여받은 사용자가 로그인하면 소속 Org/Project 조회 가능
+
 #### Keycloak 구성 (단일 Realm)
 
 AAP는 **단일 Realm 정책**을 사용한다. Console은 LiteLLM, Langfuse 등과 동일한 레벨의 OIDC Client로 등록되며, Console 전용 RBAC 정보는 **전용 Client Scope**로 격리하여 다른 Client의 토큰에 영향을 주지 않는다.
@@ -208,8 +226,8 @@ Realm: aap (단일)
 | `realm-management: manage-clients` | Client 생성/수정/삭제 (OIDC/SAML/OAuth) 및 Protocol Mapper 관리 |
 | `realm-management: manage-groups` | 그룹 생성/삭제 (Organization 생성/삭제 시 하위 그룹 CRUD) |
 | `realm-management: query-groups` | 그룹 목록/상세 조회 |
-| `realm-management: manage-users` | 사용자-그룹 멤버십 변경 |
-| `realm-management: query-users` | 사용자 검색 |
+| `realm-management: manage-users` | 사용자-그룹 멤버십 변경 + 사전 할당 시 사용자 레코드 생성 |
+| `realm-management: query-users` | 사용자 검색 (멤버 추가 시 이메일/이름 기반 검색) |
 
 #### 권한 모델
 
@@ -218,7 +236,9 @@ Realm: aap (단일)
 | **권한 수준** | `super_admin` — 플랫폼 전체 관리. Organization 생성/삭제, 전체 현황 조회, 정책 설정 (플랫폼 관리자 전용) <br> `admin` — Org 설정 및 멤버 관리, Project 생성/삭제 가능 <br> `write` — Project 설정 변경 가능 <br> `read` — Project 조회만 가능 |
 | **Keycloak 그룹 구조** | 계층적 그룹으로 Organization별 권한을 관리한다. `/console` prefix로 다른 서비스의 그룹과 충돌을 방지한다. 구조: `/console/orgs/{org-id}/admin`, `/console/orgs/{org-id}/write`, `/console/orgs/{org-id}/read`. 플랫폼 전체 `super_admin`은 별도 **Realm Role**로 관리 |
 | **JWT 토큰 클레임** | `console-rbac` Client Scope의 Group Membership mapper에 의해 `aap-console` Client의 JWT에만 `groups` 클레임이 포함된다 (`full.path: true`). 예: `["\/console\/orgs\/acme-corp\/admin"]` |
-| **멤버 관리** | Organization 생성/수정 시 `aap-console` Service Account로 Keycloak Admin API를 호출하여 사용자를 해당 Org 그룹에 추가/제거/역할 변경. Console은 Keycloak을 단일 진실 공급원(SSOT)으로 사용 |
+| **멤버 관리** | `aap-console` Service Account로 Keycloak Admin API를 호출하여 사용자를 해당 Org 그룹에 추가/제거/역할 변경. Console은 Keycloak을 단일 진실 공급원(SSOT)으로 사용 |
+| **사용자 검색** | 멤버 추가 시 Keycloak Admin API (`GET /users?search={query}`)로 사용자 검색. 이메일 또는 이름으로 검색 가능 |
+| **사용자 사전 할당** | 아직 Console에 로그인하지 않은 사용자도 권한 할당 가능. Keycloak에 사용자 레코드가 없으면 Admin API (`POST /users`)로 이메일 기반 최소 사용자를 사전 생성한 뒤 그룹 할당. 해당 사용자가 나중에 SSO 로그인 시 Keycloak First Broker Login 플로우가 이메일 매칭으로 기존 레코드에 자동 링크 |
 | **권한 상속** | Organization 멤버십이 하위 모든 Project에 동일하게 적용 |
 | **Console UI 제어** | JWT 토큰의 `groups` 클레임을 파싱하여 권한 수준에 따라 UI 요소(버튼, 메뉴 등) 활성/비활성 처리 |
 | **API 제어** | 모든 API 엔드포인트에서 JWT 토큰의 `groups` 클레임을 검증하여 요청자의 권한 수준을 확인. DB 조회 없이 토큰만으로 인가 처리 |
@@ -227,6 +247,8 @@ Realm: aap (단일)
 
 | Console 작업 | Keycloak Admin API |
 |---|---|
+| 사용자 검색 | `GET /admin/realms/{realm}/users?search={query}` — 이메일/이름으로 사용자 검색 |
+| 사용자 사전 생성 | `POST /admin/realms/{realm}/users` — Keycloak 미등록 사용자를 이메일 기반으로 사전 생성 (사전 할당용) |
 | Org 생성 | `POST /admin/realms/{realm}/groups` → `/console/orgs/{org-id}` 하위 그룹(admin/write/read) 자동 생성 |
 | 멤버 추가 | `PUT /admin/realms/{realm}/users/{user-id}/groups/{group-id}` |
 | 멤버 제거 | `DELETE /admin/realms/{realm}/users/{user-id}/groups/{group-id}` |
@@ -266,6 +288,17 @@ Realm: aap (단일)
 
 - **Keycloak Admin REST API**를 직접 호출하여 Client 생성/수정/삭제를 자동화한다. Console의 Service Account 토큰으로 인증한다.
 - 발급된 Keycloak Client Secret 및 PAK는 생성 시 UI에 **일회성으로만 표시**하며, Console에서는 별도로 저장하지 않는다.
+
+**Client 네이밍 컨벤션**:
+
+Console이 자동 생성하는 Keycloak Client는 기존 수동 등록 Client와의 충돌을 방지하고 식별을 용이하게 하기 위해 아래 규칙을 따른다.
+
+| 형식 | 예시 |
+|------|------|
+| `aap-{org-id}-{project-id}-{protocol}` | `aap-acme-chatbot-oidc`, `aap-acme-chatbot-saml` |
+
+- `aap-` prefix로 Console이 생성한 Client임을 식별
+- Console은 자신이 생성한 Client만 수정/삭제하며, `aap-` prefix가 없는 Client는 조작하지 않음 (코드 레벨 방어)
 
 **Keycloak Admin API 연동 (Client 관리)**:
 
@@ -589,6 +622,7 @@ Pod
 ### Phase 1: 핵심 기반 구축 (MVP)
 
 - Rails 8 프로젝트 초기 설정 (SQLite + SolidQueue + SolidCable) 및 Keycloak SSO 인증 연동
+- Keycloak First Broker Login 플로우 설정 — 이메일 매칭 기반 기존 사용자 자동 링크 (사용자 사전 할당 전제조건)
 - K8s 배포 구성 (Deployment Recreate + PVC + Litestream Sidecar 백업/복구)
 - Organization CRUD + 멤버십 관리 — Keycloak 그룹 연동 (FR-1, Langfuse Org 연동은 Phase 2에서 Langfuse tRPC 통합 시 추가)
 - 접근제어 RBAC — Keycloak 그룹 기반 JWT 인가 (FR-2)
@@ -631,12 +665,13 @@ Pod
 | Config Server Admin API 장애 시 설정 변경 불가 | 중간 | 프로비저닝 파이프라인 자동 재시도 (FR-7.2). Config Server 복구 시 `failed` 상태 작업을 수동 재시도 가능 (FR-7.3) |
 | SQLite 파일 손상 또는 PVC 유실 | 중간 | Litestream이 S3에 실시간 백업. Init Container가 S3에서 자동 복원. RPO ≈ 수초 |
 | 단일 인스턴스 배포로 인한 다운타임 | 낮음 | Recreate 전략 다운타임은 수십 초. 내부 관리 콘솔이므로 허용 가능. Liveness/Readiness Probe로 빠른 복구 보장 |
+| Console Service Account 권한 과다 | 중간 | `manage-clients`/`manage-groups`/`manage-users`가 Realm 전체 범위. Console 버그 시 타 팀 Client/Group 영향 가능. **완화**: 코드 레벨에서 `aap-` prefix Client 및 `/console/` prefix Group만 조작하도록 방어. Client/Group 조작 전 prefix 검증 로직 필수. 통합 테스트로 범위 이탈 방지 |
 
 ### 10.2 외부 의존성
 
 | 시스템 | 의존 유형 | 비고 |
 |--------|-----------|------|
-| Keycloak | Admin REST API | RBAC 그룹 관리 + SAML/OIDC/OAuth Client 자동 구성 |
+| Keycloak | Admin REST API | RBAC 그룹 관리 + SAML/OIDC/OAuth Client 자동 구성. **사전 설정 필요**: First Broker Login 플로우에서 이메일 매칭 기반 기존 사용자 자동 링크 설정 (사용자 사전 할당 기능의 전제조건) |
 | Langfuse | 내부 tRPC API (오픈소스) | 웹 UI 내부 tRPC API로 Org/Project/API Key CRUD. NextAuth 세션 쿠키 인증 |
 | LiteLLM | Config Server 경유 설정 전파 | 모델 라우팅, 가드레일, S3 경로 설정 |
 | Config Server | `aap-config-server` Admin API | Console은 Admin API 호출만 수행. Git/kubeseal/kubectl/전파는 Config Server 책임 |
