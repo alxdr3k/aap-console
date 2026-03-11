@@ -1,8 +1,8 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> 버전: 1.6
+> 버전: 1.7
 > 작성일: 2026-03-05
-> 최종 수정일: 2026-03-10
+> 최종 수정일: 2026-03-11
 > 상태: Draft
 
 ---
@@ -245,9 +245,10 @@ Realm: aap (단일)
 |------|-----------|
 | **Keycloak 리소스** | Keycloak Admin API로 해당 Project의 Client 삭제 (`DELETE /admin/realms/{realm}/clients/{id}`) |
 | **Langfuse 리소스** | Langfuse tRPC API를 통해 프로젝트 및 SDK Key 삭제 |
-| **Config Server** | Config Server Admin API (`DELETE /api/v1/admin/changes`)로 해당 App의 설정 + 시크릿 일괄 삭제. Config Server가 Git/K8s 정리 수행 |
+| **Config Server (설정/시크릿)** | Config Server Admin API (`DELETE /api/v1/admin/changes`)로 해당 App의 설정 + 시크릿 일괄 삭제 |
+| **Config Server (App Registry)** | Config Server Admin API (`POST /api/v1/admin/app-registry/webhook`, `action: delete`)로 App 등록 해제 |
 
-> **구현 고려사항**: 동일 파일 내에서 여러 Project의 설정이 공존할 수 있으므로, Project별 설정 격리 전략이 필요하다. 삭제 시 다른 Project의 설정을 훼손하지 않도록 App ID 기반의 섹션 분리 또는 파일 분리 방식을 설계해야 한다.
+> **구현 고려사항**: Config Server의 설정/시크릿 삭제 API가 해당 App의 데이터만 정확히 제거하고 다른 Project에 영향을 주지 않아야 한다. App ID 기반의 격리 전략은 Config Server 모듈에서 설계한다.
 
 ### FR-4. 인증 체계 자동 구성
 
@@ -307,7 +308,7 @@ Langfuse 웹 UI가 내부적으로 사용하는 tRPC API를 직접 호출한다.
 >
 > **엔드포인트**: `POST /api/trpc/{procedure}` 형식. 예: `POST /api/trpc/projects.create`
 
-> **설계 원칙**: Console은 시크릿 평문을 Config Server Admin API로 전달만 하고, 암호화/저장/적용은 Config Server가 수행한다. Git에는 SealedSecret(암호화) 형태로만 저장되며, Config 파일에서는 `os.environ/LANGFUSE_PUBLIC_KEY` 형태로 참조한다.
+> **설계 원칙**: Console은 시크릿 평문을 Config Server Admin API로 전달만 하고, 암호화/저장/적용은 Config Server가 수행한다. Git에는 시크릿 평문이 저장되지 않는다 (SealedSecret 암호화 방식).
 >
 > **인가**: Console이 사용자 RBAC 권한을 검증한 후 Config Server Admin API를 호출한다 (비기능 요구사항 6.1 참조).
 
@@ -483,9 +484,8 @@ Step 1. Project 레코드 생성 (DB) + App ID 발급
   │
   ▼
 Step 3. Config 반영 [Config Server Admin API 호출]
-  ├─ LiteLLM Config → Config Server Admin API로 설정 데이터 전달
-  ├─ Langfuse SK/PK → Config Server Admin API로 시크릿 평문 전달
-  └─ Config Server가 Git push + kubeseal + kubectl apply → LiteLLM 자동 전파
+  ├─ POST /api/v1/admin/changes — LiteLLM Config + Langfuse SK/PK를 일괄 전달
+  └─ Config Server가 atomic 처리 후 버전 식별자(Git 커밋 해시) 반환 → LiteLLM 자동 전파
   │
   ▼
 Step 4. Health Check 실행 (정합성 검증)
