@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> 버전: 1.8
+> 버전: 1.9
 > 작성일: 2026-03-05
 > 최종 수정일: 2026-03-11
 > 상태: Draft
@@ -55,7 +55,7 @@
 | **LiteLLM** | LLM 모델 라우팅 및 프록시 게이트웨이. App ID로 Project별 요청을 식별 |
 | **Langfuse** | LLM 호출에 대한 관측성(Observability) 및 트레이싱 플랫폼 |
 | **aap-helm-charts** | AAP 서비스들의 K8s 배포용 Helm Chart 레포 |
-| **Config Server** | Go 기반 설정 서버 (`aap-config-server`). 설정 읽기 API 서빙 + Admin API로 설정/시크릿 쓰기 처리. Console은 Config Server Admin API만 호출하고, Git/kubeseal/kubectl 등 인프라 작업은 Config Server가 수행 |
+| **Config Server** | Go 기반 설정 서버 (`aap-config-server`). 설정 읽기 API 서빙 + Admin API로 설정/시크릿 쓰기 처리. Console은 Config Server Admin API만 호출하고, 암호화/저장/적용 등 인프라 작업은 Config Server가 수행 |
 | **Config Agent** | Config Server의 설정을 LiteLLM 등 대상 서비스에 전달하는 컴포넌트. Console 관점에서는 Config Server 이후의 전파 파이프라인 |
 | **Provisioner** | Console 내부의 서비스 객체. Keycloak Admin API, Langfuse tRPC API 등 외부 서비스 API를 직접 호출하여 리소스를 생성/수정/삭제하는 Background Job 단위 |
 
@@ -93,18 +93,9 @@
                              ▼            │           │
                       ┌───────────────┐   │           │
                       │ Config Server │───┘           │
-                      │  · 읽기 API   │               │
                       │  · Admin API  │               │
-                      │  · kubeseal   │               │
-                      │  · git push   │               │
-                      │  · kubectl    │               │
-                      └───────┬───────┘               │
-                              │ git push              │
-                              ▼                       │
-                      ┌──────────────┐                │
-                      │Config Git    │                │
-                      │Repo          │                │
-                      └──────────────┘                │
+                      │  · 읽기 API   │               │
+                      └───────────────┘               │
                                                       │
                       └───────────────────────────────┘
 ```
@@ -115,21 +106,31 @@
   1. **리소스 생성 (API 직접 호출)**: Keycloak Admin REST API로 Client 생성, Langfuse tRPC API로 프로젝트 생성 등
   2. **동적 Config 반영 (Config Server Admin API)**:
      - Console이 Config Server Admin API를 호출하여 설정 값/시크릿 값 전달
-     - Config Server가 kubeseal 암호화, Git commit & push, kubectl apply 등 인프라 작업 수행
-     - 이후 Config Server → Config Agent → LiteLLM으로 자동 전파
+     - Config Server가 내부적으로 암호화, 저장, 적용 등 인프라 작업을 수행
+     - 이후 Config Server 전파 파이프라인을 통해 LiteLLM에 자동 반영
 
 **Console → Config Server 인터페이스**:
 
-Console은 Config Server Admin API만 호출한다. Git 레포 구조, kubeseal, kubectl 등은 Config Server 내부 관심사이며, Console은 알 필요 없다.
+Console은 Config Server Admin API만 호출한다. 설정의 저장/암호화/적용 방식은 Config Server 내부 관심사이며, Console은 알 필요 없다.
 
 | Console 작업 | Config Server API | 상세 |
 |---|---|---|
-| **설정/시크릿 일괄 변경** | `POST /api/v1/admin/changes` | 설정 데이터 + 시크릿 평문을 한 번에 전달. Config Server가 단일 atomic Git 커밋으로 처리 후 버전 식별자(Git 커밋 해시) 반환 |
-| **설정/시크릿 일괄 삭제** | `DELETE /api/v1/admin/changes` | 지정한 org/project/service의 설정 및 시크릿 제거. 단일 atomic Git 커밋 |
-| **버전 롤백** | `POST /api/v1/admin/changes/revert` | 버전 식별자(Git 커밋 해시) 지정. Config Server가 해당 커밋 시점으로 revert |
-| **App Registry 변경** | `POST /api/v1/admin/app-registry/webhook` | App 등록/수정/삭제 시 Config Server의 인메모리 인증 캐시 갱신 |
+| **설정/시크릿 일괄 변경** | `POST /api/v1/admin/changes` | 설정 데이터 + 시크릿 평문을 한 번에 전달. Config Server가 atomic하게 처리 후 버전 식별자 반환 |
+| **설정/시크릿 일괄 삭제** | `DELETE /api/v1/admin/changes` | 지정한 org/project/service의 설정 및 시크릿 제거. 단일 atomic 처리 |
+| **버전 롤백** | `POST /api/v1/admin/changes/revert` | 버전 식별자 지정. Config Server가 해당 시점으로 설정/시크릿 복원 |
+| **App Registry 변경** | `POST /api/v1/admin/app-registry/webhook` | App 등록/수정/삭제 시 Config Server의 인메모리 인증 캐시 갱신. Console은 **fire-and-forget + async retry** 방식으로 전송 — Console DB 저장 후 비동기 전송하며, Config Server 다운 시에도 Console CRUD는 정상 완료 |
 
-> **설계 원칙 (Console Creates, Server Manages)**: Console은 "무엇을 설정할지"만 결정하고, Config Server는 "어떻게 저장하고 전파할지"를 담당한다. 이를 통해 Console은 Git/kubeseal/kubectl 의존성 없이 순수 관리 UI/API로 유지된다.
+**Console → Config Server 제공 API (Config Server가 Console을 호출)**:
+
+| Console API | 호출 주체 | 상세 |
+|---|---|---|
+| **App Registry 벌크 조회** | Config Server (시작 시) | `GET /api/v1/apps?all=true` — Config Server가 시작 시 전체 App Registry를 로드하여 인메모리 인증 캐시를 구성. Console이 미준비 상태일 경우 Config Server가 자체 재시도 후 빈 캐시로 기동 (설정 서빙은 정상, App 인증만 불가) |
+
+**시작 순서 독립성**: Console과 Config Server는 부팅 시 상호 의존하지 않도록 설계한다. 어느 쪽이 먼저 기동해도 데드락이 발생하지 않으며, 상대방이 복구되면 정상 기능이 점진적으로 회복된다.
+- **Console 독립 기동**: Config Server가 다운이어도 Console DB CRUD는 정상 완료. webhook은 async retry queue에서 재시도. 단, Config Server 의존 화면(설정 조회/이력)은 에러 상태
+- **Config Server 독립 기동**: Console API에서 App Registry 로드 실패 시 빈 캐시로 기동. Console 복구 후 webhook 수신으로 캐시 정합성 회복
+
+> **설계 원칙 (Console Creates, Server Manages)**: Console은 "무엇을 설정할지"만 결정하고, Config Server는 "어떻게 저장하고 전파할지"를 담당한다. 이를 통해 Console은 인프라 의존성 없이 순수 관리 UI/API로 유지된다.
 
 ---
 
@@ -344,7 +345,7 @@ Langfuse 웹 UI가 내부적으로 사용하는 tRPC API를 직접 호출한다.
 >
 > **엔드포인트**: `POST /api/trpc/{procedure}` 형식. 예: `POST /api/trpc/projects.create`
 
-> **설계 원칙**: Console은 시크릿 평문을 Config Server Admin API로 전달만 하고, 암호화/저장/적용은 Config Server가 수행한다. Git에는 시크릿 평문이 저장되지 않는다 (SealedSecret 암호화 방식).
+> **설계 원칙**: Console은 시크릿 평문을 Config Server Admin API로 전달만 하고, 암호화/저장/적용은 Config Server가 수행한다. 시크릿 저장/암호화 방식은 Config Server 내부 관심사이다.
 >
 > **인가**: Console이 사용자 RBAC 권한을 검증한 후 Config Server Admin API를 호출한다 (비기능 요구사항 6.1 참조).
 
@@ -415,12 +416,12 @@ pending → in_progress → completed
 
 | 항목 | 상세 |
 |------|------|
-| **이력 관리** | Project별 설정 변경 시마다 버전 기록. Config Server가 반환하는 버전 식별자(Git 커밋 해시)를 Console DB에 저장하여 변경 이력과 연결 |
+| **이력 관리** | Project별 설정 변경 시마다 버전 기록. Config Server가 반환하는 버전 식별자를 Console DB에 저장하여 변경 이력과 연결 |
 | **버전 조회** | Console에서 변경 이력 목록 및 diff 확인 |
 | **롤백 — Keycloak** | Console DB에 기록된 이전 설정 스냅샷을 기반으로 Keycloak Admin API를 호출하여 Client 설정 복구 (`PUT /admin/realms/{realm}/clients/{id}`) |
 | **롤백 — Langfuse** | Console DB에 기록된 이전 스냅샷을 기반으로 Langfuse tRPC API를 호출하여 Project 설정 복구 |
-| **롤백 — Config Server** | Console이 저장된 버전 식별자로 Config Server revert API 호출 (`POST /api/v1/admin/changes/revert`). Config Server가 해당 Git 커밋 시점으로 revert. Console은 시크릿 평문을 재전달할 필요 없음 — Git 이력에서 복원 |
-| **원자적 버전 관리** | Config Server의 설정/시크릿 변경은 단일 atomic Git 커밋으로 처리되므로, 하나의 버전 식별자로 config + secret 모두 식별 가능 |
+| **롤백 — Config Server** | Console이 저장된 버전 식별자로 Config Server revert API 호출 (`POST /api/v1/admin/changes/revert`). Config Server가 해당 시점으로 설정/시크릿 복원. Console은 시크릿 평문을 재전달할 필요 없음 — Config Server가 내부 이력에서 복원 |
+| **원자적 버전 관리** | Config Server의 설정/시크릿 변경은 단일 atomic 처리되므로, 하나의 버전 식별자로 config + secret 모두 식별 가능 |
 | **감사 로그** | 누가, 언제, 어떤 설정을 변경했는지 추적 |
 
 ### FR-9. Health Check 및 정합성 검증
@@ -440,7 +441,7 @@ pending → in_progress → completed
 
 - Keycloak Client Secret, PAK는 생성 시 UI에 일회성 표시 후 Console 미저장
 - Langfuse SK/PK는 Console 미저장. Config Server Admin API로 평문 전달 후 즉시 폐기. 암호화/저장/적용은 Config Server가 수행
-- Git 레포에는 시크릿 평문이 저장되지 않음 (SealedSecret 암호화 방식). 시크릿 저장 형식은 Config Server 내부 관심사
+- 시크릿 평문은 Config Server의 저장소에 직접 저장되지 않음 (암호화 처리). 시크릿 저장/암호화 방식은 Config Server 내부 관심사
 - Console 접근은 조직 SSO를 통한 인증 필수
 - Organization 단위 RBAC (admin/write/read) 기반 접근제어 — Keycloak 그룹에 위임 (FR-2 참조)
 - Console → Config Server 요청 시 인증/인가 검증 (아래 상세)
@@ -449,7 +450,7 @@ pending → in_progress → completed
 
 **Console → Config Server 인증/인가**:
 
-Console은 Config Server Admin API만 호출한다. Git 접근, kubeseal, kubectl 등 인프라 작업은 Config Server가 수행한다.
+Console은 Config Server Admin API만 호출한다. 암호화, 저장, 적용 등 인프라 작업은 Config Server가 수행한다.
 
 | 계층 | 검증 주체 | 검증 내용 |
 |------|-----------|-----------|
@@ -481,7 +482,7 @@ Console은 Config Server Admin API만 호출한다. Git 접근, kubeseal, kubect
 |------|------------------|
 | **Console DB (SQLite)** | SQLite WAL 모드로 동시 읽기 허용, 쓰기는 단일 프로세스 직렬화. 단일 인스턴스 배포이므로 DB 레벨 동시성 문제 최소화. 프로비저닝 상태 머신(FR-7.1)으로 중복 처리 방지 |
 | **외부 API 호출** | SolidQueue Job 직렬화로 동일 Project에 대한 동시 프로비저닝 방지. 각 단계는 멱등하게 설계 (FR-7.2) |
-| **Config Server API** | 동일 Project에 대한 동시 API 호출은 SolidQueue Job 직렬화로 방지. **서로 다른 Project 간**: Config Server의 Git 레포가 App ID 기반 디렉토리로 격리되므로 동시 쓰기 시에도 파일 충돌 없음. Git 레벨 동시성은 Config Server 모듈 책임 |
+| **Config Server API** | 동일 Project에 대한 동시 API 호출은 SolidQueue Job 직렬화로 방지. **서로 다른 Project 간**: Config Server가 Project별 설정 격리를 보장하므로 동시 쓰기 시에도 충돌 없음. 동시성 제어는 Config Server 모듈 책임 |
 | **Background Job (SolidQueue)** | 동일 Project에 대한 Job은 직렬 실행을 보장 (unique job 또는 큐 기반 직렬화). 서로 다른 Project의 Job은 병렬 실행 가능 |
 
 **설계 원칙**:
@@ -508,7 +509,8 @@ Step 1. Project 레코드 생성 (DB) + App ID 발급
   │
   ▼
 Step 1b. App Registry 등록 [Config Server Admin API]
-  └─ POST /api/v1/admin/app-registry/webhook — App ID 등록 (이후 Config Server API 호출의 인증 전제조건)
+  └─ POST /api/v1/admin/app-registry/webhook — App ID 등록 (fire-and-forget + async retry)
+     (이후 Config Server API 호출의 인증 전제조건)
   │
   │ ── 리소스 생성 (병렬 실행 가능) ──
   │
@@ -525,7 +527,7 @@ Step 1b. App Registry 등록 [Config Server Admin API]
   ▼
 Step 3. Config 반영 [Config Server Admin API 호출]
   ├─ POST /api/v1/admin/changes — LiteLLM Config + Langfuse SK/PK를 일괄 전달
-  └─ Config Server가 atomic 처리 후 버전 식별자(Git 커밋 해시) 반환 → LiteLLM 자동 전파
+  └─ Config Server가 atomic 처리 후 버전 식별자 반환 → LiteLLM 자동 전파
   │
   ▼
 Step 4. Health Check 실행 (정합성 검증)
@@ -555,7 +557,7 @@ Step 5. 완료 → Console에 결과 표시
 | **인증/인가** | Keycloak (Admin REST API + RBAC) | SAML/OIDC/OAuth Client 자동 구성 (Admin API 직접 호출). Organization 단위 RBAC을 Keycloak 그룹으로 관리 (섹션 5 FR-2 참조) |
 | **관측성** | Langfuse (오픈소스, tRPC API 연동) | LLM 트레이싱 프로젝트 및 키 관리. 내부 tRPC API로 Org/Project CRUD |
 | **LLM 게이트웨이** | LiteLLM | 모델 라우팅, 가드레일, Rate Limit |
-| **Config Server** | Go 서버 (`aap-config-server`) | Console은 Admin API 호출만 수행. Git/kubeseal/kubectl/LiteLLM 전파는 Config Server 모듈 책임 |
+| **Config Server** | Go 서버 (`aap-config-server`) | Console은 Admin API 호출만 수행. 암호화/저장/적용/LiteLLM 전파는 Config Server 모듈 책임 |
 | **K8s 배포** | Deployment (Recreate 전략) + PVC | 단일 인스턴스 배포. 미리 생성한 PVC에 SQLite 파일 저장. Litestream Sidecar로 백업/복구 |
 | **테스트** | RSpec + FactoryBot | TDD 기반 개발. 단위/통합/시스템 테스트 |
 | **CI/CD** | (미정) | GitOps 기반 배포 파이프라인 |
@@ -674,7 +676,7 @@ Pod
 | Keycloak | Admin REST API | RBAC 그룹 관리 + SAML/OIDC/OAuth Client 자동 구성. **사전 설정 필요**: First Broker Login 플로우에서 이메일 매칭 기반 기존 사용자 자동 링크 설정 (사용자 사전 할당 기능의 전제조건) |
 | Langfuse | 내부 tRPC API (오픈소스) | 웹 UI 내부 tRPC API로 Org/Project/API Key CRUD. NextAuth 세션 쿠키 인증 |
 | LiteLLM | Config Server 경유 설정 전파 | 모델 라우팅, 가드레일, S3 경로 설정 |
-| Config Server | `aap-config-server` Admin API | Console은 Admin API 호출만 수행. Git/kubeseal/kubectl/전파는 Config Server 책임 |
+| Config Server | `aap-config-server` Admin API | Console은 Admin API 호출만 수행. 암호화/저장/적용/전파는 Config Server 책임. Config Server 시작 시 Console의 `GET /api/v1/apps` 호출 (App Registry 로드) |
 | S3 (Object Storage) | Litestream 백업 + Langfuse 데이터 | stg/prd: Managed S3 서비스. dev: MinIO (클러스터 내 자체 배포) |
 | aap-helm-charts | Git Repo | AAP 서비스 배포용 Helm Chart 관리 |
 
