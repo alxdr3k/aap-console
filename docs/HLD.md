@@ -402,12 +402,10 @@ app/
 ├── services/
 │   ├── organizations/
 │   │   ├── create_service.rb             # FR-1: Org 생성 + Langfuse Org + 초기 멤버십
-│   │   ├── update_service.rb             # FR-1
 │   │   └── destroy_service.rb            # FR-1: 하위 Project 전체 삭제 + 멤버십 정리 후 Org 삭제
 │   │
 │   ├── projects/
 │   │   ├── create_service.rb             # FR-3: DB 생성 + 프로비저닝 job enqueue
-│   │   ├── update_service.rb             # FR-3
 │   │   └── destroy_service.rb            # FR-3: 삭제 프로비저닝 job enqueue
 │   │
 │   ├── provisioning/
@@ -428,7 +426,7 @@ app/
 │   └── config_versions/
 │       └── rollback_service.rb           # FR-8: 버전 롤백 오케스트레이션
 │
-├── clients/                              # 외부 API HTTP 클라이언트
+├── clients/                              # 외부 API HTTP 클라이언트 (비즈니스 로직 없는 순수 HTTP 통신 계층이므로 services/와 분리)
 │   ├── keycloak_client.rb                # FR-2, FR-4
 │   ├── langfuse_client.rb                # FR-1, FR-5
 │   └── config_server_client.rb           # FR-6
@@ -464,6 +462,8 @@ app/
 | **Orchestrator** | Step 실행 순서 관리, 상태 머신 전이, 롤백 트리거 | 외부 API 직접 호출 (Step에 위임) |
 
 ### 3.3 Service 계층 패턴
+
+Service는 **외부 API 호출이나 다중 리소스 오케스트레이션이 필요한 경우에만** 도입한다. 단순 CRUD(예: Org/Project의 단일 필드 수정)는 Controller에서 Model을 직접 호출한다.
 
 모든 Service는 동일한 패턴을 따른다:
 
