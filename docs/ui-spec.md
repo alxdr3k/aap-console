@@ -78,6 +78,7 @@ AAP Console
 │       │       ├── 인증 설정
 │       │       ├── LiteLLM Config
 │       │       ├── 변경 이력
+│       │       ├── Playground (AI Chat)
 │       │       └── 프로비저닝 이력
 │       │           └── {Job} (프로비저닝 현황 — 실시간)
 │       └── 멤버 관리
@@ -107,6 +108,7 @@ AAP Console
 | 인증 설정 | `/.../:id/auth_config` | 인증 방식 상세, Client Secret 재발급 | FR-4 |
 | LiteLLM Config | `/.../:id/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
 | 변경 이력 | `/.../:id/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
+| Playground | `/.../:id/playground` | 모델 선택, AI Chat, 요청 인스펙터 | FR-10 |
 | 프로비저닝 이력 | `/.../:id/provisioning_jobs` | 과거 Job 목록 | FR-7.3 |
 
 ### 4.3 프로비저닝

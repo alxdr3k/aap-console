@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> **Version**: 1.13
+> **Version**: 1.14
 > **Date**: 2026-03-12
 > **Status**: Approved
 > **References**: [HLD](./HLD.md) · [UI Spec](./ui-spec.md)
@@ -9,17 +9,17 @@
 
 ## 목차
 
-1. [개요](#1-개요)
-2. [용어 정의](#2-용어-정의)
-3. [시스템 아키텍처 개요](#3-시스템-아키텍처-개요)
-4. [리소스 계층 구조](#4-리소스-계층-구조)
-5. [핵심 기능 요구사항](#5-핵심-기능-요구사항)
-6. [비기능 요구사항](#6-비기능-요구사항)
-7. [신규 Project 생성 워크플로우](#7-신규-project-생성-워크플로우)
-8. [기술 스택](#8-기술-스택)
-9. [마일스톤 및 우선순위](#9-마일스톤-및-우선순위)
-10. [리스크 및 의존성](#10-리스크-및-의존성)
-11. [부록](#11-부록)
+1. 개요
+2. 용어 정의
+3. 시스템 아키텍처 개요
+4. 리소스 계층 구조
+5. 핵심 기능 요구사항
+6. 비기능 요구사항
+7. 신규 Project 생성 워크플로우
+8. 기술 스택
+9. 마일스톤 및 우선순위
+10. 리스크 및 의존성
+11. 부록
 
 ---
 
@@ -460,6 +460,48 @@ Project 생성 폼 제출
 | **Langfuse 검증** | 프로젝트 생성 후 SDK Key로 연결 테스트 |
 | **종합 리포트** | 검증 결과를 Console에 표시하고, 실패 시 알림 |
 
+### FR-10. Playground (AI Chat)
+
+Project에 적용된 LiteLLM Config이 정상 동작하는지 확인할 수 있는 간단한 AI 채팅 인터페이스를 제공한다. **구현 우선순위: 낮음 (Phase 4)**.
+
+| 항목 | 상세 |
+|------|------|
+| **기본 채팅** | Project에 설정된 LiteLLM을 통해 LLM과 대화. 메시지 입력 → 응답 표시 |
+| **모델 선택** | Project의 LiteLLM Config에 등록된 모델 목록에서 선택하여 대화 (예: azure-gpt4, claude-sonnet) |
+| **스트리밍 응답** | LiteLLM의 streaming 응답을 Console UI에서 토큰 단위로 실시간 표시 |
+| **시스템 프롬프트** | 커스텀 system prompt 입력 가능. 기본값은 빈 문자열 |
+| **파라미터 조정** | temperature, max_tokens, top_p 등 요청 파라미터를 UI에서 조절 |
+| **가드레일 검증** | 설정된 content-filter 등 가드레일이 실제로 동작하는지 확인. 차단 시 가드레일 응답 메시지 표시 |
+| **요청/응답 인스펙터** | LiteLLM으로 전송된 실제 HTTP 요청/응답 상세 (헤더, 바디, 레이턴시, 상태 코드) 표시. 접을 수 있는 패널로 제공 |
+| **토큰 사용량 표시** | 요청/응답 토큰 수, 모델별 비용 추정 표시 (LiteLLM 응답의 usage 필드 활용) |
+| **대화 내보내기** | 현재 대화를 JSON 형식으로 다운로드 (디버깅/공유용) |
+| **세션 기반** | 대화 이력은 브라우저 세션에서만 유지. Console DB에 저장하지 않음 |
+| **접근 권한** | Project `read`+ 권한 필요 |
+
+**통신 경로**:
+
+```
+Console (브라우저)
+  │
+  ├─ POST /organizations/:org/projects/:slug/playground/chat
+  │   (Console 서버가 프록시)
+  │
+  ▼
+Console (서버)
+  │
+  ├─ Project의 App ID로 LiteLLM API 호출
+  │   POST {LITELLM_URL}/chat/completions
+  │   Headers: x-application-id: {app_id}
+  │   Body: {model, messages, stream: true, ...}
+  │
+  ▼
+LiteLLM → LLM Provider → 응답 → Console 서버 → SSE → 브라우저
+```
+
+> **설계 원칙**: Console은 LiteLLM에 직접 API 호출하는 프록시 역할만 수행한다. Console 서버를 경유하는 이유는 (1) LiteLLM 내부 URL을 브라우저에 노출하지 않기 위해, (2) Console의 RBAC 권한 검증을 서버에서 수행하기 위해서이다.
+>
+> **제약**: Playground는 설정 검증 목적의 보조 도구이며, 프로덕션 채팅 서비스가 아니다. Rate limit, 대화 저장, 히스토리 관리 등은 범위 밖이다.
+
 ---
 
 ## 6. 비기능 요구사항
@@ -685,6 +727,7 @@ Pod
 - [ ] 다중 인증 방식 전체 지원 (SAML, OAuth, PAK)
 - [ ] 관리자 대시보드 (전체 Organization/Project 현황, 서비스 설정 상태)
 - [ ] 알림 시스템 (설정 완료/실패, 이상 감지)
+- [ ] Playground — Project별 AI Chat 검증 도구 (FR-10)
 - [ ] 성능 최적화 및 부하 테스트
 
 ---

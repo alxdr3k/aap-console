@@ -1,26 +1,26 @@
 # AAP Console — High-Level Design (HLD)
 
-> **Version**: 1.7
+> **Version**: 1.8
 > **Date**: 2026-03-12
 > **Status**: Draft
-> **References**: [PRD v1.13](./PRD.md) · [UI Spec](./ui-spec.md)
+> **References**: [PRD](./PRD.md) · [UI Spec](./ui-spec.md)
 
 ---
 
 ## 목차
 
-1. [시스템 개요](#1-시스템-개요)
-2. [데이터베이스 스키마](#2-데이터베이스-스키마)
-3. [컴포넌트 아키텍처](#3-컴포넌트-아키텍처)
-4. [API 설계](#4-api-설계)
-5. [프로비저닝 파이프라인](#5-프로비저닝-파이프라인)
-6. [실시간 통신 (ActionCable)](#6-실시간-통신-actioncable)
-7. [외부 API 클라이언트](#7-외부-api-클라이언트)
-8. [인증/인가](#8-인증인가)
-9. [주요 화면 와이어프레임](#9-주요-화면-와이어프레임)
-10. [설계 결정](#10-설계-결정)
-11. [의존성](#11-의존성)
-12. [FR 추적 매트릭스](#12-fr-추적-매트릭스)
+1. 시스템 개요
+2. 데이터베이스 스키마
+3. 컴포넌트 아키텍처
+4. API 설계
+5. 프로비저닝 파이프라인
+6. 실시간 통신 (ActionCable)
+7. 외부 API 클라이언트
+8. 인증/인가
+9. 주요 화면 와이어프레임
+10. 설계 결정
+11. 의존성
+12. FR 추적 매트릭스
 
 ---
 
@@ -369,6 +369,7 @@ app/
 │   ├── litellm_configs_controller.rb     # FR-6
 │   ├── provisioning_jobs_controller.rb   # FR-7.3
 │   ├── config_versions_controller.rb     # FR-8
+│   ├── playgrounds_controller.rb        # FR-10: LiteLLM 프록시 + SSE
 │   └── api/
 │       └── v1/
 │           └── apps_controller.rb        # Config Server용 App Registry API
@@ -432,7 +433,8 @@ app/
     ├── organizations/                    # FR-1
     ├── projects/                         # FR-3
     ├── provisioning_jobs/                # FR-7.3: 현황 화면
-    └── config_versions/                  # FR-8
+    ├── config_versions/                  # FR-8
+    └── playgrounds/                      # FR-10: AI Chat UI
 ```
 
 ### 3.2 컴포넌트 역할
@@ -535,6 +537,13 @@ app/
 | GET | `/config_versions/:id` | 변경 상세 + diff | Project `read`+ |
 | POST | `/config_versions/:id/rollback` | 해당 버전으로 롤백 | Project `write`+ |
 
+#### Playground — FR-10
+
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/organizations/:org_slug/projects/:slug/playground` | Playground 화면 | Project `read`+ |
+| POST | `/organizations/:org_slug/projects/:slug/playground/chat` | LiteLLM 프록시 (SSE 스트리밍) | Project `read`+ |
+
 ### 4.2 외부 제공 API (Config Server용)
 
 | Method | Path | 설명 | 인증 |
@@ -583,6 +592,9 @@ Rails.application.routes.draw do
       resource :auth_config, only: [:show, :update]
       resource :litellm_config, only: [:show, :update]
       resources :config_versions, only: [:index]
+      resource :playground, only: [:show] do
+        post :chat, on: :member
+      end
     end
   end
 
@@ -1185,6 +1197,49 @@ Console DB에 이메일/이름을 저장하지 않으므로, 멤버 목록 등 U
 └─────────────────────────────────────────────────────┘
 ```
 
+### 9.6 Playground — FR-10
+
+```
+┌─────────────────────────────────────────────────────┐
+│  AAP Console  > Acme Corp > Chatbot > Playground    │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  Playground                    모델: [azure-gpt4 ▼] │
+│                                                     │
+│  ┌─ 파라미터 ──────────────────────────────────┐    │
+│  │  Temperature: [0.7  ] Max Tokens: [1024 ]   │    │
+│  │  System Prompt: [               ] (선택)    │    │
+│  └─────────────────────────────────────────────┘    │
+│                                                     │
+│  ┌─ 대화 ──────────────────────────────────────┐    │
+│  │                                             │    │
+│  │  👤 안녕하세요. 테스트 메시지입니다.          │    │
+│  │                                             │    │
+│  │  🤖 안녕하세요! 무엇을 도와드릴까요?         │    │
+│  │     ─── 토큰: 12/28 · 레이턴시: 0.8s ───   │    │
+│  │                                             │    │
+│  │  👤 가드레일 테스트: [차단 대상 문구]         │    │
+│  │                                             │    │
+│  │  ⚠ 가드레일에 의해 차단됨                    │    │
+│  │    guardrail: content-filter (pre_call)     │    │
+│  │                                             │    │
+│  └─────────────────────────────────────────────┘    │
+│                                                     │
+│  [메시지 입력...                        ] [전송]     │
+│                                                     │
+│  [요청/응답 상세 ▼]  [대화 초기화]  [JSON 내보내기]  │
+│                                                     │
+│  ┌─ 요청/응답 상세 (접힘) ─────────────────────┐    │
+│  │  POST /chat/completions                     │    │
+│  │  x-application-id: app-a3Bf9kR2mX1q        │    │
+│  │  Status: 200 · Latency: 0.8s               │    │
+│  │  Tokens: prompt=12, completion=28           │    │
+│  │  [요청 바디 보기]  [응답 바디 보기]          │    │
+│  └─────────────────────────────────────────────┘    │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## 10. 설계 결정
@@ -1319,3 +1374,4 @@ Health Check 실패는 프로비저닝 전체를 롤백하지 않고 **경고(wa
 | **FR-7.3** | 현황 화면 | — (jobs+steps 참조) | `ProvisioningJobsController` | — | — | `ProvisioningChannel` |
 | **FR-8** | 이력/롤백 | `config_versions`, `audit_logs` | `ConfigVersionsController` | `ConfigVersions::RollbackService` | `ConfigServerClient` (revert) | — |
 | **FR-9** | Health Check | — (steps에 기록) | — | `Steps::HealthCheck` | 각 Client (상태 확인) | `HealthCheckJob` |
+| **FR-10** | Playground | — (서버 미저장) | `PlaygroundsController` | — | LiteLLM API (프록시) | — |
