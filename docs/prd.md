@@ -581,6 +581,8 @@ Step 5. 완료 → 프로비저닝 현황 페이지에서 결과 확인 → Proj
 | **테스트** | RSpec + FactoryBot | TDD 기반 개발. 단위/통합/시스템 테스트 |
 | **CI/CD** | (미정) | GitOps 기반 배포 파이프라인 |
 
+> **관련 ADR**: [ADR-004 인증/인가 분리](./adr-004-auth-authz-separation.md) · [ADR-005 SQLite + Litestream](./adr-005-sqlite-litestream.md) · [ADR-006 Hotwire vs SPA](./adr-006-hotwire-server-rendering.md)
+
 ### 8.1 개발 방법론
 
 - **TDD (Test-Driven Development)**: 모든 기능은 테스트 코드 선행 작성 후 구현
