@@ -3,7 +3,7 @@
 > **Version**: 0.1
 > **Date**: 2026-03-12
 > **Status**: Draft
-> **References**: [PRD v1.12](./PRD.md) · [HLD v1.6](./HLD.md)
+> **References**: [PRD](./PRD.md) · [HLD](./HLD.md)
 
 ---
 

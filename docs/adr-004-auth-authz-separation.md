@@ -72,4 +72,3 @@ Keycloak은 **OIDC 로그인/토큰 발급만** 담당. Org 소속, 역할, Proj
 
 - PRD Section FR-2: 접근제어 (RBAC)
 - HLD Section 8: 인증/인가
-- HLD Section 10.3: RBAC 설계 결정
