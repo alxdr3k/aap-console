@@ -755,6 +755,8 @@ Orchestrator.run(job)
 | 1 | `config_server_apply` | `POST /admin/changes` | 변경된 설정만 전달 |
 | 2 | `health_check` | LiteLLM | |
 
+> **서로 다른 Project의 동시 설정 변경**: Console은 Project별 동시성 제어만 담당한다. 서로 다른 Project가 동시에 `config_server_apply`를 호출하는 것은 허용되며, 이로 인한 LiteLLM pod 재시작 순서 제어는 Config Server 측 책임이다.
+
 ---
 
 ## 6. 실시간 통신 (ActionCable)
@@ -1113,7 +1115,26 @@ Console DB에 이메일/이름을 저장하지 않으므로, 멤버 목록 등 U
 └─────────────────────────────────────────────────────┘
 ```
 
-### 9.4 멤버 관리 — FR-2
+### 9.4 프로비저닝 상태 UI 표시 매핑
+
+내부 상태 머신의 값을 사용자에게 직접 노출하면 혼란을 줄 수 있다 (`rolled_back` 등). UI에서는 아래 매핑으로 변환하여 표시한다.
+
+#### Job 상태
+
+| 내부 상태 | UI 표시 (한) | UI 표시 (영) | 색상 | 아이콘 | 설명 |
+|-----------|-------------|-------------|------|--------|------|
+| `pending` | 대기 | Pending | gray | ○ | |
+| `in_progress` | 진행중 | In Progress | blue | ⟳ | |
+| `completed` | 완료 | Completed | green | ✓ | |
+| `failed` | 실패 | Failed | red | ✗ | 롤백 전 상태 (즉시 롤백 진입) |
+| `retrying` | 재시도중 | Retrying | yellow | ⟳ | |
+| `rolling_back` | 정리중 | Cleaning up | orange | ⟳ | 사용자에게는 "자동 정리" 맥락으로 |
+| `rolled_back` | **실패 (정리 완료)** | **Failed (cleaned up)** | red | ✗ | 실패한 것은 동일. 자동으로 원상복구됨을 부가 표시 |
+| `rollback_failed` | **실패 (수동 조치 필요)** | **Failed (action needed)** | red | ⚠ | 관리자 개입 필요 |
+
+> **설계 원칙**: 사용자 관점에서 `rolled_back`과 `rollback_failed`는 둘 다 "실패"다. 차이는 자동 정리가 되었느냐 여부뿐이다. 내부 상태는 세밀하게 관리하되, UI에서는 실패 사실을 중심으로 표현하고 정리 여부를 부가 정보로 제공한다.
+
+### 9.5 멤버 관리 — FR-2
 
 ```
 ┌─────────────────────────────────────────────────────┐
