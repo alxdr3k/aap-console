@@ -133,17 +133,21 @@
                    │ created_at       │
                    │ updated_at       │
                    └──────────────────┘
-┌──────────────────────┐         ┌──────────────────────┐
-│  org_memberships     │         │ project_permissions  │
-├──────────────────────┤         ├──────────────────────┤
-│ id              PK   │         │ id              PK   │
-│ organization_id FK   │───▶ organizations          │
-│ user_sub             │         │ org_membership_id FK │───▶ org_memberships
-│ role                 │         │ project_id       FK  │───▶ projects
-│ invited_at           │         │ role                 │
-│ joined_at            │         │ created_at           │
-│ created_at           │         │ updated_at           │
-│ updated_at           │         └──────────────────────┘
+                          ┌───────────────────┐
+                          │  organizations    │
+                          └─────────▲─────────┘
+                                    │
+┌──────────────────────┐            │       ┌──────────────────────┐
+│  org_memberships     │            │       │ project_permissions  │
+├──────────────────────┤            │       ├──────────────────────┤
+│ id              PK   │            │       │ id              PK   │
+│ organization_id FK   │────────────┘       │ org_membership_id FK │───▶ org_memberships
+│ user_sub             │                    │ project_id       FK  │───▶ projects
+│ role                 │                    │ role                 │
+│ invited_at           │                    │ created_at           │
+│ joined_at            │                    │ updated_at           │
+│ created_at           │                    └──────────────────────┘
+│ updated_at           │
 └──────────────────────┘
 ```
 
@@ -236,8 +240,6 @@
 3. project_permissions 레코드 있음 → 해당 role로 접근
 4. project_permissions 레코드 없음 → 접근 불가
 ```
-
-> **Org admin은 project_permissions 레코드 불필요**. admin 역할 자체가 Org 내 모든 Project에 대한 암묵적 접근 권한을 부여한다. `project_permissions`는 `read`/`write` 역할의 사용자에게 Project별 세밀한 접근 제어를 위해 사용된다.
 
 #### provisioning_jobs — FR-7.1
 
