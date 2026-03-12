@@ -880,7 +880,7 @@ Job 완료 시 `Orchestrator`가 `job.status`를 갱신하고 `broadcast_replace
 
 ### 7.4 ConfigServerClient — FR-6, FR-8
 
-`app/clients/config_server_client.rb` — `Authorization: Bearer <API_KEY>` 헤더로 인증. `X-App-ID`는 요청 컨텍스트 식별용.
+`app/clients/config_server_client.rb` — `Authorization: Bearer <API_KEY>` 헤더로 인증.
 
 - 환경변수: `CONFIG_SERVER_URL`, `CONFIG_SERVER_API_KEY`
 
@@ -1323,7 +1323,7 @@ Health Check 실패는 프로비저닝 전체를 롤백하지 않고 **경고(wa
 | Console → Keycloak | 사용자 검색/조회 | Admin REST API | Service Account Token |
 | Console → Keycloak | Client CRUD | Admin REST API | Service Account Token |
 | Console → Langfuse | Org/Project/Key CRUD | tRPC (`/api/trpc/*`) | NextAuth 세션 쿠키 |
-| Console → Config Server | 설정/시크릿 CRUD | Admin API (`/api/v1/admin/*`) | `Authorization: Bearer <API_KEY>` + `X-App-ID` (컨텍스트) |
+| Console → Config Server | 설정/시크릿 CRUD | Admin API (`/api/v1/admin/*`) | `Authorization: Bearer <API_KEY>` |
 | Console → Config Server | App Registry 알림 | Webhook (`/api/v1/admin/app-registry/webhook`) | `Authorization: Bearer <API_KEY>` |
 | Config Server → Console | App Registry 벌크 조회 | `GET /api/v1/apps?all=true` | (클러스터 내부) |
 
