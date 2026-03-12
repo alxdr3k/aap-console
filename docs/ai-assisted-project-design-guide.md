@@ -508,7 +508,7 @@ PRD는 12회 이상의 주요 리비전을 거쳤으며, 각 단계에서 전혀
 
 ## 부록: 참고 문서
 
-- [PRD](./prd.md) — 제품 요구사항 정의서
+- [PRD](./PRD.md) — 제품 요구사항 정의서
 - [HLD](./HLD.md) — High-Level Design
 - [업무 목표](./business-objectives.md) — 업무 목표 원문
 - [ADR 001~006](./adr-001-provisioning-orchestration.md) — 아키텍처 의사결정 기록

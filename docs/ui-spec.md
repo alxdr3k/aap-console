@@ -144,6 +144,7 @@ AAP Console
 | `in_progress` | 진행중... | 현재 실행 중인 단계 |
 | `completed` | 완료 | 성공적으로 완료된 단계 |
 | `failed` | 실패 | 실패한 단계 (오류 메시지 표시) |
+| `skipped` | 완료 | 크래시 복구 시 이미 완료 확인된 단계. UI에서는 `completed`와 동일하게 표시 |
 | `rolled_back` | 롤백 완료 | 보상 트랜잭션으로 정리된 단계 |
 | `rollback_failed` | 롤백 실패 | 보상 트랜잭션 실패 (수동 개입 필요) |
 
@@ -238,7 +239,7 @@ Console > {Organization} > {Project} > {하위 페이지}
 | 멤버 관리 (추가/제거) | ✓ | ✓ | — | — |
 | 설정 편집 (Config, Auth) | ✓ | ✓ | ✓* | — |
 | 설정 조회 | ✓ | ✓ | ✓* | ✓* |
-| 프로비저닝 수동 재시도 | ✓ | ✓ | — | — |
+| 프로비저닝 수동 재시도 | ✓ | ✓ | ✓* | — |
 
 > `*` = 해당 Project에 대한 `project_permissions` 레코드가 있는 경우에만
 

@@ -91,7 +91,8 @@
 │ langfuse_org_id  │   │   │ description      │
 │ created_at       │   │   │ app_id      UNQ  │
 │ updated_at       │   │   │ status           │  (provisioning/active/
-└──────────────────┘   │   │ created_at       │   update_pending/deleting/deleted)
+└──────────────────┘   │   │ created_at       │   update_pending/deleting/deleted/
+                       │   │                  │   provision_failed)
                        │   │ updated_at       │
                        │   └──────┬───────────┘
                        │          │
@@ -185,7 +186,7 @@
 | `slug` | string NOT NULL | URL-safe 식별자. `(organization_id, slug)` 유니크 |
 | `description` | text | Project 설명 |
 | `app_id` | string NOT NULL UNQ | 자동 발급. 외부 서비스 식별용 (`x-application-id`) |
-| `status` | string NOT NULL DEFAULT 'provisioning' | `provisioning` / `active` / `update_pending` / `deleting` / `deleted` |
+| `status` | string NOT NULL DEFAULT 'provisioning' | `provisioning` / `active` / `update_pending` / `deleting` / `deleted` / `provision_failed` |
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
 
@@ -277,7 +278,7 @@
 | `provisioning_job_id` | integer FK NOT NULL | 소속 Job |
 | `name` | string NOT NULL | 단계 식별자 (예: `keycloak_client_create`) |
 | `step_order` | integer NOT NULL | 실행 순서 (병렬 단계는 동일 order) |
-| `status` | string NOT NULL DEFAULT 'pending' | `pending` / `in_progress` / `completed` / `failed` / `retrying` / `skipped` |
+| `status` | string NOT NULL DEFAULT 'pending' | `pending` / `in_progress` / `completed` / `failed` / `retrying` / `skipped` / `rolled_back` / `rollback_failed` |
 | `started_at` | datetime | |
 | `completed_at` | datetime | |
 | `error_message` | text | 실패 시 에러 상세 |
@@ -671,7 +672,9 @@ Orchestrator.run(job)
         │       (result_snapshot 기반)
         │
         ├─ 롤백 성공 → job.status = rolled_back
+        │     create 작업인 경우: project.status = provision_failed
         └─ 롤백 실패 → job.status = rollback_failed
+              create 작업인 경우: project.status = provision_failed
               (플랫폼 관리자 수동 개입 필요)
 ```
 

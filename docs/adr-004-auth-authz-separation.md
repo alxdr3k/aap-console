@@ -64,7 +64,7 @@ Keycloak은 **OIDC 로그인/토큰 발급만** 담당. Org 소속, 역할, Proj
 |------|------|
 | **인증** | Keycloak OIDC Authorization Code Flow. `aap-console` Confidential Client |
 | **Org 역할** | `org_memberships` 테이블: `user_sub` + `organization_id` + `role(admin/write/read)` |
-| **Project ACL** | `project_permissions` 테이블: `user_sub` + `project_id` + `role(write/read)` |
+| **Project ACL** | `project_permissions` 테이블: `org_membership_id` + `project_id` + `role(write/read)` |
 | **super_admin** | 유일한 예외. Keycloak Realm Role `super_admin`으로 판별. 플랫폼 전체 관리 권한 |
 | **PII 미저장** | Console DB에 `user_sub`만 저장. 이메일/이름은 Keycloak Admin API로 실시간 조회 |
 
