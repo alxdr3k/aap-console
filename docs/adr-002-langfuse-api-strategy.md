@@ -2,7 +2,7 @@
 
 > **상태**: Accepted
 > **일자**: 2026-03-12
-> **결정자**: Console 팀
+> **결정자**: Platform TG
 
 ## 컨텍스트
 
@@ -73,7 +73,7 @@ Langfuse PostgreSQL에 직접 INSERT.
 
 | 항목 | 설명 |
 |------|------|
-| Langfuse 서비스 계정 | Console 전용 사용자 생성 (email/password). Org Owner 권한 필요 |
+| Langfuse 서비스 계정 | Console 전용 사용자 생성 (email/password). Org 생성 권한이 있어야 하므로 Langfuse 초기 설정 시 Admin 사용자로 등록 필요 |
 | 환경변수 | `LANGFUSE_URL`, `LANGFUSE_SERVICE_EMAIL`, `LANGFUSE_SERVICE_PASSWORD` |
 | 통합 테스트 | `docker-compose`로 Langfuse 컨테이너 기동 → tRPC 호출 검증 |
 
