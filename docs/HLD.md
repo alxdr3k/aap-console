@@ -134,17 +134,30 @@
                    │ created_at       │
                    │ updated_at       │
                    └──────────────────┘
-┌──────────────────────┐       ┌──────────────────────┐
-│  org_memberships     │       │ project_permissions  │
-├──────────────────────┤       ├──────────────────────┤
-│ id              PK   │       │ id              PK   │
+┌──────────────────────┐
+│  org_memberships     │
+├──────────────────────┤
+│ id              PK   │
 │ organization_id FK   │───▶ organizations
-│ user_sub             │       │ org_membership_id FK │───▶ org_memberships
-│ role                 │       │ project_id       FK  │───▶ projects
-│ invited_at           │       │ role                 │
-│ joined_at            │       │ created_at           │
-│ created_at           │       │ updated_at           │
-│ updated_at           │       └──────────────────────┘
+│ user_sub             │
+│ role                 │
+│ invited_at           │
+│ joined_at            │
+│ created_at           │
+│ updated_at           │
+└──────────┬───────────┘
+           │
+     ┌─────┘
+     │
+┌────▼─────────────────┐
+│ project_permissions  │
+├──────────────────────┤
+│ id              PK   │
+│ org_membership_id FK │───▶ org_memberships
+│ project_id       FK  │───▶ projects
+│ role                 │
+│ created_at           │
+│ updated_at           │
 └──────────────────────┘
 ```
 
