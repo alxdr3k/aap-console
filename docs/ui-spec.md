@@ -1,6 +1,6 @@
 # AAP Console — UI Specification (UI Spec)
 
-> **Version**: 1.1
+> **Version**: 1.3
 > **Date**: 2026-03-12
 > **Status**: Draft
 > **References**: [PRD](./PRD.md) · [HLD](./HLD.md)
@@ -79,6 +79,7 @@ AAP Console
 │       ├── Projects (탭 또는 섹션)
 │       │   └── {Project} (상세)
 │       │       ├── 인증 설정
+│       │       ├── Langfuse 설정 (읽기 전용)
 │       │       ├── LiteLLM Config
 │       │       ├── 변경 이력
 │       │       ├── Playground (AI Chat)
@@ -112,7 +113,7 @@ AAP Console
 | LiteLLM Config | `/.../:id/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
 | 변경 이력 | `/.../:id/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
 | Playground | `/.../:id/playground` | 모델 선택, AI Chat, 요청 인스펙터 | FR-10 |
-| 프로비저닝 이력 | `/.../:id/provisioning_jobs` | 과거 Job 목록 | FR-7.3 |
+| 프로비저닝 이력 | `/.../:id/provisioning_jobs` | 과거 Job 목록 (유형, 상태, 일시, 소요시간) | FR-7.3 |
 
 ### 4.3 프로비저닝
 
@@ -163,7 +164,9 @@ AAP Console
 
 ### 6.1 일회성 시크릿 표시
 
-**적용 대상**: Keycloak Client Secret, PAK, Langfuse SDK Key
+**적용 대상**: Keycloak Client Secret, PAK
+
+> Langfuse SDK Key(PK/SK)는 Console이 저장하지 않고 Config Server로 직접 전달되므로 사용자에게 표시하지 않는다 (PRD FR-5 참조).
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -366,9 +369,11 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 
 **구성 요소**:
 - Org 기본 정보 (이름, 설명) + 편집 버튼 (admin 이상)
+  - **[편집]**: Turbo Frame으로 이름/설명 필드를 인라인 편집 폼으로 전환. 저장/취소 버튼. 별도 페이지 이동 없음
 - Project 테이블: 이름, App ID, 프로비저닝 상태 배지
 - 멤버 요약: 역할별 인원수 + 멤버 관리 페이지 링크
 - Project 상태 배지: 최근 프로비저닝 Job의 상태를 반영 (5절 매핑 적용)
+- **삭제 버튼** (super_admin): 위험 액션 확인(6.2절) → Org 삭제 프로비저닝 현황으로 리다이렉트
 
 **Project 행 클릭 동작**:
 - `completed` (Active) → Project 상세 페이지
@@ -490,11 +495,15 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 ├──────────┬──────────────────────────────────────────┤
 │ 사이드바  │                                          │
 │          │  Chatbot                  Status: Active ● │
-│          │  AI 챗봇 서비스                            │
-│          │                                          │
-│          │  App ID: app-a3Bf9kR2mX1q      [📋 복사] │
-│          │                     [설정 변경] [삭제]     │
+│          │  AI 챗봇 서비스             [이름/설명 편집]│
 │          │                                (admin)    │
+│          │  App ID: app-a3Bf9kR2mX1q      [📋 복사] │
+│          │                                [삭제]     │
+│          │                                (admin)    │
+│          │                                          │
+│          │  ┌────────────────────────────────────┐   │
+│          │  │ 인증 │ Langfuse │ LiteLLM │ 이력  │   │
+│          │  └──┬───────────────────────────────────┘   │
 │          │                                          │
 │          │  ┌─ 인증 설정 (FR-4) ───────────────────┐ │
 │          │  │  방식: OIDC                           │ │
@@ -535,12 +544,14 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 
 **구성 요소**:
 - 기본 정보: 이름, 설명, App ID (클립보드 복사), 상태 배지
-- 인증 설정 섹션: 인증 방식, Client ID, Secret 재발급 버튼
-- Langfuse 설정 섹션: Langfuse Project 이름, SDK Key 발급 상태 (마스킹된 PK prefix), 트레이싱 연동 상태, Langfuse 대시보드 외부 링크
-- LiteLLM Config 섹션: 모델 목록, 가드레일, S3 설정 요약 + 편집 링크
-- 변경 이력 섹션: 최근 3건 + "전체 이력 보기" 링크
-- 프로비저닝 이력 섹션: 최근 Job 상태 + 상세 링크
-- Playground 링크 (Phase 4)
+- **[이름/설명 편집]**: Turbo Frame으로 인라인 편집 폼 표시 (별도 페이지 이동 없음). 저장 시 Flash 알림
+- **탭 네비게이션**: 인증 / Langfuse / LiteLLM / 이력 — 각 탭은 Turbo Frame으로 로드하여 페이지 전환 없이 탭 전환. 하위 페이지 URL(`/.../:id/auth_config` 등)로 직접 접근도 가능
+- 인증 설정 탭: 인증 방식, Client ID, Secret 재발급 버튼, [상세 편집] 링크 (8.11로 이동)
+- Langfuse 탭: Langfuse Project 이름, SDK Key 발급 상태 (마스킹된 PK prefix), 트레이싱 연동 상태, Langfuse 대시보드 외부 링크
+- LiteLLM 탭: 모델 목록, 가드레일, S3 설정 요약, [설정 편집] 링크 (8.8로 이동)
+- 이력 탭: 변경 이력 최근 3건 + [전체 이력 보기] (8.9로 이동), 프로비저닝 이력 최근 Job + [전체 보기]
+- Playground 링크 (Phase 4) — 탭 외부, 상단 우측에 별도 배치
+- 삭제 버튼: 위험 액션 확인(6.2절) → 삭제 프로비저닝 현황(8.7)으로 리다이렉트
 
 ### 8.6 Project 생성 — FR-3
 
@@ -584,6 +595,22 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 > 폼 제출 시 프로비저닝 현황 페이지(8.7)로 즉시 리다이렉트된다.
 
 ### 8.7 프로비저닝 현황 — FR-7.3
+
+프로비저닝 현황 페이지는 **생성/수정/삭제** 모든 프로비저닝 유형을 동일한 UI로 표시한다. 유형에 따라 제목과 Step 구성이 달라진다.
+
+**프로비저닝 유형별 Step 구성**:
+
+| 유형 | 제목 | Step 구성 | 완료 후 이동 |
+|------|------|----------|-------------|
+| **create** | Project 생성 프로비저닝 | Step 1. App Registry 등록 → Step 2a. 인증 리소스 생성 / Step 2b. Langfuse 리소스 생성 (병렬) → Step 3. Config 반영 → Step 4. Health Check | 시크릿 표시 → Project 상세 |
+| **update** | 설정 변경 프로비저닝 | Step 1. Config 반영 → Step 2. Health Check | Project 상세 (시크릿 없음) |
+| **delete** | Project 삭제 프로비저닝 | Step 1. Keycloak Client 삭제 / Langfuse 리소스 삭제 (병렬) → Step 2. Config Server 설정 삭제 → Step 3. App Registry 해제 → Step 4. Console DB 정리 | Org 상세 |
+
+> **삭제 프로비저닝**: Project 삭제 시에도 6.2절 위험 액션 확인 → 프로비저닝 현황 페이지로 리다이렉트 → 완료 시 Org 상세로 이동. 시크릿 표시 단계 없음.
+>
+> **Org 삭제**: 하위 모든 Project의 삭제 프로비저닝을 순차 실행한 뒤 Langfuse Org 삭제 + Console DB 정리. Org 삭제 전용 프로비저닝 현황 페이지에서 "Project별 삭제 진행률 + Org 정리" 단계를 표시. 완료 시 Org 목록으로 이동.
+
+**수동 재시도 후 동작**: [수동 재시도] 클릭 시 같은 프로비저닝 Job의 상태가 `failed` → `retrying` → `in_progress`로 리셋되며, 같은 페이지에서 실시간으로 진행 상태가 다시 표시된다 (새 Job이 생성되지 않음).
 
 진행 중:
 
@@ -756,6 +783,12 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 - diff 뷰: 선택한 버전 간 차이를 unified diff 형식으로 표시 (Turbo Frame으로 인라인 로드)
 - 롤백 버튼: 선택한 버전으로 롤백 (위험 액션 확인 패턴 적용 — 6.2절)
 
+**롤백 실행 후 동작**:
+1. [이 버전으로 롤백] 클릭 → 위험 액션 확인 모달 (6.2절): "v{N} 버전으로 롤백하면 현재 설정이 교체됩니다. 진행하시겠습니까?"
+2. 확인 → Keycloak Client 설정 복구 + Langfuse 설정 복구 + Config Server revert API 호출을 포함하는 프로비저닝 Job 자동 생성
+3. 프로비저닝 현황 페이지(8.7, update 유형)로 리다이렉트 — 실시간 진행 상태 표시
+4. 완료 시 Project 상세로 이동 가능
+
 ### 8.10 Playground — FR-10
 
 ```
@@ -766,7 +799,8 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │  Playground              모델: [azure-gpt4 ▼]│
 │          │                                          │
 │          │  ┌─ 파라미터 ──────────────────────────┐  │
-│          │  │ Temperature: [0.7] Max Tokens:[1024]│  │
+│          │  │ Temperature:[0.7] Max Tokens:[1024] │  │
+│          │  │ Top P: [1.0]                       │  │
 │          │  │ System Prompt: [                  ] │  │
 │          │  │                          (선택사항) │  │
 │          │  └────────────────────────────────────┘  │
@@ -805,7 +839,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 
 **구성 요소**:
 - 모델 선택 드롭다운: Project의 LiteLLM Config에 등록된 모델만 표시
-- 파라미터 패널: temperature, max_tokens, system prompt
+- 파라미터 패널: temperature, max_tokens, top_p, system prompt
 - 대화 영역: 스트리밍 응답 실시간 표시 (SSE)
 - 메시지별 메타데이터: 토큰 수, 레이턴시
 - 가드레일 차단 시: 경고 표시 + 차단한 가드레일 이름/단계
@@ -903,6 +937,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 |------|------|:----:|------------|------|
 | 사용자 | 자동완성 또는 이메일 직접 입력 | ✓ | 유효한 이메일 형식 | Keycloak 검색 + 사전 할당 |
 | Org 권한 | select | ✓ | admin / write / read | |
+| Project 접근 권한 | checkbox 목록 | — | | admin 선택 시 숨김 (전체 접근). write/read 선택 시 표시 |
 
 ### 9.5 유효성 검사 표시
 
