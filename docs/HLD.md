@@ -1,6 +1,6 @@
 # AAP Console — High-Level Design (HLD)
 
-> **Version**: 1.12
+> **Version**: 1.13
 > **Date**: 2026-04-17
 > **Status**: Draft
 > **References**: [PRD](./PRD.md) · [UI Spec](./ui-spec.md)
@@ -186,9 +186,11 @@
 | `slug` | string NOT NULL | URL-safe 식별자. `(organization_id, slug)` 유니크 |
 | `description` | text | Project 설명 |
 | `app_id` | string NOT NULL UNQ | 자동 발급. 외부 서비스 식별용 (`x-application-id`) |
-| `status` | string NOT NULL DEFAULT 'provisioning' | `provisioning` / `active` / `update_pending` / `deleting` / `deleted` / `provision_failed` |
+| `status` | integer NOT NULL DEFAULT 0 | ActiveRecord `enum`: `provisioning(0)` / `active(1)` / `update_pending(2)` / `deleting(3)` / `deleted(4)` / `provision_failed(5)` |
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
+
+> Rails 구현: `enum status: { provisioning: 0, active: 1, update_pending: 2, deleting: 3, deleted: 4, provision_failed: 5 }` (정수 컬럼). scope(`Project.active`, `Project.provisioning`) 및 predicate(`project.active?`) 자동 제공.
 
 **app_id 생성 규칙**: `app-{SecureRandom.alphanumeric(12)}` (예: `app-a3Bf9kR2mX1q`). 충돌 시 재생성.
 
@@ -229,7 +231,26 @@ provisioning ── create 성공 ──▶ active
 | `created_at` | datetime | |
 | `updated_at` | datetime | |
 
-> **시크릿 미저장 원칙**: Keycloak Client Secret, PAK 값은 이 테이블에 저장하지 않는다. 생성 시 UI에 일회성 표시 후 폐기 (PRD 6.1).
+> **시크릿 미저장 원칙**: Keycloak Client Secret 평문, PAK 평문은 이 테이블에 저장하지 않는다. 생성 시 UI에 일회성 표시 후 폐기 (PRD 6.1).
+>
+> **`project_auth_configs` vs `project_api_keys`**: `project_auth_configs`는 Project당 1개(1:1)로 **주 인증 방식**(OIDC/SAML/OAuth/PAK 중 택1)을 기록한다. PAK는 `auth_type = 'pak'`인 경우뿐 아니라 다른 인증 방식을 선택한 Project에서도 **추가로 발급 가능**하다 (ui-spec §8.11). 따라서 PAK는 별도 테이블 `project_api_keys`에 다중 레코드로 관리한다.
+
+#### project_api_keys — FR-4 (PAK 다중 발급)
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | integer PK | |
+| `project_id` | integer FK NOT NULL | 대상 Project |
+| `name` | string NOT NULL | 사용자 지정 식별자 (예: "staging-ci-key") |
+| `token_digest` | string NOT NULL UNQ | PAK 평문의 SHA256 해시. 평문은 저장하지 않음 |
+| `token_prefix` | string NOT NULL | PAK 앞 8자 (예: `pak-a3Bf`). UI 목록에서 식별용으로 표시 |
+| `last_used_at` | datetime | 최종 사용 시각 (LiteLLM 요청 검증 시 갱신). 미사용 키 식별용 |
+| `revoked_at` | datetime | 폐기 시각. NULL이면 활성 상태 |
+| `created_at` | datetime | |
+
+> **유니크 제약**: `(project_id, name)`. 같은 Project 내에서 동일 이름의 PAK 중복 금지.
+>
+> **검증 흐름**: LiteLLM 등 외부 서비스가 PAK를 제시하면 Console은 SHA256 해시를 계산하여 `token_digest`와 매칭한다. 평문은 어느 시점에도 DB에 존재하지 않는다 (PRD 6.1 Secret Zero-Store).
 
 #### org_memberships — FR-2
 
@@ -284,7 +305,7 @@ provisioning ── create 성공 ──▶ active
 | `id` | integer PK | |
 | `project_id` | integer FK NOT NULL | 대상 Project |
 | `operation` | string NOT NULL | `create` / `update` / `delete` |
-| `status` | string NOT NULL DEFAULT 'pending' | 아래 상태 값 참조 (ActiveRecord `enum`으로 관리) |
+| `status` | integer NOT NULL DEFAULT 0 | 아래 상태 값 참조 (ActiveRecord `enum`으로 관리) |
 | `started_at` | datetime | 실행 시작 시각 |
 | `completed_at` | datetime | 완료/실패 시각 |
 | `error_message` | text | 최종 에러 메시지 |
@@ -376,6 +397,11 @@ add_index :projects, [:organization_id, :status]
 # project_auth_configs
 add_index :project_auth_configs, :project_id, unique: true
 
+# project_api_keys
+add_index :project_api_keys, [:project_id, :name], unique: true
+add_index :project_api_keys, :token_digest, unique: true
+add_index :project_api_keys, :project_id
+
 # org_memberships
 add_index :org_memberships, [:organization_id, :user_sub], unique: true
 add_index :org_memberships, :user_sub
@@ -387,12 +413,18 @@ add_index :project_permissions, :project_id
 # provisioning_jobs
 add_index :provisioning_jobs, [:project_id, :status]
 add_index :provisioning_jobs, :status
+# 동일 Project에 대한 활성 Job은 최대 1개 (status: pending/in_progress/retrying/rolling_back)
+add_index :provisioning_jobs, :project_id,
+          unique: true,
+          where: "status IN (0, 1, 5, 6)",
+          name: "idx_active_provisioning_job_per_project"
 
 # provisioning_steps
 add_index :provisioning_steps, [:provisioning_job_id, :step_order]
 
 # config_versions
 add_index :config_versions, [:project_id, :created_at]
+add_index :config_versions, :provisioning_job_id
 
 # audit_logs
 add_index :audit_logs, [:organization_id, :created_at]
@@ -410,14 +442,16 @@ add_index :audit_logs, :created_at
 app/
 ├── controllers/
 │   ├── application_controller.rb         # 세션 인증, RBAC 인가 (FR-2)
+│   ├── sessions_controller.rb            # FR-2: OIDC 콜백 + 로그아웃
+│   ├── users_controller.rb               # FR-2: Keycloak 사용자 검색 프록시
 │   ├── organizations_controller.rb       # FR-1
 │   ├── members_controller.rb             # FR-2
 │   ├── projects_controller.rb            # FR-3
 │   ├── auth_configs_controller.rb        # FR-4
 │   ├── litellm_configs_controller.rb     # FR-6
-│   ├── provisioning_jobs_controller.rb   # FR-7.3
+│   ├── provisioning_jobs_controller.rb   # FR-7.3 (show, retry, secrets)
 │   ├── config_versions_controller.rb     # FR-8
-│   ├── playgrounds_controller.rb        # FR-10: LiteLLM 프록시 + SSE
+│   ├── playgrounds_controller.rb         # FR-10: LiteLLM 프록시 + SSE
 │   └── api/
 │       └── v1/
 │           └── apps_controller.rb        # Config Server용 App Registry API
@@ -427,8 +461,10 @@ app/
 │   ├── project.rb                        # FR-3
 │   ├── org_membership.rb                 # FR-2: Org 역할 관리
 │   ├── project_permission.rb             # FR-2: Project ACL
-│   ├── current_user.rb                   # FR-2: 세션 + DB 기반 인가 모델
-│   ├── project_auth_config.rb            # FR-4
+│   ├── current.rb                        # FR-2: ActiveSupport::CurrentAttributes (요청 단위 user_sub/realm_roles)
+│   ├── authorization.rb                  # FR-2: 인가 판단 PORO (Current 기반)
+│   ├── project_auth_config.rb            # FR-4: 주 인증 방식 (1:1)
+│   ├── project_api_key.rb                # FR-4: PAK 다중 발급
 │   ├── provisioning_job.rb               # FR-7.1 (상태 머신)
 │   ├── provisioning_step.rb              # FR-7.2
 │   ├── config_version.rb                 # FR-8
@@ -441,6 +477,7 @@ app/
 │   │
 │   ├── projects/
 │   │   ├── create_service.rb             # FR-3: DB 생성 + 프로비저닝 job enqueue
+│   │   ├── update_service.rb             # FR-3: dirty 필드 분류 + 조건부 프로비저닝 enqueue (§5.6)
 │   │   └── destroy_service.rb            # FR-3: 삭제 프로비저닝 job enqueue
 │   │
 │   ├── provisioning/
@@ -456,7 +493,7 @@ app/
 │   │       ├── langfuse_project_delete.rb
 │   │       ├── config_server_apply.rb    # FR-6
 │   │       ├── config_server_delete.rb
-│   │       └── health_check.rb           # FR-9
+│   │       └── health_check.rb           # FR-9: 프로비저닝 파이프라인 내 인라인 실행
 │   │
 │   └── config_versions/
 │       └── rollback_service.rb           # FR-8: 버전 롤백 오케스트레이션
@@ -467,9 +504,8 @@ app/
 │   └── config_server_client.rb           # FR-6
 │
 ├── jobs/
-│   ├── provisioning_execute_job.rb        # FR-7: SolidQueue Job
-│   ├── app_registry_webhook_job.rb       # fire-and-forget + async retry
-│   └── health_check_job.rb              # FR-9
+│   ├── provisioning_execute_job.rb       # FR-7: SolidQueue Job
+│   └── app_registry_webhook_job.rb       # fire-and-forget + async retry
 │
 ├── channels/
 │   └── provisioning_channel.rb           # FR-7.3: WebSocket 스트리밍
@@ -483,7 +519,15 @@ app/
     └── playgrounds/                      # FR-10: AI Chat UI
 ```
 
-> **Zeitwerk 오토로딩**: 디렉토리명과 상수명은 Rails 8 기본 Zeitwerk 규약을 따른다. 즉 `app/clients/keycloak_client.rb` → `KeycloakClient` (최상위), `app/services/provisioning/orchestrator.rb` → `Provisioning::Orchestrator`. `app/clients`는 Rails 기본 autoload_paths에 포함되지 않으므로 `config/application.rb`에서 `config.autoload_lib(ignore: %w[assets tasks])` 또는 `config.autoload_paths << Rails.root.join("app/clients")` 를 명시한다. `app/services/provisioning/steps/*.rb`는 `Provisioning::Steps::*` 네임스페이스로 자동 매핑된다.
+> **Zeitwerk 오토로딩**: 디렉토리명·파일명과 상수명은 Rails 8 기본 Zeitwerk 규약을 따른다. 파일명이 상수명을 결정하므로 `app/models/current.rb` → `Current` (파일명 `current_user.rb`로 두면 `CurrentUser`가 되어 `ActiveSupport::CurrentAttributes` 관례와 어긋난다). `app/clients/keycloak_client.rb` → `KeycloakClient` (최상위), `app/services/provisioning/orchestrator.rb` → `Provisioning::Orchestrator`, `app/services/provisioning/steps/*.rb` → `Provisioning::Steps::*`. `app/clients`는 Rails 기본 autoload_paths에 포함되지 않으므로 `config/application.rb`에서 `config.autoload_paths << Rails.root.join("app/clients")`를 명시한다.
+>
+> **네임스페이스 선택 — `clients/`를 평면(flat)으로 두는 이유**:
+>
+> - 외부 서비스 클라이언트는 Keycloak/Langfuse/Config Server 3개로 고정되어 있으며, 서비스당 1개 클라이언트만 두는 구조이므로 `Clients::Keycloak::Client` 같은 3단 중첩은 불필요한 수직화를 낳는다.
+> - 공통 추상화는 `BaseClient` 한 단계면 충분하다. 상위 네임스페이스(`Clients`)를 두면 각 파일이 모듈 선언 보일러플레이트를 얹어야 한다.
+> - Rails 관례상 `app/clients/foo_client.rb` → `FooClient`는 `app/services/foo_service.rb` → `FooService` 패턴과 대칭이며, 팀이 추가 규칙 없이도 파일 위치를 추론할 수 있다.
+>
+> 향후 한 서비스에 다수의 클라이언트(예: Keycloak Admin API + Account API)를 두어야 한다면 그 시점에 해당 서비스만 `Clients::Keycloak::AdminClient` 형태로 승격하고 `BaseClient`의 위치도 함께 재정비한다.
 
 ### 3.2 컴포넌트 역할
 
