@@ -1,7 +1,7 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> **Version**: 1.15
-> **Date**: 2026-03-12
+> **Version**: 1.16
+> **Date**: 2026-04-17
 > **Status**: Approved
 > **References**: [HLD](./HLD.md) · [UI Spec](./ui-spec.md)
 
@@ -359,6 +359,8 @@ Project 생성/수정/삭제 시 여러 외부 서비스(Keycloak, Langfuse, Con
 
 ```
 pending → in_progress → completed
+                │              │
+                │              └─→ completed_with_warnings
                 │
                 ├─→ failed → retrying → in_progress
                 │                          │
@@ -374,6 +376,7 @@ pending → in_progress → completed
 | `pending` | 작업 대기 중 (SolidQueue에 enqueue됨) |
 | `in_progress` | 프로비저닝 단계 실행 중 |
 | `completed` | 모든 단계 성공 |
+| `completed_with_warnings` | 리소스 생성 단계는 모두 성공했으나 Health Check(FR-9) 등 비차단 검증에서 경고 발생. Project는 `active`로 전이되며 UI에 경고 배너 노출 |
 | `failed` | 특정 단계 실패. 자동 재시도 대상 |
 | `retrying` | 재시도 진행 중 |
 | `rolling_back` | 보상 트랜잭션 실행 중 (이미 생성된 리소스 정리) |
