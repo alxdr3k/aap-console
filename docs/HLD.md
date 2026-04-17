@@ -1,6 +1,6 @@
 # AAP Console — High-Level Design (HLD)
 
-> **Version**: 1.11
+> **Version**: 1.12
 > **Date**: 2026-04-17
 > **Status**: Draft
 > **References**: [PRD](./PRD.md) · [UI Spec](./ui-spec.md)
@@ -298,7 +298,7 @@ provisioning ── create 성공 ──▶ active
 
 **동시성 제어**: 동일 `project_id`에 대해 `pending` / `in_progress` / `retrying` / `rolling_back` 상태의 job이 있으면 새 job 생성을 거부한다 (앱 레벨 검증 + `(project_id)` 부분 인덱스로 활성 Job 유일성 보장). 상세는 §5.5 참조.
 
-**retention**: `audit_logs`와 마찬가지로 180일 보관 후 일일 배치 Job(`ProvisioningJobsCleanupJob`)이 `completed` / `rolled_back` / `completed_with_warnings` 레코드를 아카이빙(S3)하고 삭제. `failed` / `rollback_failed`는 관리자 확인 전까지 보존.
+**retention**: 180일 보관 후 일일 배치 Job(`ProvisioningJobsCleanupJob`)이 `completed` / `rolled_back` / `completed_with_warnings` 레코드를 아카이빙(S3)하고 삭제. `failed` / `rollback_failed`는 관리자 확인 전까지 보존. `audit_logs`(365일)보다 짧은 이유는 프로비저닝 로그가 감사 증적이 아닌 운영 진단 목적이며, 상태 변경 이벤트 자체는 `audit_logs`에 별도로 기록되기 때문이다.
 
 #### provisioning_steps — FR-7.2
 
@@ -885,8 +885,11 @@ Orchestrator.run(job)
 
 | order | 단계 | 외부 API | 비고 |
 |-------|------|---------|------|
-| 1 | `config_server_apply` | `POST /admin/changes` | 변경된 설정만 전달 |
-| 2 | `health_check` | LiteLLM | |
+| 1 | `keycloak_client_update` | `PUT /admin/realms/{realm}/clients/{uuid}` | 인증 설정 변경 시에만 실행 (조건부). `project_auth_configs.*` dirty일 때 포함 |
+| 2 | `config_server_apply` | `POST /admin/changes` | 변경된 설정만 전달 |
+| 3 | `health_check` | LiteLLM | |
+
+> 변경 필드에 따라 해당 단계만 선별 실행된다. 예: 이름/설명만 변경 시 프로비저닝 자체가 트리거되지 않으며, LiteLLM Config만 변경 시 `config_server_apply` + `health_check`만 실행된다. 상세 트리거 규칙은 아래 표 참조.
 
 **Update 프로비저닝 트리거 규칙**: Project의 모든 PATCH가 Update 프로비저닝을 트리거하지는 않는다. 필드 변경 유형에 따라 동작이 분기된다.
 
@@ -902,7 +905,7 @@ Orchestrator.run(job)
 
 > **서로 다른 Project의 동시 설정 변경**: Console은 Project별 동시성 제어만 담당한다. 서로 다른 Project가 동시에 `config_server_apply`를 호출하는 것은 허용되며, 이로 인한 LiteLLM pod 재시작 순서 제어는 Config Server 측 책임이다.
 >
-> **동일 Project에 대한 연속 Update 요청**: §5.5 동시성 제어에 따라 앱 레벨 검증이 이미 `in_progress`/`retrying` Job이 있으면 새 Update 요청을 거부한다. UI는 §7의 경고 UX로 사용자에게 재시도를 유도한다.
+> **동일 Project에 대한 연속 Update 요청**: §5.5 동시성 제어에 따라 앱 레벨 검증이 이미 `in_progress`/`retrying` Job이 있으면 새 Update 요청을 거부한다. UI는 [ui-spec §6.8 동시 설정 변경 경고](./ui-spec.md#68-동시-설정-변경-경고)로 사용자에게 재시도를 유도한다.
 
 ---
 
