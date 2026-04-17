@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git log)",
+      "Bash(git log:*)",
+      "Bash(git diff)",
+      "Bash(git diff:*)",
+      "Bash(git branch)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git blame:*)",
+      "Bash(ls)",
+      "Bash(ls:*)",
+      "Bash(pwd)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(file:*)",
+      "Bash(bundle exec rspec)",
+      "Bash(bundle exec rspec:*)",
+      "Bash(bundle exec rubocop)",
+      "Bash(bundle exec rubocop:*)",
+      "Bash(bin/rails db:migrate:status)",
+      "Bash(bin/rails routes:*)",
+      "Bash(bin/rails runner:*)"
+    ],
+    "ask": [
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "Bash(git add)",
+      "Bash(git add:*)",
+      "Bash(git commit)",
+      "Bash(git commit:*)",
+      "Bash(git stash:*)",
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(bin/rails db:migrate)",
+      "Bash(bin/rails db:rollback:*)",
+      "Bash(bin/rails db:seed)",
+      "Bash(bundle install)",
+      "Bash(bundle install:*)",
+      "Bash(bundle update:*)",
+      "Bash(mv:*)",
+      "Bash(cp:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(rm -fr:*)",
+      "Bash(sudo:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push:*main*)",
+      "Bash(git push:*master*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(curl:*keycloak*)",
+      "Bash(curl:*langfuse*)",
+      "Bash(curl:*litellm*)",
+      "Bash(curl:*config-server*)",
+      "Bash(wget:*keycloak*)",
+      "Bash(wget:*langfuse*)",
+      "Bash(wget:*litellm*)",
+      "Bash(wget:*config-server*)",
+      "Write(**/.env)",
+      "Write(**/.env.*)",
+      "Write(**/credentials.yml*)",
+      "Write(**/*.pem)",
+      "Write(**/*.key)",
+      "Edit(**/.env)",
+      "Edit(**/.env.*)",
+      "Edit(**/credentials.yml*)",
+      "Edit(**/*.pem)",
+      "Edit(**/*.key)"
+    ]
+  },
+  "env": {
+    "RAILS_ENV": "test",
+    "COVERAGE": "false",
+    "CLAUDE_PROJECT_NAME": "aap-console"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh",
+            "timeout": 10,
+            "statusMessage": "Loading project context..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/secret-scan.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/bash-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-edit-advice.sh",
+            "timeout": 10,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-stop-check.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "FileChanged": [
+      {
+        "matcher": ".env|.envrc|.env.local",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/env-change-warn.sh",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+  "disableAllHooks": false
+}
