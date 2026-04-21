@@ -1,7 +1,7 @@
 # AAP Console — UI Specification (UI Spec)
 
-> **Version**: 1.3
-> **Date**: 2026-03-12
+> **Version**: 1.6
+> **Date**: 2026-04-21
 > **Status**: Draft
 > **References**: [PRD](./PRD.md) · [HLD](./HLD.md)
 
@@ -99,21 +99,21 @@ AAP Console
 | 페이지 | URL 패턴 | 주요 기능 | 관련 FR |
 |--------|---------|-----------|---------|
 | Organization 목록 | `/organizations` | 소속 Org 카드 목록, 검색 | FR-1 |
-| Organization 상세 | `/organizations/:id` | Org 정보, Project 목록, 멤버 요약 | FR-1 |
+| Organization 상세 | `/organizations/:slug` | Org 정보, Project 목록, 멤버 요약 | FR-1 |
 | Organization 생성 | `/organizations/new` | 이름, 설명 입력 (super_admin) | FR-1 |
-| 멤버 관리 | `/organizations/:id/members` | 멤버 목록, 추가/제거/권한 변경 | FR-2 |
+| 멤버 관리 | `/organizations/:slug/members` | 멤버 목록, 추가/제거/권한 변경 | FR-2 |
 
 ### 4.2 Project
 
 | 페이지 | URL 패턴 | 주요 기능 | 관련 FR |
 |--------|---------|-----------|---------|
-| Project 생성 | `/organizations/:org_id/projects/new` | 이름, 인증 방식, 모델 선택 | FR-3 |
-| Project 상세 | `/organizations/:org_id/projects/:id` | 설정 현황, 인증 정보, Config 요약 | FR-3 |
-| 인증 설정 | `/.../:id/auth_config` | 인증 방식 상세, Client Secret 재발급 | FR-4 |
-| LiteLLM Config | `/.../:id/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
-| 변경 이력 | `/.../:id/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
-| Playground | `/.../:id/playground` | 모델 선택, AI Chat, 요청 인스펙터 | FR-10 |
-| 프로비저닝 이력 | `/.../:id/provisioning_jobs` | 과거 Job 목록 (유형, 상태, 일시, 소요시간) | FR-7.3 |
+| Project 생성 | `/organizations/:org_slug/projects/new` | 이름, 인증 방식, 모델 선택 | FR-3 |
+| Project 상세 | `/organizations/:org_slug/projects/:slug` | 설정 현황, 인증 정보, Config 요약 | FR-3 |
+| 인증 설정 | `/.../:slug/auth_config` | 인증 방식 상세, Client Secret 재발급 | FR-4 |
+| LiteLLM Config | `/.../:slug/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
+| 변경 이력 | `/.../:slug/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
+| Playground | `/.../:slug/playground` | 모델 선택, AI Chat, 요청 인스펙터 | FR-10 |
+| 프로비저닝 이력 | `/.../:slug/provisioning_jobs` | 과거 Job 목록 (유형, 상태, 일시, 소요시간) | FR-7.3 |
 
 ### 4.3 프로비저닝
 
@@ -134,6 +134,7 @@ AAP Console
 | `pending` | 대기 | `gray` | ○ |
 | `in_progress` | 진행중 | `blue` | ⟳ |
 | `completed` | 완료 | `green` | ✓ |
+| `completed_with_warnings` | 완료 (경고 있음) | `amber` | ⚠ |
 | `failed` | 실패 | `red` | ✗ |
 | `retrying` | 재시도중 | `yellow` | ⟳ |
 | `rolling_back` | 정리중 | `orange` | ⟳ |
@@ -156,6 +157,7 @@ AAP Console
 
 - **색상 + 아이콘 + 텍스트** 3중 전달 — 색각 이상 사용자를 위해 색상만으로 구분하지 않음
 - 실패 상태(`failed`, `rolled_back`, `rollback_failed`)는 모두 **빨간색 계열**로 통일 — 사용자에게 "실패"를 명확히 전달
+- 경고 상태(`completed_with_warnings`)는 **amber 계열** + ⚠ 아이콘으로 통일 — "성공했으나 일부 검증 실패" 를 즉시 인식하게 함. 빨간 계열과 구분하여 사용자가 "동작은 정상" 임을 이해하도록 한다
 - `rolling_back` → `rolled_back` 전환 시 자동 정리가 완료됨을 텍스트로 표현 ("정리중" → "실패 (정리 완료)")
 - **실시간 전환**: ActionCable + Turbo Streams로 페이지 새로고침 없이 상태 배지 업데이트
 
@@ -171,7 +173,8 @@ AAP Console
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  ⚠ 이 값은 한 번만 표시됩니다. 안전하게 보관하세요.  │
+│  ⚠ 이 값은 10분간만 조회할 수 있습니다.             │
+│     안전하게 보관하세요.                            │
 │                                                    │
 │  Client Secret: ●●●●●●●●●●●●●●●●  [👁 표시] [📋] │
 │                                                    │
@@ -182,7 +185,8 @@ AAP Console
 - 기본적으로 마스킹 처리 (●●●)
 - "표시" 버튼으로 일시적 표시 가능
 - 클립보드 복사 버튼 제공
-- "확인" 후 다시 조회 불가
+- "확인" 클릭 시 **현재 브라우저 세션** 에서 재조회 방지 플래그가 저장된다 (UX 힌트). 같은 Project에 권한이 있는 다른 관리자/다른 기기/동일 사용자의 다른 세션은 TTL(10분) 내에 재조회 가능하다 (HLD §6.5)
+- TTL 만료(10분) 후에는 어느 세션에서도 조회 불가 — Secret 재발급 플로우(8.11)로 새 값 생성 필요
 
 ### 6.2 위험 액션 확인
 
@@ -269,6 +273,47 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 | 폼 제출 대기 | 제출 버튼 비활성화 + 텍스트 "처리중..." 변경 |
 | Turbo Frame 로드 | 프레임 영역에 스피너 표시 |
 | ActionCable 연결 끊김 | 상단 배너 "실시간 연결이 끊어졌습니다. 재연결 중..." |
+
+### 6.8 동시 설정 변경 경고
+
+동일 Project에 대해 이미 진행 중인 프로비저닝 Job이 있는 상태에서 새 설정 변경이 요청되면, Console은 앱 레벨에서 요청을 거부한다 (HLD §5.5). UI는 이 상태를 사용자가 이해할 수 있도록 명확히 안내한다.
+
+**사전 예방 — 편집 폼 진입 시점**:
+
+사용자가 LiteLLM Config 편집(8.8) 또는 인증 설정 편집(8.11) 화면에 진입할 때, Project에 활성 프로비저닝 Job이 있으면 상단에 배너를 표시한다.
+
+```
+┌───────────────────────────────────────────────────────┐
+│  ⚠ 진행 중인 프로비저닝 작업이 있습니다.                   │
+│     현재 작업이 완료된 후 설정을 변경해주세요.              │
+│     [진행 상황 보기] (프로비저닝 현황 페이지로 이동)         │
+└───────────────────────────────────────────────────────┘
+```
+
+- 배너 색상: `yellow` (경고)
+- "변경 저장 및 적용" 버튼은 `disabled` 처리 + 툴팁 "진행 중인 작업이 완료된 후 시도하세요"
+- 배너는 ActionCable 구독으로 실시간 업데이트 — 진행 중인 Job이 완료되면 배너가 자동으로 사라지고 버튼 활성화
+
+**사후 처리 — 제출 직전 경합 발생**:
+
+사용자가 폼을 열었을 때는 활성 Job이 없었으나, 제출 직전에 다른 사용자가 변경을 먼저 제출하여 Job이 생성된 경우. Controller가 409 Conflict를 반환하고, 폼 상단에 오류 영역을 표시한다.
+
+```
+┌───────────────────────────────────────────────────────┐
+│  ✗ 변경을 저장할 수 없습니다.                              │
+│                                                         │
+│  다른 작업이 진행 중입니다. 잠시 후 다시 시도해주세요.        │
+│  진행 중인 작업: "설정 변경 프로비저닝" (시작: 14:32:10)    │
+│                                                         │
+│  [진행 상황 보기]  [이 화면에서 대기]                       │
+└───────────────────────────────────────────────────────┘
+```
+
+- "이 화면에서 대기"를 클릭하면 ActionCable로 완료 이벤트를 수신. 완료 후 경고가 정보 배너로 전환되며 "지금 다시 저장" 버튼이 활성화됨
+- 사용자의 폼 입력값은 그대로 유지 (Turbo Frame 재렌더링으로 데이터 손실 없음)
+- "진행 상황 보기"를 클릭하면 프로비저닝 현황 페이지로 이동 — 돌아올 때 폼 입력값 복원은 보장하지 않음
+
+**충돌 빈도가 낮은 전제**: Console의 사용자 규모(소수 관리자)와 Update 빈도를 고려할 때 경합은 드물다. 낙관적 락(version 컬럼)까지 도입하지 않고, 서버 검증(409) + UI 안내로 충분하다.
 
 ---
 
@@ -376,10 +421,20 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 - Project 상태 배지: 최근 프로비저닝 Job의 상태를 반영 (5절 매핑 적용)
 - **삭제 버튼** (super_admin): 위험 액션 확인(6.2절) → Org 삭제 프로비저닝 현황으로 리다이렉트
 
-**Project 행 클릭 동작**:
-- `completed` (Active) → Project 상세 페이지
-- `in_progress` / `pending` / `retrying` → 해당 프로비저닝 현황 페이지 (진행 상황 확인이 자연스러움)
-- `failed` / `rolled_back` / `rollback_failed` → 해당 프로비저닝 현황 페이지 (오류 확인 및 재시도)
+**Project 행 클릭 동작** (Project 의 `projects.status` 와 최근 ProvisioningJob 상태 조합 기준):
+
+| Project 상태 | 최근 Job 상태 | 행 클릭 시 이동 |
+|-------------|---------------|----------------|
+| `active` | `completed` | Project 상세 페이지 |
+| `active` | `completed_with_warnings` | Project 상세 페이지 (상단에 Health Check 경고 배너 고정) |
+| `update_pending` | `in_progress` / `pending` / `retrying` | 최근 Update 프로비저닝 현황 페이지 |
+| `deleting` | `in_progress` / `rolling_back` | 삭제 프로비저닝 현황 페이지 |
+| `provisioning` | `in_progress` / `pending` / `retrying` | 최초 생성 프로비저닝 현황 페이지 |
+| `provision_failed` | `failed` / `rolled_back` / `rollback_failed` | 프로비저닝 현황 페이지 (오류 확인 및 수동 재시도) |
+| `deleted` | — | 행이 목록에 표시되지 않음 (soft-delete 필터링) |
+
+- `completed_with_warnings` Project는 정상 동작 중이지만 일부 정합성 검증(FR-9)이 실패한 상태이므로 Project 상세로 직접 이동해 사용자가 경고 내용을 확인할 수 있게 한다.
+- `update_pending` / `deleting` 은 과도기 상태이므로 현황 페이지로 이동해 실시간 진행률을 보게 한다.
 
 ### 8.3 Organization 생성 — FR-1
 
@@ -436,6 +491,13 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │                                          │
 └──────────┴──────────────────────────────────────────┘
 ```
+
+**"초대 대기 중" 배지**:
+
+- 표시 조건: `org_memberships.joined_at IS NULL` (HLD §8.2) — 해당 사용자가 아직 Console에 로그인하지 않았거나, 이 Org 에 처음 들어오지 않은 상태
+- 위치: 이름 컬럼 옆에 `(미로그인)` 텍스트 대신 `● 초대 대기 중` 배지로 표시
+- 스타일: `gray` 배경 + 작은 점 아이콘 (`●`)
+- 멤버가 로그인하여 `joined_at` 이 채워지면 배지가 사라지고 이름이 표시됨 (다음 페이지 로드부터 반영)
 
 **멤버 추가 모달** (Turbo Frame):
 
@@ -497,10 +559,10 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │ 사이드바  │                                          │
 │          │  Chatbot                  Status: Active ● │
 │          │  AI 챗봇 서비스             [이름/설명 편집]│
-│          │                                (admin)    │
+│          │                              (admin 이상) │
 │          │  App ID: app-a3Bf9kR2mX1q      [📋 복사] │
 │          │                                [삭제]     │
-│          │                                (admin)    │
+│          │                              (admin 이상) │
 │          │                                          │
 │          │  ┌────────────────────────────────────┐   │
 │          │  │ 인증 │ Langfuse │ LiteLLM │ 이력  │   │
@@ -546,7 +608,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 **구성 요소**:
 - 기본 정보: 이름, 설명, App ID (클립보드 복사), 상태 배지
 - **[이름/설명 편집]**: Turbo Frame으로 인라인 편집 폼 표시 (별도 페이지 이동 없음). 저장 시 Flash 알림
-- **탭 네비게이션**: 인증 / Langfuse / LiteLLM / 이력 — 각 탭은 Turbo Frame으로 로드하여 페이지 전환 없이 탭 전환. 하위 페이지 URL(`/.../:id/auth_config` 등)로 직접 접근도 가능
+- **탭 네비게이션**: 인증 / Langfuse / LiteLLM / 이력 — 각 탭은 Turbo Frame으로 로드하여 페이지 전환 없이 탭 전환. 하위 페이지 URL(`/.../:slug/auth_config` 등)로 직접 접근도 가능
 - 인증 설정 탭: 인증 방식, Client ID, Secret 재발급 버튼, [상세 편집] 링크 (8.11로 이동)
 - Langfuse 탭: Langfuse Project 이름, SDK Key 발급 상태 (마스킹된 PK prefix), 트레이싱 연동 상태, Langfuse 대시보드 외부 링크
 - LiteLLM 탭: 모델 목록, 가드레일, S3 설정 요약, [설정 편집] 링크 (8.8로 이동)
@@ -604,8 +666,8 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 | 유형 | 제목 | Step 구성 | 완료 후 이동 |
 |------|------|----------|-------------|
 | **create** | Project 생성 프로비저닝 | Step 1. App Registry 등록 → Step 2a. 인증 리소스 생성 / Step 2b. Langfuse 리소스 생성 (병렬) → Step 3. Config 반영 → Step 4. Health Check | 시크릿 표시 → Project 상세 |
-| **update** | 설정 변경 프로비저닝 | Step 1. Config 반영 → Step 2. Health Check | Project 상세 (시크릿 없음) |
-| **delete** | Project 삭제 프로비저닝 | Step 1. Keycloak Client 삭제 / Langfuse 리소스 삭제 (병렬) → Step 2. Config Server 설정 삭제 → Step 3. App Registry 해제 → Step 4. Console DB 정리 | Org 상세 |
+| **update** | 설정 변경 프로비저닝 | Step 1. Keycloak Client 수정 (인증 설정 변경 시에만, 조건부 실행) → Step 2. Config 반영 → Step 3. Health Check | Project 상세 (시크릿 없음; Client Secret 재발급한 경우 예외) |
+| **delete** | Project 삭제 프로비저닝 | Step 1. Keycloak Client 삭제 / Langfuse 리소스 삭제 / Config Server 설정 삭제 (3개 병렬) → Step 2. App Registry 해제 → Step 3. Console DB 정리 | Org 상세 |
 
 > **삭제 프로비저닝**: Project 삭제 시에도 6.2절 위험 액션 확인 → 프로비저닝 현황 페이지로 리다이렉트 → 완료 시 Org 상세로 이동. 시크릿 표시 단계 없음.
 >
@@ -676,9 +738,9 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │  Status: ✓ 완료                           │
 │          │                                          │
 │          │  ┌──────────────────────────────────────┐ │
-│          │  │ ⚠ 아래 인증 정보는 이 화면에서만      │ │
-│          │  │   확인할 수 있습니다.                  │ │
-│          │  │   안전하게 보관한 뒤 페이지를 떠나세요. │ │
+│          │  │ ⚠ 아래 인증 정보는 프로비저닝 완료 후 │ │
+│          │  │   10분간만 조회할 수 있습니다.          │ │
+│          │  │   안전하게 보관하세요.                  │ │
 │          │  │                                      │ │
 │          │  │  ── OIDC Client ──                   │ │
 │          │  │  Client ID:  aap-acme-chatbot-oidc   │ │
@@ -696,7 +758,11 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │  (위 "확인" 클릭 전까지 비활성)            │
 ```
 
-> **시크릿 표시 타이밍**: 프로비저닝이 `completed`로 전환되는 즉시, 같은 페이지에 인라인으로 시크릿 영역이 나타난다 (Turbo Stream `append`). 사용자가 "확인 — 안전하게 저장했습니다"를 클릭해야만 "Project 상세로 이동" 버튼이 활성화된다. 이 페이지를 떠나면 시크릿은 다시 조회할 수 없다. Langfuse SDK Key(PK/SK)는 Console이 저장하지 않으므로 사용자에게 표시하지 않고, Config Server로 직접 전달된다.
+> **시크릿 표시 타이밍**: 프로비저닝이 `completed`로 전환되는 즉시, 같은 페이지에 인라인으로 시크릿 영역이 나타난다 (Turbo Stream `append`). 사용자가 "확인 — 안전하게 저장했습니다"를 클릭해야만 "Project 상세로 이동" 버튼이 활성화된다.
+>
+> 서버 측 시크릿 캐시는 **10분 TTL** 로 유지된다 (HLD §6.5). TTL 내에는 동일 Project에 대한 `write`+ 권한을 가진 다른 관리자 또는 동일 사용자의 다른 세션(탭 재방문 포함) 이 현황 페이지를 다시 열어 `Secret 확인` 링크를 클릭하면 동일한 값이 다시 표시된다. "확인" 클릭은 현재 브라우저 세션의 UX 힌트일 뿐이며 서버 측 정책은 TTL 기반이다. TTL 만료 후에는 인증 설정 편집 화면(8.11) 의 Secret 재발급 플로우로만 새 값 생성 가능.
+>
+> Langfuse SDK Key(PK/SK)는 Console이 저장하지 않으므로 사용자에게 표시하지 않고, Config Server로 직접 전달된다.
 
 **구성 요소**:
 - 각 Step을 세로 타임라인으로 표시 (상태 아이콘 + 이름 + 소요시간/오류)
