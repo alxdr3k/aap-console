@@ -1,7 +1,7 @@
 # AAP Console — High-Level Design (HLD)
 
-> **Version**: 1.14
-> **Date**: 2026-04-17
+> **Version**: 1.15
+> **Date**: 2026-04-21
 > **Status**: Draft
 > **References**: [PRD](./PRD.md) · [UI Spec](./ui-spec.md)
 
@@ -944,9 +944,9 @@ Orchestrator.run(job)
 |-------|------|---------|------|
 | 1 | `keycloak_client_update` | `PUT /admin/realms/{realm}/clients/{uuid}` | 인증 설정 변경 시에만 실행 (조건부). `project_auth_configs.*` dirty일 때 포함 |
 | 2 | `config_server_apply` | `POST /admin/changes` | 변경된 설정만 전달 |
-| 3 | `health_check` | LiteLLM | |
+| 3 | `health_check` | 이번 Update에서 변경된 서비스만 (Keycloak: auth 변경 시 / LiteLLM: Config 반영 시). Langfuse는 Update 대상 아님 | |
 
-> 변경 필드에 따라 해당 단계만 선별 실행된다. 예: 이름/설명만 변경 시 프로비저닝 자체가 트리거되지 않으며, LiteLLM Config만 변경 시 `config_server_apply` + `health_check`만 실행된다. 상세 트리거 규칙은 아래 표 참조.
+> 변경 필드에 따라 해당 단계만 선별 실행된다. 예: 이름/설명만 변경 시 프로비저닝 자체가 트리거되지 않으며, LiteLLM Config만 변경 시 `config_server_apply` + `health_check`(LiteLLM만)만 실행된다. 상세 트리거 규칙은 아래 표 참조.
 
 **Update 프로비저닝 트리거 규칙**: Project의 모든 PATCH가 Update 프로비저닝을 트리거하지는 않는다. 필드 변경 유형에 따라 동작이 분기된다.
 

@@ -1,7 +1,7 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> **Version**: 1.16
-> **Date**: 2026-04-17
+> **Version**: 1.17
+> **Date**: 2026-04-21
 > **Status**: Approved
 > **References**: [HLD](./HLD.md) · [UI Spec](./ui-spec.md)
 
@@ -526,7 +526,7 @@ Console은 Config Server Admin API만 호출한다. 암호화, 저장, 적용 �
 | Console UI 페이지 로드 | ≤ 2초 | 서버 응답 시간 (TTFB) |
 | 실시간 로그 스트리밍 지연 | ≤ 1초 | Step 상태 변경 → ActionCable 수신 |
 | Keycloak Admin API 응답 | ≤ 3초 | Client CRUD 단일 호출 |
-| Config Server Admin API 응답 | ≤ 5초 | `POST /admin/changes` (Git commit 포함) |
+| Config Server Admin API 응답 | ≤ 5초 | `POST /admin/changes` 단일 호출 |
 
 ### 6.3 확장성
 
