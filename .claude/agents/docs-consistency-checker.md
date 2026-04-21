@@ -20,9 +20,18 @@ Find cross-document inconsistencies before they reach review. Flag them concisel
 - `docs/ui-spec.md` — screens, state-to-UI mapping.
 - `docs/business-objectives.md` — BO-N drives PRD FRs.
 
+# Scope modes (token budget)
+
+The caller decides the audit breadth. Honor the narrowest mode that still covers their concern — full audits are expensive and most edits touch only a slice of the docs.
+
+- **Focused mode (default when the caller names specific sections, FRs, files, or topics)**: Audit *only* what the caller listed and its direct cross-document counterparts. Skip unrelated checklist categories entirely. Do not expand scope "just in case". Example triggers: "verify FR-9 alignment between PRD §5 and HLD §5.6", "check the secret-TTL wording across HLD §6.5 and ui-spec §6.1", "focus on the changes in HLD §5.6".
+- **Full audit mode (explicit request only)**: Run the entire checklist end-to-end. Only enter this mode when the caller says "전체", "full audit", "모든 카테고리", or gives no scope hints on a fresh review.
+
+When in focused mode, state the focus in one line at the top of the report (e.g. `## 스코프\nFR-9 Health Check scope 정합성만 검사`). Do not invent findings outside the focus.
+
 # Audit checklist
 
-Run these checks in order. Stop-and-report as soon as a category has findings.
+Run these checks in order. In full audit mode run every item. In focused mode run only the subset that matches the caller's focus. Stop-and-report as soon as a category has findings.
 
 1. **FR numbering**: every `FR-N` referenced in HLD/UI-spec/ADRs exists in PRD §5. No gaps, no duplicates.
 2. **Glossary alignment**: terms used in HLD/ADRs match PRD §2 definitions. Flag drift (e.g. "Provisioner" vs "Orchestrator" used inconsistently).
