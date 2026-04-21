@@ -1,6 +1,6 @@
 # AAP Console — UI Specification (UI Spec)
 
-> **Version**: 1.4
+> **Version**: 1.5
 > **Date**: 2026-04-17
 > **Status**: Draft
 > **References**: [PRD](./PRD.md) · [HLD](./HLD.md)
@@ -134,6 +134,7 @@ AAP Console
 | `pending` | 대기 | `gray` | ○ |
 | `in_progress` | 진행중 | `blue` | ⟳ |
 | `completed` | 완료 | `green` | ✓ |
+| `completed_with_warnings` | 완료 (경고 있음) | `amber` | ⚠ |
 | `failed` | 실패 | `red` | ✗ |
 | `retrying` | 재시도중 | `yellow` | ⟳ |
 | `rolling_back` | 정리중 | `orange` | ⟳ |
@@ -156,6 +157,7 @@ AAP Console
 
 - **색상 + 아이콘 + 텍스트** 3중 전달 — 색각 이상 사용자를 위해 색상만으로 구분하지 않음
 - 실패 상태(`failed`, `rolled_back`, `rollback_failed`)는 모두 **빨간색 계열**로 통일 — 사용자에게 "실패"를 명확히 전달
+- 경고 상태(`completed_with_warnings`)는 **amber 계열** + ⚠ 아이콘으로 통일 — "성공했으나 일부 검증 실패" 를 즉시 인식하게 함. 빨간 계열과 구분하여 사용자가 "동작은 정상" 임을 이해하도록 한다
 - `rolling_back` → `rolled_back` 전환 시 자동 정리가 완료됨을 텍스트로 표현 ("정리중" → "실패 (정리 완료)")
 - **실시간 전환**: ActionCable + Turbo Streams로 페이지 새로고침 없이 상태 배지 업데이트
 
@@ -171,7 +173,8 @@ AAP Console
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  ⚠ 이 값은 한 번만 표시됩니다. 안전하게 보관하세요.  │
+│  ⚠ 이 값은 10분간만 조회할 수 있습니다.             │
+│     안전하게 보관하세요.                            │
 │                                                    │
 │  Client Secret: ●●●●●●●●●●●●●●●●  [👁 표시] [📋] │
 │                                                    │
@@ -182,7 +185,8 @@ AAP Console
 - 기본적으로 마스킹 처리 (●●●)
 - "표시" 버튼으로 일시적 표시 가능
 - 클립보드 복사 버튼 제공
-- "확인" 후 다시 조회 불가
+- "확인" 클릭 시 **현재 브라우저 세션** 에서 재조회 방지 플래그가 저장된다 (UX 힌트). 같은 Project에 권한이 있는 다른 관리자/다른 기기/동일 사용자의 다른 세션은 TTL(10분) 내에 재조회 가능하다 (HLD §6.5)
+- TTL 만료(10분) 후에는 어느 세션에서도 조회 불가 — Secret 재발급 플로우(8.11)로 새 값 생성 필요
 
 ### 6.2 위험 액션 확인
 
@@ -417,10 +421,20 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 - Project 상태 배지: 최근 프로비저닝 Job의 상태를 반영 (5절 매핑 적용)
 - **삭제 버튼** (super_admin): 위험 액션 확인(6.2절) → Org 삭제 프로비저닝 현황으로 리다이렉트
 
-**Project 행 클릭 동작**:
-- `completed` (Active) → Project 상세 페이지
-- `in_progress` / `pending` / `retrying` → 해당 프로비저닝 현황 페이지 (진행 상황 확인이 자연스러움)
-- `failed` / `rolled_back` / `rollback_failed` → 해당 프로비저닝 현황 페이지 (오류 확인 및 재시도)
+**Project 행 클릭 동작** (Project 의 `projects.status` 와 최근 ProvisioningJob 상태 조합 기준):
+
+| Project 상태 | 최근 Job 상태 | 행 클릭 시 이동 |
+|-------------|---------------|----------------|
+| `active` | `completed` | Project 상세 페이지 |
+| `active` | `completed_with_warnings` | Project 상세 페이지 (상단에 Health Check 경고 배너 고정) |
+| `update_pending` | `in_progress` / `pending` / `retrying` | 최근 Update 프로비저닝 현황 페이지 |
+| `deleting` | `in_progress` / `rolling_back` | 삭제 프로비저닝 현황 페이지 |
+| `provisioning` | `in_progress` / `pending` / `retrying` | 최초 생성 프로비저닝 현황 페이지 |
+| `provision_failed` | `failed` / `rolled_back` / `rollback_failed` | 프로비저닝 현황 페이지 (오류 확인 및 수동 재시도) |
+| `deleted` | — | 행이 목록에 표시되지 않음 (soft-delete 필터링) |
+
+- `completed_with_warnings` Project는 정상 동작 중이지만 일부 정합성 검증(FR-9)이 실패한 상태이므로 Project 상세로 직접 이동해 사용자가 경고 내용을 확인할 수 있게 한다.
+- `update_pending` / `deleting` 은 과도기 상태이므로 현황 페이지로 이동해 실시간 진행률을 보게 한다.
 
 ### 8.3 Organization 생성 — FR-1
 
@@ -477,6 +491,13 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │                                          │
 └──────────┴──────────────────────────────────────────┘
 ```
+
+**"초대 대기 중" 배지**:
+
+- 표시 조건: `org_memberships.joined_at IS NULL` (HLD §8.2) — 해당 사용자가 아직 Console에 로그인하지 않았거나, 이 Org 에 처음 들어오지 않은 상태
+- 위치: 이름 컬럼 옆에 `(미로그인)` 텍스트 대신 `● 초대 대기 중` 배지로 표시
+- 스타일: `gray` 배경 + 작은 점 아이콘 (`●`)
+- 멤버가 로그인하여 `joined_at` 이 채워지면 배지가 사라지고 이름이 표시됨 (다음 페이지 로드부터 반영)
 
 **멤버 추가 모달** (Turbo Frame):
 
@@ -645,8 +666,8 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 | 유형 | 제목 | Step 구성 | 완료 후 이동 |
 |------|------|----------|-------------|
 | **create** | Project 생성 프로비저닝 | Step 1. App Registry 등록 → Step 2a. 인증 리소스 생성 / Step 2b. Langfuse 리소스 생성 (병렬) → Step 3. Config 반영 → Step 4. Health Check | 시크릿 표시 → Project 상세 |
-| **update** | 설정 변경 프로비저닝 | Step 1. Config 반영 → Step 2. Health Check | Project 상세 (시크릿 없음) |
-| **delete** | Project 삭제 프로비저닝 | Step 1. Keycloak Client 삭제 / Langfuse 리소스 삭제 (병렬) → Step 2. Config Server 설정 삭제 → Step 3. App Registry 해제 → Step 4. Console DB 정리 | Org 상세 |
+| **update** | 설정 변경 프로비저닝 | Step 1. Keycloak Client 수정 (인증 설정 변경 시에만, 조건부 실행) → Step 2. Config 반영 → Step 3. Health Check | Project 상세 (시크릿 없음; Client Secret 재발급한 경우 예외) |
+| **delete** | Project 삭제 프로비저닝 | Step 1. Keycloak Client 삭제 / Langfuse 리소스 삭제 / Config Server 설정 삭제 (3개 병렬) → Step 2. App Registry 해제 → Step 3. Console DB 정리 | Org 상세 |
 
 > **삭제 프로비저닝**: Project 삭제 시에도 6.2절 위험 액션 확인 → 프로비저닝 현황 페이지로 리다이렉트 → 완료 시 Org 상세로 이동. 시크릿 표시 단계 없음.
 >
@@ -717,9 +738,9 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │  Status: ✓ 완료                           │
 │          │                                          │
 │          │  ┌──────────────────────────────────────┐ │
-│          │  │ ⚠ 아래 인증 정보는 이 화면에서만      │ │
-│          │  │   확인할 수 있습니다.                  │ │
-│          │  │   안전하게 보관한 뒤 페이지를 떠나세요. │ │
+│          │  │ ⚠ 아래 인증 정보는 프로비저닝 완료 후 │ │
+│          │  │   10분간만 조회할 수 있습니다.          │ │
+│          │  │   안전하게 보관하세요.                  │ │
 │          │  │                                      │ │
 │          │  │  ── OIDC Client ──                   │ │
 │          │  │  Client ID:  aap-acme-chatbot-oidc   │ │
@@ -737,7 +758,11 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │  (위 "확인" 클릭 전까지 비활성)            │
 ```
 
-> **시크릿 표시 타이밍**: 프로비저닝이 `completed`로 전환되는 즉시, 같은 페이지에 인라인으로 시크릿 영역이 나타난다 (Turbo Stream `append`). 사용자가 "확인 — 안전하게 저장했습니다"를 클릭해야만 "Project 상세로 이동" 버튼이 활성화된다. 이 페이지를 떠나면 시크릿은 다시 조회할 수 없다. Langfuse SDK Key(PK/SK)는 Console이 저장하지 않으므로 사용자에게 표시하지 않고, Config Server로 직접 전달된다.
+> **시크릿 표시 타이밍**: 프로비저닝이 `completed`로 전환되는 즉시, 같은 페이지에 인라인으로 시크릿 영역이 나타난다 (Turbo Stream `append`). 사용자가 "확인 — 안전하게 저장했습니다"를 클릭해야만 "Project 상세로 이동" 버튼이 활성화된다.
+>
+> 서버 측 시크릿 캐시는 **10분 TTL** 로 유지된다 (HLD §6.5). TTL 내에는 동일 Project에 대한 `write`+ 권한을 가진 다른 관리자 또는 동일 사용자의 다른 세션(탭 재방문 포함) 이 현황 페이지를 다시 열어 `Secret 확인` 링크를 클릭하면 동일한 값이 다시 표시된다. "확인" 클릭은 현재 브라우저 세션의 UX 힌트일 뿐이며 서버 측 정책은 TTL 기반이다. TTL 만료 후에는 인증 설정 편집 화면(8.11) 의 Secret 재발급 플로우로만 새 값 생성 가능.
+>
+> Langfuse SDK Key(PK/SK)는 Console이 저장하지 않으므로 사용자에게 표시하지 않고, Config Server로 직접 전달된다.
 
 **구성 요소**:
 - 각 Step을 세로 타임라인으로 표시 (상태 아이콘 + 이름 + 소요시간/오류)
