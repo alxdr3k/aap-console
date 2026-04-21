@@ -1,7 +1,7 @@
 # AAP Console — UI Specification (UI Spec)
 
-> **Version**: 1.5
-> **Date**: 2026-04-17
+> **Version**: 1.6
+> **Date**: 2026-04-21
 > **Status**: Draft
 > **References**: [PRD](./PRD.md) · [HLD](./HLD.md)
 
@@ -99,21 +99,21 @@ AAP Console
 | 페이지 | URL 패턴 | 주요 기능 | 관련 FR |
 |--------|---------|-----------|---------|
 | Organization 목록 | `/organizations` | 소속 Org 카드 목록, 검색 | FR-1 |
-| Organization 상세 | `/organizations/:id` | Org 정보, Project 목록, 멤버 요약 | FR-1 |
+| Organization 상세 | `/organizations/:slug` | Org 정보, Project 목록, 멤버 요약 | FR-1 |
 | Organization 생성 | `/organizations/new` | 이름, 설명 입력 (super_admin) | FR-1 |
-| 멤버 관리 | `/organizations/:id/members` | 멤버 목록, 추가/제거/권한 변경 | FR-2 |
+| 멤버 관리 | `/organizations/:slug/members` | 멤버 목록, 추가/제거/권한 변경 | FR-2 |
 
 ### 4.2 Project
 
 | 페이지 | URL 패턴 | 주요 기능 | 관련 FR |
 |--------|---------|-----------|---------|
-| Project 생성 | `/organizations/:org_id/projects/new` | 이름, 인증 방식, 모델 선택 | FR-3 |
-| Project 상세 | `/organizations/:org_id/projects/:id` | 설정 현황, 인증 정보, Config 요약 | FR-3 |
-| 인증 설정 | `/.../:id/auth_config` | 인증 방식 상세, Client Secret 재발급 | FR-4 |
-| LiteLLM Config | `/.../:id/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
-| 변경 이력 | `/.../:id/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
-| Playground | `/.../:id/playground` | 모델 선택, AI Chat, 요청 인스펙터 | FR-10 |
-| 프로비저닝 이력 | `/.../:id/provisioning_jobs` | 과거 Job 목록 (유형, 상태, 일시, 소요시간) | FR-7.3 |
+| Project 생성 | `/organizations/:org_slug/projects/new` | 이름, 인증 방식, 모델 선택 | FR-3 |
+| Project 상세 | `/organizations/:org_slug/projects/:slug` | 설정 현황, 인증 정보, Config 요약 | FR-3 |
+| 인증 설정 | `/.../:slug/auth_config` | 인증 방식 상세, Client Secret 재발급 | FR-4 |
+| LiteLLM Config | `/.../:slug/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
+| 변경 이력 | `/.../:slug/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
+| Playground | `/.../:slug/playground` | 모델 선택, AI Chat, 요청 인스펙터 | FR-10 |
+| 프로비저닝 이력 | `/.../:slug/provisioning_jobs` | 과거 Job 목록 (유형, 상태, 일시, 소요시간) | FR-7.3 |
 
 ### 4.3 프로비저닝
 
@@ -559,10 +559,10 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │ 사이드바  │                                          │
 │          │  Chatbot                  Status: Active ● │
 │          │  AI 챗봇 서비스             [이름/설명 편집]│
-│          │                                (admin)    │
+│          │                              (admin 이상) │
 │          │  App ID: app-a3Bf9kR2mX1q      [📋 복사] │
 │          │                                [삭제]     │
-│          │                                (admin)    │
+│          │                              (admin 이상) │
 │          │                                          │
 │          │  ┌────────────────────────────────────┐   │
 │          │  │ 인증 │ Langfuse │ LiteLLM │ 이력  │   │
@@ -608,7 +608,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 **구성 요소**:
 - 기본 정보: 이름, 설명, App ID (클립보드 복사), 상태 배지
 - **[이름/설명 편집]**: Turbo Frame으로 인라인 편집 폼 표시 (별도 페이지 이동 없음). 저장 시 Flash 알림
-- **탭 네비게이션**: 인증 / Langfuse / LiteLLM / 이력 — 각 탭은 Turbo Frame으로 로드하여 페이지 전환 없이 탭 전환. 하위 페이지 URL(`/.../:id/auth_config` 등)로 직접 접근도 가능
+- **탭 네비게이션**: 인증 / Langfuse / LiteLLM / 이력 — 각 탭은 Turbo Frame으로 로드하여 페이지 전환 없이 탭 전환. 하위 페이지 URL(`/.../:slug/auth_config` 등)로 직접 접근도 가능
 - 인증 설정 탭: 인증 방식, Client ID, Secret 재발급 버튼, [상세 편집] 링크 (8.11로 이동)
 - Langfuse 탭: Langfuse Project 이름, SDK Key 발급 상태 (마스킹된 PK prefix), 트레이싱 연동 상태, Langfuse 대시보드 외부 링크
 - LiteLLM 탭: 모델 목록, 가드레일, S3 설정 요약, [설정 편집] 링크 (8.8로 이동)

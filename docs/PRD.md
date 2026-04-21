@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> **Version**: 1.17
+> **Version**: 1.18
 > **Date**: 2026-04-21
 > **Status**: Approved
 > **References**: [HLD](./HLD.md) · [UI Spec](./ui-spec.md)
@@ -268,6 +268,7 @@ Realm: aap (단일)
 | **Config Server (설정/시크릿)** | Config Server Admin API (`DELETE /api/v1/admin/changes`)로 해당 App의 설정 + 시크릿 일괄 삭제 |
 | **Config Server (App Registry)** | Config Server Admin API (`POST /api/v1/admin/app-registry/webhook`, `action: delete`)로 App 등록 해제 |
 | **Console DB (접근 권한)** | 해당 Project에 대한 `project_permissions` 레코드 삭제 |
+| **Console DB (PAK)** | 해당 Project에 발급된 `project_api_keys` 레코드 삭제 (FR-4) |
 
 ### FR-4. 인증 체계 자동 구성
 
