@@ -25,14 +25,10 @@ class ConfigServerClient < BaseClient
   end
 
   def delete_changes(org:, project:, service:, idempotency_key:)
+    path = "/api/v1/admin/changes?#{URI.encode_www_form(org: org, project: project, service: service)}"
     response = delete(
-      "/api/v1/admin/changes",
-      headers: auth_headers.merge(
-        "X-Idempotency-Key" => idempotency_key,
-        "Content-Type" => "application/json"
-      ).tap do |h|
-        # Faraday DELETE with body requires raw approach — store params in headers context
-      end
+      path,
+      headers: auth_headers.merge("X-Idempotency-Key" => idempotency_key)
     )
     response.body
   end

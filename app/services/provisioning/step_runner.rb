@@ -17,7 +17,7 @@ module Provisioning
       if step_impl.already_completed?
         @step.update!(status: :skipped, completed_at: Time.current)
         broadcast_step_update
-        return { status: :completed, step: @step }
+        return { status: :completed, step: @step, ephemeral_params: {} }
       end
 
       attempt_execute(step_impl)
@@ -26,15 +26,16 @@ module Provisioning
     private
 
     def attempt_execute(step_impl, retry_count: 0)
-      result_snapshot = step_impl.execute
+      raw_result = step_impl.execute
+      ephemeral = raw_result.is_a?(Hash) ? (raw_result.delete(:_ephemeral) || {}) : {}
       @step.update!(
         status: :completed,
         completed_at: Time.current,
-        result_snapshot: result_snapshot,
+        result_snapshot: raw_result,
         retry_count: retry_count
       )
       broadcast_step_update
-      { status: :completed, step: @step }
+      { status: :completed, step: @step, ephemeral_params: ephemeral }
     rescue => e
       handle_failure(step_impl, e, retry_count)
     end

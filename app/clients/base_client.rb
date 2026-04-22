@@ -51,10 +51,6 @@ class BaseClient
     else
       raise ApiError.new("Unexpected status: #{response.status}", status: response.status, body: response.body)
     end
-  rescue Faraday::TimeoutError => e
-    raise TimeoutError.new("Request timed out", upstream: e)
-  rescue Faraday::ConnectionFailed => e
-    raise ConnectionError.new("Connection failed", upstream: e)
   end
 
   def get(path, params: {}, headers: {})

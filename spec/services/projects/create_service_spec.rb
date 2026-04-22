@@ -58,6 +58,14 @@ RSpec.describe Projects::CreateService do
       expect(result).to be_failure
     end
 
+    it "creates a project_auth_config with the given auth_type" do
+      result = described_class.new(organization: organization, params: params, current_user_sub: user_sub).call
+      expect(result).to be_success
+      auth_config = result.data.project_auth_config
+      expect(auth_config).to be_present
+      expect(auth_config.auth_type).to eq("oidc")
+    end
+
     it "returns failure if another active job exists for the project" do
       # Create first project and job
       result1 = described_class.new(organization: organization, params: params, current_user_sub: user_sub).call

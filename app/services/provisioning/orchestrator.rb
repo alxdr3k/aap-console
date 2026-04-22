@@ -16,6 +16,7 @@ module Provisioning
           rollback_and_fail
           return
         end
+        results.each { |r| @params.merge!(r[:ephemeral_params] || {}) }
       end
 
       complete_successfully

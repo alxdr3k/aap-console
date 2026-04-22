@@ -19,6 +19,10 @@ module Projects
       ActiveRecord::Base.transaction do
         project.save!
 
+        project.create_project_auth_config!(
+          auth_type: @params[:auth_type]
+        )
+
         provisioning_job = project.provisioning_jobs.create!(
           operation: "create",
           status: :pending

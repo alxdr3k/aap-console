@@ -72,7 +72,7 @@ class ProvisioningJobsController < ApplicationController
 
     role = current_authorization.project_role(project)
     unless role && role_sufficient?(role, :write)
-      render_forbidden
+      render_forbidden and return
     end
   end
 
