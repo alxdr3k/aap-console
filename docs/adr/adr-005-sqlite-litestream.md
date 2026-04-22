@@ -1,7 +1,7 @@
 # ADR-005: 데이터베이스 — SQLite + Litestream vs PostgreSQL
 
 > **상태**: Accepted
-> **일자**: 2026-03-12
+> **일자**: 2026-04-22
 > **결정자**: Platform TG
 
 ## 컨텍스트

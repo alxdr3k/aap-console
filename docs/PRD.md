@@ -1,7 +1,7 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> **Version**: 1.19
-> **Date**: 2026-04-21
+> **Version**: 2.0
+> **Date**: 2026-04-22
 > **Status**: Approved
 > **References**: [HLD](./HLD.md) · [UI Spec](./ui-spec.md)
 
@@ -619,7 +619,7 @@ Step 5. 완료 → 프로비저닝 현황 페이지에서 결과 확인 → Proj
 | **테스트** | RSpec + FactoryBot | TDD 기반 개발. 단위/통합/시스템 테스트 |
 | **CI/CD** | (미정) | GitOps 기반 배포 파이프라인 |
 
-> **관련 ADR**: [ADR-004 인증/인가 분리](./adr-004-auth-authz-separation.md) · [ADR-005 SQLite + Litestream](./adr-005-sqlite-litestream.md) · [ADR-006 Hotwire vs SPA](./adr-006-hotwire-server-rendering.md)
+> **관련 ADR**: [ADR-004 인증/인가 분리](./adr/adr-004-auth-authz-separation.md) · [ADR-005 SQLite + Litestream](./adr/adr-005-sqlite-litestream.md) · [ADR-006 Hotwire vs SPA](./adr/adr-006-hotwire-server-rendering.md)
 
 ### 8.1 개발 방법론
 
@@ -638,7 +638,7 @@ Step 5. 완료 → 프로비저닝 현황 페이지에서 결과 확인 → Proj
 - Litestream이 SQLite WAL 변경을 S3에 실시간 스트리밍 백업 (RPO ≈ 수초)
 - Pod 재시작 시 Init Container가 S3에서 자동 복원
 
-> 상세 결정 근거: [ADR-005 SQLite + Litestream](./adr-005-sqlite-litestream.md)
+> 상세 결정 근거: [ADR-005 SQLite + Litestream](./adr/adr-005-sqlite-litestream.md)
 
 ---
 
