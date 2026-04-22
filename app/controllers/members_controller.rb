@@ -10,8 +10,8 @@ class MembersController < ApplicationController
   end
 
   def create
-    user_sub = member_params[:user_sub]
-    role = member_params[:role]
+    user_sub = params.dig(:member, :user_sub).to_s.strip
+    role = params.dig(:member, :role)
 
     if user_sub.blank?
       return render json: { errors: [ "user_sub can't be blank" ] }, status: :unprocessable_entity
@@ -39,7 +39,7 @@ class MembersController < ApplicationController
   end
 
   def update
-    if @membership.update(role: member_params[:role])
+    if @membership.update(role: params.require(:member).permit(:role)[:role])
       AuditLog.create!(
         organization: @organization,
         user_sub: Current.user_sub,
@@ -79,9 +79,5 @@ class MembersController < ApplicationController
     @membership = @organization.org_memberships.find_by!(user_sub: params[:user_sub])
   rescue ActiveRecord::RecordNotFound
     render json: { error: "Not found" }, status: :not_found
-  end
-
-  def member_params
-    params.require(:member).permit(:user_sub, :role)
   end
 end
