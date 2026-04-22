@@ -1,7 +1,7 @@
 # ADR-003: 외부 API 연동 방식 — Terraform Provider vs 직접 호출
 
 > **상태**: Accepted
-> **일자**: 2026-03-12
+> **일자**: 2026-04-22
 > **결정자**: Platform TG
 
 ## 컨텍스트

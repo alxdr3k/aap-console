@@ -1,8 +1,8 @@
 # AAP Console — High-Level Design (HLD)
 
-> **Version**: 1.17
-> **Date**: 2026-04-21
-> **Status**: Draft
+> **Version**: 1.18
+> **Date**: 2026-04-22
+> **Status**: Approved
 > **References**: [PRD](./PRD.md) · [UI Spec](./ui-spec.md)
 
 ---
@@ -1076,7 +1076,7 @@ ActionCable의 pub/sub adapter로 `SolidCable`(SQLite 기반)을 사용한다. S
 - 세션 쿠키를 인스턴스 변수로 캐시, 만료/401 시 재로그인
 - 환경변수: `LANGFUSE_URL`, `LANGFUSE_SERVICE_EMAIL`, `LANGFUSE_SERVICE_PASSWORD`
 
-> **⚠ 비공식 API**: tRPC는 Langfuse 내부 API로 업그레이드 시 breaking change 가능. 리스크 완화 전략은 [ADR-002](./adr-002-langfuse-api-strategy.md) 참조.
+> **⚠ 비공식 API**: tRPC는 Langfuse 내부 API로 업그레이드 시 breaking change 가능. 리스크 완화 전략은 [ADR-002](./adr/adr-002-langfuse-api-strategy.md) 참조.
 
 **Thread 안전성**: §5.2 병렬 단계 실행에서 `LangfuseClient` 인스턴스가 Thread 간 공유될 수 있다. 세션 쿠키 상태는 `Mutex#synchronize`로 보호하고, 쿠키 갱신(401 감지 → 재로그인)도 Mutex 하에서 수행한다. 대안으로 Thread-local 인스턴스(`Thread.current[:langfuse_client] ||= ...`)를 사용해도 된다 — 각 Thread가 독립 세션을 보유하므로 동시성 제어가 불필요하지만 Langfuse 측 세션 수가 늘어난다. 기본 채택은 **Mutex 보호 싱글톤**.
 
@@ -1127,7 +1127,7 @@ ActionCable의 pub/sub adapter로 `SolidCable`(SQLite 기반)을 사용한다. S
 
 ### 8.1 역할 분담: Keycloak vs Console DB
 
-> 상세 결정 근거는 [ADR-004](./adr-004-auth-authz-separation.md) 참조.
+> 상세 결정 근거는 [ADR-004](./adr/adr-004-auth-authz-separation.md) 참조.
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
@@ -1335,12 +1335,12 @@ Console DB에 이메일/이름을 저장하지 않으므로, 멤버 목록 등 U
 주요 아키텍처 결정은 ADR 문서에 상세 기록되어 있다. 여기서는 ADR이 없는 결정만 기술한다.
 
 **ADR 참조**:
-- [ADR-001: 프로비저닝 오케스트레이션](./adr-001-provisioning-orchestration.md) — 직접 구현 (Rails Saga) 채택
-- [ADR-002: Langfuse API 연동](./adr-002-langfuse-api-strategy.md) — tRPC (세션 쿠키) 채택
-- [ADR-003: 외부 API 연동](./adr-003-external-api-integration-strategy.md) — 직접 API 호출 채택
-- [ADR-004: 인증/인가 분리](./adr-004-auth-authz-separation.md) — Console DB 전량 인가 채택
-- [ADR-005: 데이터베이스](./adr-005-sqlite-litestream.md) — SQLite + Litestream 채택
-- [ADR-006: 프론트엔드](./adr-006-hotwire-server-rendering.md) — Hotwire 채택
+- [ADR-001: 프로비저닝 오케스트레이션](./adr/adr-001-provisioning-orchestration.md) — 직접 구현 (Rails Saga) 채택
+- [ADR-002: Langfuse API 연동](./adr/adr-002-langfuse-api-strategy.md) — tRPC (세션 쿠키) 채택
+- [ADR-003: 외부 API 연동](./adr/adr-003-external-api-integration-strategy.md) — 직접 API 호출 채택
+- [ADR-004: 인증/인가 분리](./adr/adr-004-auth-authz-separation.md) — Console DB 전량 인가 채택
+- [ADR-005: 데이터베이스](./adr/adr-005-sqlite-litestream.md) — SQLite + Litestream 채택
+- [ADR-006: 프론트엔드](./adr/adr-006-hotwire-server-rendering.md) — Hotwire 채택
 
 ### 10.1 왜 Thread(Job 내 병렬)인가
 

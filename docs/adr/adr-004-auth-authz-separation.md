@@ -1,7 +1,7 @@
 # ADR-004: 인증/인가 분리 — Keycloak 순수 인증 + Console DB RBAC
 
 > **상태**: Accepted
-> **일자**: 2026-03-12
+> **일자**: 2026-04-22
 > **결정자**: Platform TG
 
 ## 컨텍스트
