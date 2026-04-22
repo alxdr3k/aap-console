@@ -17,7 +17,7 @@ gem "thruster", require: false
 # Authentication
 gem "omniauth", "~> 2.1"
 gem "omniauth-keycloak", "~> 1.4"
-gem "omniauth-rails_csrf_protection", "~> 1.0"
+gem "omniauth-rails_csrf_protection", "~> 2.0"
 
 # HTTP client for external API calls (Keycloak, Langfuse, Config Server)
 gem "faraday", "~> 2.9"
