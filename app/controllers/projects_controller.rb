@@ -1,10 +1,10 @@
 class ProjectsController < ApplicationController
   before_action :set_organization
-  before_action -> { authorize_org!(@organization) }, only: [:index]
-  before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [:create, :destroy]
-  before_action :set_project, only: [:show, :update, :destroy]
-  before_action -> { authorize_project!(@project) }, only: [:show]
-  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [:update]
+  before_action -> { authorize_org!(@organization) }, only: [ :index ]
+  before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [ :create, :destroy ]
+  before_action :set_project, only: [ :show, :update, :destroy ]
+  before_action -> { authorize_project!(@project) }, only: [ :show ]
+  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :update ]
 
   def index
     projects = current_authorization.accessible_projects(@organization)
@@ -23,7 +23,7 @@ class ProjectsController < ApplicationController
       provisioning_job = project.provisioning_jobs.last
       redirect_to provisioning_job_path(provisioning_job), status: :see_other
     else
-      render json: { errors: [result.error] }, status: :unprocessable_entity
+      render json: { errors: [ result.error ] }, status: :unprocessable_entity
     end
   end
 
@@ -59,7 +59,7 @@ class ProjectsController < ApplicationController
       provisioning_job = project.provisioning_jobs.where(operation: "delete").last
       redirect_to provisioning_job_path(provisioning_job), status: :see_other
     else
-      render json: { errors: [result.error] }, status: :unprocessable_entity
+      render json: { errors: [ result.error ] }, status: :unprocessable_entity
     end
   end
 

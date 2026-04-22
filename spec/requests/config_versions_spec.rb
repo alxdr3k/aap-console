@@ -6,7 +6,7 @@ RSpec.describe "ConfigVersions", type: :request do
   let!(:project) { create(:project, :active, organization: org) }
   let!(:config_version) do
     create(:config_version, project: project, version_id: "v1", change_type: "create",
-           changed_by_sub: user_sub, snapshot: { models: ["gpt-4"] })
+           changed_by_sub: user_sub, snapshot: { models: [ "gpt-4" ] })
   end
 
   before { login_as(user_sub) }

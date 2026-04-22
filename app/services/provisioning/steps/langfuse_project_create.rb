@@ -38,7 +38,6 @@ module Provisioning
       def already_completed?
         step_record.result_snapshot&.dig("langfuse_project_id").present?
       end
-
     end
   end
 end

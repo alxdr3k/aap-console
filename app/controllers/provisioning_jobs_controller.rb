@@ -1,7 +1,7 @@
 class ProvisioningJobsController < ApplicationController
   before_action :set_job
   before_action :authorize_job_access!
-  before_action :authorize_job_write!, only: [:retry, :secrets]
+  before_action :authorize_job_write!, only: [ :retry, :secrets ]
 
   def show
     render json: {

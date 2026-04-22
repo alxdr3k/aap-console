@@ -38,7 +38,7 @@ module Provisioning
 
     def run_step_group(steps)
       if steps.size == 1
-        [run_single_step(steps.first)]
+        [ run_single_step(steps.first) ]
       else
         threads = steps.map do |step|
           Thread.new { run_single_step(step) }

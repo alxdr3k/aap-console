@@ -29,7 +29,7 @@ class BaseClient
     @connection ||= Faraday.new(url: @base_url) do |f|
       f.request :json
       f.response :json
-      f.request :retry, max: 2, interval: 0.5, exceptions: [Faraday::ServerError, Faraday::TimeoutError]
+      f.request :retry, max: 2, interval: 0.5, exceptions: [ Faraday::ServerError, Faraday::TimeoutError ]
       f.options.timeout = @timeout
       f.options.open_timeout = @open_timeout
       f.adapter Faraday.default_adapter

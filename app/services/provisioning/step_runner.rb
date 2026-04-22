@@ -69,7 +69,7 @@ module Provisioning
     end
 
     def backoff_interval(retry_count)
-      [2 ** (retry_count + 1), 32].min
+      [ 2 ** (retry_count + 1), 32 ].min
     end
 
     def build_step_impl

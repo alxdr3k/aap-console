@@ -1,8 +1,8 @@
 class OrganizationsController < ApplicationController
-  before_action :set_organization, only: [:show, :update, :destroy]
-  before_action -> { authorize_org!(@organization) }, only: [:show]
-  before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [:update]
-  before_action :require_super_admin!, only: [:create, :destroy]
+  before_action :set_organization, only: [ :show, :update, :destroy ]
+  before_action -> { authorize_org!(@organization) }, only: [ :show ]
+  before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [ :update ]
+  before_action :require_super_admin!, only: [ :create, :destroy ]
 
   def index
     @organizations = current_authorization.organizations
@@ -27,7 +27,7 @@ class OrganizationsController < ApplicationController
     if result.success?
       redirect_to organization_path(result.data.slug), status: :see_other
     else
-      render json: { errors: [result.error] }, status: :unprocessable_entity
+      render json: { errors: [ result.error ] }, status: :unprocessable_entity
     end
   end
 
@@ -56,7 +56,7 @@ class OrganizationsController < ApplicationController
     if result.success?
       redirect_to organizations_path, status: :see_other
     else
-      render json: { errors: [result.error] }, status: :unprocessable_entity
+      render json: { errors: [ result.error ] }, status: :unprocessable_entity
     end
   end
 

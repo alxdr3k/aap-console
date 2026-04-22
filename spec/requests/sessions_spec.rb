@@ -11,7 +11,7 @@ RSpec.describe "Sessions", type: :request do
         extra: {
           raw_info: {
             "sub" => user_sub,
-            "realm_access" => { "roles" => ["user"] }
+            "realm_access" => { "roles" => [ "user" ] }
           }
         }
       )
@@ -25,13 +25,13 @@ RSpec.describe "Sessions", type: :request do
     it "stores user_sub and realm_roles in session and redirects" do
       get "/auth/keycloak/callback"
       expect(session[:user_sub]).to eq(user_sub)
-      expect(session[:realm_roles]).to eq(["user"])
+      expect(session[:realm_roles]).to eq([ "user" ])
       expect(response).to redirect_to("/organizations")
     end
 
     context "when realm roles include super_admin" do
       before do
-        auth_hash.extra.raw_info["realm_access"] = { "roles" => ["super_admin"] }
+        auth_hash.extra.raw_info["realm_access"] = { "roles" => [ "super_admin" ] }
       end
 
       it "stores super_admin in realm_roles" do

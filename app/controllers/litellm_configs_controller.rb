@@ -1,8 +1,8 @@
 class LitellmConfigsController < ApplicationController
   before_action :set_organization
   before_action :set_project
-  before_action -> { authorize_project!(@project) }, only: [:show]
-  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [:update]
+  before_action -> { authorize_project!(@project) }, only: [ :show ]
+  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :update ]
 
   def show
     latest_version = @project.config_versions.order(created_at: :desc).first
@@ -26,7 +26,7 @@ class LitellmConfigsController < ApplicationController
         render json: { message: "Config updated" }
       end
     else
-      render json: { errors: [result.error] }, status: :unprocessable_entity
+      render json: { errors: [ result.error ] }, status: :unprocessable_entity
     end
   end
 

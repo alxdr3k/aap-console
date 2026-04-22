@@ -8,7 +8,7 @@ RSpec.describe Projects::CreateService do
       name: "Chatbot",
       description: "Our AI chatbot",
       auth_type: "oidc",
-      models: ["azure-gpt4"],
+      models: [ "azure-gpt4" ],
       s3_retention_days: 90
     }
   end

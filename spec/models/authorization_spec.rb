@@ -6,12 +6,12 @@ RSpec.describe Authorization do
 
   describe "#super_admin?" do
     it "returns true when realm_roles contains super_admin" do
-      auth = described_class.new(user_sub: "u1", realm_roles: ["super_admin"])
+      auth = described_class.new(user_sub: "u1", realm_roles: [ "super_admin" ])
       expect(auth.super_admin?).to be true
     end
 
     it "returns false when realm_roles does not contain super_admin" do
-      auth = described_class.new(user_sub: "u1", realm_roles: ["user"])
+      auth = described_class.new(user_sub: "u1", realm_roles: [ "user" ])
       expect(auth.super_admin?).to be false
     end
   end
@@ -32,7 +32,7 @@ RSpec.describe Authorization do
   describe "#project_role" do
     context "when user is super_admin" do
       it "returns :admin" do
-        auth = described_class.new(user_sub: "u1", realm_roles: ["super_admin"])
+        auth = described_class.new(user_sub: "u1", realm_roles: [ "super_admin" ])
         expect(auth.project_role(project)).to eq(:admin)
       end
     end
@@ -69,7 +69,7 @@ RSpec.describe Authorization do
       it "returns all projects in the org" do
         create(:org_membership, organization: organization, user_sub: "u1", role: "admin")
         auth = described_class.new(user_sub: "u1", realm_roles: [])
-        expect(auth.accessible_projects(organization)).to match_array([project, project2])
+        expect(auth.accessible_projects(organization)).to match_array([ project, project2 ])
       end
     end
 

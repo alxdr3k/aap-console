@@ -1,7 +1,7 @@
 class ConfigVersionsController < ApplicationController
-  before_action :set_config_version, only: [:show, :rollback]
-  before_action :authorize_config_version_read!, only: [:show]
-  before_action :authorize_config_version_write!, only: [:rollback]
+  before_action :set_config_version, only: [ :show, :rollback ]
+  before_action :authorize_config_version_read!, only: [ :show ]
+  before_action :authorize_config_version_write!, only: [ :rollback ]
 
   def index
     @organization = Organization.find_by!(slug: params[:organization_slug])

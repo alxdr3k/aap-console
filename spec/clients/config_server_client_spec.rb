@@ -10,7 +10,7 @@ RSpec.describe ConfigServerClient do
       stub_config_server_apply_changes(version: "v1-abc123")
       result = client.apply_changes(
         org: "acme", project: "chatbot", service: "litellm",
-        config: { models: ["gpt-4"] },
+        config: { models: [ "gpt-4" ] },
         idempotency_key: "idem-123"
       )
       expect(result["version"]).to eq("v1-abc123")
@@ -32,7 +32,7 @@ RSpec.describe ConfigServerClient do
 
   describe "#get_config" do
     it "retrieves config for org/project/service" do
-      stub_config_server_get_config(org: "acme", project: "chatbot", service: "litellm", config: { "models" => ["gpt-4"] })
+      stub_config_server_get_config(org: "acme", project: "chatbot", service: "litellm", config: { "models" => [ "gpt-4" ] })
       result = client.get_config(org: "acme", project: "chatbot", service: "litellm")
       expect(result["models"]).to include("gpt-4")
     end

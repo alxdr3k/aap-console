@@ -11,7 +11,7 @@ RSpec.describe KeycloakClient do
 
   describe "#search_users" do
     it "returns matching users" do
-      stub_keycloak_search_users(query: "john", users: [{ "id" => "user-1", "email" => "john@example.com" }])
+      stub_keycloak_search_users(query: "john", users: [ { "id" => "user-1", "email" => "john@example.com" } ])
       result = client.search_users(query: "john")
       expect(result).to be_an(Array)
       expect(result.first["email"]).to eq("john@example.com")
@@ -37,8 +37,8 @@ RSpec.describe KeycloakClient do
     it "creates an OIDC client with aap- prefix" do
       client_id = "aap-acme-chatbot-oidc"
       stub_keycloak_create_client(client_id: client_id)
-      stub_keycloak_get_clients(client_id: client_id, clients: [{ "clientId" => client_id, "id" => "uuid-123" }])
-      result = client.create_oidc_client(client_id: client_id, redirect_uris: ["https://app.example.com/callback"])
+      stub_keycloak_get_clients(client_id: client_id, clients: [ { "clientId" => client_id, "id" => "uuid-123" } ])
+      result = client.create_oidc_client(client_id: client_id, redirect_uris: [ "https://app.example.com/callback" ])
       expect(result["clientId"]).to eq(client_id)
     end
 

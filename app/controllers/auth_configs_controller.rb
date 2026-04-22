@@ -1,8 +1,8 @@
 class AuthConfigsController < ApplicationController
   before_action :set_organization
   before_action :set_project
-  before_action -> { authorize_project!(@project) }, only: [:show]
-  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [:update]
+  before_action -> { authorize_project!(@project) }, only: [ :show ]
+  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :update ]
 
   def show
     config = @project.project_auth_config

@@ -19,7 +19,7 @@ RSpec.describe "Organizations", type: :request do
 
   describe "POST /organizations" do
     context "as super_admin" do
-      before { login_as(user_sub, realm_roles: ["super_admin"]) }
+      before { login_as(user_sub, realm_roles: [ "super_admin" ]) }
 
       it "creates an org and redirects to it" do
         stub_langfuse_create_org(name: "Acme Corp")
@@ -82,7 +82,7 @@ RSpec.describe "Organizations", type: :request do
 
     context "as super_admin" do
       before do
-        login_as(user_sub, realm_roles: ["super_admin"])
+        login_as(user_sub, realm_roles: [ "super_admin" ])
         stub_langfuse_delete_org(org_id: org.langfuse_org_id)
       end
 

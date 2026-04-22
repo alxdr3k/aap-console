@@ -1,8 +1,8 @@
 class MembersController < ApplicationController
   before_action :set_organization
-  before_action -> { authorize_org!(@organization) }, only: [:index]
-  before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [:create, :update, :destroy]
-  before_action :set_membership, only: [:update, :destroy]
+  before_action -> { authorize_org!(@organization) }, only: [ :index ]
+  before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [ :create, :update, :destroy ]
+  before_action :set_membership, only: [ :update, :destroy ]
 
   def index
     memberships = @organization.org_memberships.order(:created_at)
@@ -14,7 +14,7 @@ class MembersController < ApplicationController
     role = member_params[:role]
 
     if user_sub.blank?
-      return render json: { errors: ["user_sub can't be blank"] }, status: :unprocessable_entity
+      return render json: { errors: [ "user_sub can't be blank" ] }, status: :unprocessable_entity
     end
 
     membership = @organization.org_memberships.build(

@@ -33,7 +33,7 @@ RSpec.describe Projects::UpdateService do
     end
 
     context "with external fields requiring provisioning" do
-      let(:params) { { models: ["gpt-4"], s3_retention_days: 30 } }
+      let(:params) { { models: [ "gpt-4" ], s3_retention_days: 30 } }
 
       it "creates a provisioning job with update operation" do
         expect {
@@ -72,7 +72,7 @@ RSpec.describe Projects::UpdateService do
         create(:provisioning_job, :in_progress, project: project)
       end
 
-      let(:params) { { models: ["gpt-4"] } }
+      let(:params) { { models: [ "gpt-4" ] } }
 
       it "returns failure for external field changes" do
         result = described_class.new(project: project, params: params, current_user_sub: user_sub).call

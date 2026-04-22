@@ -11,17 +11,17 @@ Rails.application.routes.draw do
 
   # Organizations and nested resources
   resources :organizations, param: :slug do
-    resources :members, param: :user_sub, only: [:index, :create, :update, :destroy]
+    resources :members, param: :user_sub, only: [ :index, :create, :update, :destroy ]
 
     resources :projects, param: :slug do
-      resource  :auth_config,    only: [:show, :update]
-      resource  :litellm_config, only: [:show, :update]
-      resources :config_versions, only: [:index]
+      resource  :auth_config,    only: [ :show, :update ]
+      resource  :litellm_config, only: [ :show, :update ]
+      resources :config_versions, only: [ :index ]
     end
   end
 
   # Provisioning jobs (global, not nested)
-  resources :provisioning_jobs, only: [:show] do
+  resources :provisioning_jobs, only: [ :show ] do
     member do
       post :retry
       get  :secrets
@@ -29,14 +29,14 @@ Rails.application.routes.draw do
   end
 
   # Config versions (rollback)
-  resources :config_versions, only: [:show] do
+  resources :config_versions, only: [ :show ] do
     post :rollback, on: :member
   end
 
   # Config Server App Registry API
   namespace :api do
     namespace :v1 do
-      resources :apps, only: [:index]
+      resources :apps, only: [ :index ]
     end
   end
 

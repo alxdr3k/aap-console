@@ -33,7 +33,7 @@ RSpec.describe "LitellmConfigs", type: :request do
 
     it "enqueues update provisioning and redirects" do
       patch "/organizations/#{org.slug}/projects/#{project.slug}/litellm_config",
-            params: { litellm_config: { models: ["azure-gpt4"], s3_retention_days: 90 } }
+            params: { litellm_config: { models: [ "azure-gpt4" ], s3_retention_days: 90 } }
       expect(response).to have_http_status(:see_other)
       expect(project.provisioning_jobs.where(operation: "update").count).to eq(1)
     end
@@ -44,7 +44,7 @@ RSpec.describe "LitellmConfigs", type: :request do
       create(:project_permission, org_membership: read_membership, project: other_project, role: "read")
       login_as("reader")
       patch "/organizations/#{org.slug}/projects/#{other_project.slug}/litellm_config",
-            params: { litellm_config: { models: ["azure-gpt4"] } }
+            params: { litellm_config: { models: [ "azure-gpt4" ] } }
       expect(response).to have_http_status(:forbidden)
     end
   end

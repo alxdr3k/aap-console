@@ -12,7 +12,7 @@ RSpec.describe "Users", type: :request do
     it "returns 200 with matching users" do
       stub_keycloak_search_users(
         query: "john",
-        users: [{ id: "user-abc", email: "john@example.com", firstName: "John", lastName: "Doe" }]
+        users: [ { id: "user-abc", email: "john@example.com", firstName: "John", lastName: "Doe" } ]
       )
       get "/users/search", params: { q: "john" }
       expect(response).to have_http_status(:ok)

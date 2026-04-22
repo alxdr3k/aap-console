@@ -26,7 +26,7 @@ class KeycloakClient < BaseClient
   end
 
   def get_users_by_ids(user_subs:)
-    pool = Concurrent::FixedThreadPool.new([user_subs.size, 5].min)
+    pool = Concurrent::FixedThreadPool.new([ user_subs.size, 5 ].min)
     results = Concurrent::Hash.new
 
     futures = user_subs.map do |sub|
