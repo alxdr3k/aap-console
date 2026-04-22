@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> **Version**: 2.0
+> **Version**: 1.19
 > **Date**: 2026-04-22
 > **Status**: Approved
 > **References**: [HLD](./HLD.md) · [UI Spec](./ui-spec.md)
