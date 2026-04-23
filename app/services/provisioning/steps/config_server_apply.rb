@@ -59,6 +59,7 @@ module Provisioning
             target_version: prev_version,
             idempotency_key: "config-revert-#{step_record.id}"
           )
+          record_rollback_version(prev_version)
         else
           client.delete_changes(
             org: org.slug,
@@ -129,6 +130,19 @@ module Provisioning
         end
 
         secrets
+      end
+
+      def record_rollback_version(reverted_to_version_id)
+        prior = project.config_versions.find_by(version_id: reverted_to_version_id)
+        ConfigVersion.create!(
+          project: project,
+          provisioning_job: step_record.provisioning_job,
+          version_id: reverted_to_version_id,
+          change_type: "rollback",
+          change_summary: "Rolled back to #{reverted_to_version_id}",
+          changed_by_sub: "system",
+          snapshot: prior&.snapshot || {}
+        )
       end
 
       def build_change_summary

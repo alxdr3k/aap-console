@@ -92,6 +92,23 @@ RSpec.describe Provisioning::Steps::ConfigServerApply do
         step.rollback
         expect(a_request(:delete, /changes/)).not_to have_been_made
       end
+
+      it "records a rollback ConfigVersion so subsequent updates use the correct base" do
+        stub_config_server_revert_changes(version: "v-prev-abc")
+        prior_cv = create(:config_version, project: project, version_id: "v-prev-abc",
+                          snapshot: { "models" => [ "gpt-3.5" ], "s3_retention_days" => 30 })
+        step_record = create(:provisioning_step, :config_server_apply, provisioning_job: job,
+                             result_snapshot: { "applied" => true, "previous_version_id" => "v-prev-abc",
+                                               "version_id" => "v-new-123" })
+        step = described_class.new(step_record: step_record, project: project, params: {})
+
+        expect { step.rollback }.to change(ConfigVersion, :count).by(1)
+
+        rollback_cv = project.config_versions.order(:created_at).last
+        expect(rollback_cv.change_type).to eq("rollback")
+        expect(rollback_cv.version_id).to eq("v-prev-abc")
+        expect(rollback_cv.snapshot).to eq(prior_cv.snapshot)
+      end
     end
 
     context "when operation is create" do
