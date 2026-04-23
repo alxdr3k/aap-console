@@ -31,15 +31,40 @@ RSpec.describe "AuthConfigs", type: :request do
     before do
       membership = create(:org_membership, organization: org, user_sub: user_sub, role: "write")
       create(:project_permission, org_membership: membership, project: project, role: "write")
-      create(:project_auth_config, project: project, auth_type: "oidc",
+      create(:project_auth_config,
+             project: project,
+             auth_type: "oidc",
              keycloak_client_id: "aap-acme-chatbot-oidc",
-             keycloak_client_uuid: "some-uuid")
+             keycloak_client_uuid: "server-owned-uuid")
     end
 
-    it "updates the auth config and returns 200" do
+    it "ignores client attempts to write server-owned keycloak identifiers" do
+      original = project.project_auth_config
       patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
-            params: { auth_config: { keycloak_client_id: "aap-acme-chatbot-oidc-updated" } }
+            params: { auth_config: {
+              keycloak_client_id: "hacker-value",
+              keycloak_client_uuid: "hacker-uuid"
+            } }
+
       expect(response).to have_http_status(:ok)
+      original.reload
+      expect(original.keycloak_client_id).to eq("aap-acme-chatbot-oidc")
+      expect(original.keycloak_client_uuid).to eq("server-owned-uuid")
+    end
+
+    it "enqueues an update provisioning job when redirect_uris change" do
+      expect {
+        patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+              params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } }
+      }.to change(ProvisioningJob, :count).by(1)
+
+      job = project.provisioning_jobs.order(:id).last
+      expect(job.operation).to eq("update")
+      expect(job.provisioning_steps.pluck(:name)).to eq(%w[
+        keycloak_client_update
+        config_server_apply
+        health_check
+      ])
     end
 
     it "returns 403 for read-only member" do
@@ -49,7 +74,7 @@ RSpec.describe "AuthConfigs", type: :request do
       create(:project_auth_config, project: other_project, auth_type: "oidc")
       login_as("reader")
       patch "/organizations/#{org.slug}/projects/#{other_project.slug}/auth_config",
-            params: { auth_config: { keycloak_client_id: "hack" } }
+            params: { auth_config: { redirect_uris: [ "https://hack" ] } }
       expect(response).to have_http_status(:forbidden)
     end
   end

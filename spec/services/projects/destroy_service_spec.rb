@@ -27,6 +27,18 @@ RSpec.describe Projects::DestroyService do
       }.to have_enqueued_job(ProvisioningExecuteJob)
     end
 
+    it "seeds provisioning_steps per the delete plan" do
+      described_class.new(project: project, current_user_sub: user_sub).call
+      job = project.provisioning_jobs.last
+      expect(job.provisioning_steps.pluck(:name)).to match_array(%w[
+        config_server_delete
+        keycloak_client_delete
+        langfuse_project_delete
+        app_registry_deregister
+        db_cleanup
+      ])
+    end
+
     it "writes an audit log" do
       expect {
         described_class.new(project: project, current_user_sub: user_sub).call
