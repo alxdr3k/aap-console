@@ -127,6 +127,24 @@ RSpec.describe Provisioning::Orchestrator do
         expect(job.reload.status).to eq("rolled_back")
         expect(project.reload.status).to eq("active")
       end
+
+      it "leaves project in update_pending when rollback itself fails" do
+        allow_any_instance_of(Provisioning::StepRunner).to receive(:execute) do |runner|
+          step_record = runner.instance_variable_get(:@step)
+          if step_record.name == "keycloak_client_update"
+            { status: :failed, step: step_record, error: StandardError.new("keycloak down") }
+          else
+            { status: :completed, step: step_record, ephemeral_params: {} }
+          end
+        end
+
+        expect_any_instance_of(Provisioning::RollbackRunner).to receive(:run).and_return(false)
+
+        described_class.new(provisioning_job: job).run
+
+        expect(job.reload.status).to eq("rollback_failed")
+        expect(project.reload.status).to eq("update_pending")
+      end
     end
   end
 end

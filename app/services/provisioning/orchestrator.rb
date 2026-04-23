@@ -145,7 +145,9 @@ module Provisioning
       when "create"
         project.update!(status: :provision_failed) unless project.provision_failed?
       when "update"
-        project.update!(status: :active) unless project.active?
+        # Only restore to active when the rollback succeeded. A rollback_failed
+        # job leaves the project in update_pending so operators know drift exists.
+        project.update!(status: :active) if @provisioning_job.rolled_back? && !project.active?
       when "delete"
         # Project remains in its prior state (:deleting). Admin must retry.
       end
