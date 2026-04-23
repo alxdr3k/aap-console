@@ -79,13 +79,13 @@ RSpec.describe Projects::UpdateService do
 
     context "with auth config fields (redirect_uris)" do
       let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
-      let(:params) { { redirect_uris: ["https://app.example.com/cb"], post_logout_redirect_uris: ["https://app.example.com"] } }
+      let(:params) { { redirect_uris: [ "https://app.example.com/cb" ], post_logout_redirect_uris: [ "https://app.example.com" ] } }
 
       it "persists desired redirect URIs in project_auth_config" do
         described_class.new(project: project, params: params, current_user_sub: user_sub).call
         config = project.project_auth_config.reload
-        expect(config.redirect_uris).to eq(["https://app.example.com/cb"])
-        expect(config.post_logout_redirect_uris).to eq(["https://app.example.com"])
+        expect(config.redirect_uris).to eq([ "https://app.example.com/cb" ])
+        expect(config.post_logout_redirect_uris).to eq([ "https://app.example.com" ])
       end
 
       it "does not permit keycloak_client_id or keycloak_client_uuid to be changed" do
