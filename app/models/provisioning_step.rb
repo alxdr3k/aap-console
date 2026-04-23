@@ -12,6 +12,6 @@ class ProvisioningStep < ApplicationRecord
     rollback_failed: 7
   }
 
-  validates :name, presence: true
+  validates :name, presence: true, uniqueness: { scope: :provisioning_job_id }
   validates :step_order, presence: true
 end

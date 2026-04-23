@@ -101,5 +101,32 @@ RSpec.describe Provisioning::Orchestrator do
         expect(project.reload.status).to eq("provision_failed")
       end
     end
+
+    context "when an update job fails" do
+      let(:job) { create(:provisioning_job, :pending, project: project, operation: "update") }
+
+      before do
+        project.update!(status: :update_pending)
+        Provisioning::StepSeeder.call!(job)
+      end
+
+      it "transitions project out of update_pending on failure" do
+        allow_any_instance_of(Provisioning::StepRunner).to receive(:execute) do |runner|
+          step_record = runner.instance_variable_get(:@step)
+          if step_record.name == "keycloak_client_update"
+            { status: :failed, step: step_record, error: StandardError.new("keycloak down") }
+          else
+            { status: :completed, step: step_record, ephemeral_params: {} }
+          end
+        end
+
+        expect_any_instance_of(Provisioning::RollbackRunner).to receive(:run).and_return(true)
+
+        described_class.new(provisioning_job: job).run
+
+        expect(job.reload.status).to eq("rolled_back")
+        expect(project.reload.status).to eq("active")
+      end
+    end
   end
 end

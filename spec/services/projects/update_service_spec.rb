@@ -77,6 +77,34 @@ RSpec.describe Projects::UpdateService do
       end
     end
 
+    context "with auth config fields (redirect_uris)" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:params) { { redirect_uris: ["https://app.example.com/cb"], post_logout_redirect_uris: ["https://app.example.com"] } }
+
+      it "persists desired redirect URIs in project_auth_config" do
+        described_class.new(project: project, params: params, current_user_sub: user_sub).call
+        config = project.project_auth_config.reload
+        expect(config.redirect_uris).to eq(["https://app.example.com/cb"])
+        expect(config.post_logout_redirect_uris).to eq(["https://app.example.com"])
+      end
+
+      it "does not permit keycloak_client_id or keycloak_client_uuid to be changed" do
+        original_uuid = auth_config.keycloak_client_uuid
+        described_class.new(
+          project: project,
+          params: params.merge(keycloak_client_id: "evil", keycloak_client_uuid: "evil-uuid"),
+          current_user_sub: user_sub
+        ).call
+        expect(auth_config.reload.keycloak_client_uuid).to eq(original_uuid)
+      end
+
+      it "enqueues a provisioning job for auth config changes" do
+        expect {
+          described_class.new(project: project, params: params, current_user_sub: user_sub).call
+        }.to change(ProvisioningJob, :count).by(1)
+      end
+    end
+
     context "when another active provisioning job exists" do
       before do
         create(:provisioning_job, :in_progress, project: project)

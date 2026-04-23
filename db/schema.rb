@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_22_005214) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_22_005216) do
   create_table "audit_logs", force: :cascade do |t|
     t.string "action", null: false
     t.datetime "created_at", null: false
@@ -83,7 +83,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_22_005214) do
     t.datetime "created_at", null: false
     t.string "keycloak_client_id"
     t.string "keycloak_client_uuid"
+    t.json "post_logout_redirect_uris"
     t.integer "project_id", null: false
+    t.json "redirect_uris"
     t.datetime "updated_at", null: false
     t.index ["project_id"], name: "index_project_auth_configs_on_project_id", unique: true
   end
@@ -142,6 +144,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_22_005214) do
     t.integer "status", default: 0, null: false
     t.integer "step_order", null: false
     t.datetime "updated_at", null: false
+    t.index ["provisioning_job_id", "name"], name: "index_provisioning_steps_on_job_id_and_name", unique: true
     t.index ["provisioning_job_id", "step_order"], name: "index_provisioning_steps_on_provisioning_job_id_and_step_order"
     t.index ["provisioning_job_id"], name: "index_provisioning_steps_on_provisioning_job_id"
   end

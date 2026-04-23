@@ -24,6 +24,7 @@ module Projects
         update_project_metadata if metadata_params.any?
 
         if needs_provisioning
+          persist_auth_config_params if auth_config_params.any?
           @project.update!(status: :update_pending)
           provisioning_job = @project.provisioning_jobs.create!(
             operation: "update",
@@ -58,8 +59,17 @@ module Projects
       @project.update!(metadata_params)
     end
 
+    def persist_auth_config_params
+      return unless (config = @project.project_auth_config)
+      config.update!(auth_config_params)
+    end
+
     def metadata_params
       @params.slice(:name, :description)
+    end
+
+    def auth_config_params
+      @params.slice(*AUTH_CONFIG_FIELDS)
     end
 
     def active_job_exists?
