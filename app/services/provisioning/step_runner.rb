@@ -1,6 +1,13 @@
 module Provisioning
   class StepRunner
+    # Upper bound (in seconds) on how long a single worker thread is allowed
+    # to sleep waiting for an inline retry. Anything longer is deferred via
+    # SolidQueue re-enqueue so the worker is freed up.
     MAX_INLINE_RETRY_SLEEP = 8
+
+    # Number of retry attempts during which inline sleep is still permitted
+    # (backoff sequence is 2, 4, 8, 16, 32 seconds).
+    MAX_INLINE_RETRIES = 3
 
     def initialize(step:, provisioning_job:, params: {})
       @step = step
@@ -20,7 +27,7 @@ module Provisioning
         return { status: :completed, step: @step, ephemeral_params: {} }
       end
 
-      attempt_execute(step_impl)
+      attempt_execute(step_impl, retry_count: @step.retry_count || 0)
     end
 
     private
@@ -42,30 +49,38 @@ module Provisioning
 
     def handle_failure(step_impl, error, retry_count)
       max_retries = @step.max_retries || 3
-      if retry_count < max_retries
-        interval = backoff_interval(retry_count)
+
+      if retry_count >= max_retries
+        return record_final_failure(error, retry_count)
+      end
+
+      interval = backoff_interval(retry_count)
+
+      if interval <= MAX_INLINE_RETRY_SLEEP && retry_count < MAX_INLINE_RETRIES
         @step.update!(status: :retrying, retry_count: retry_count + 1, error_message: error.message)
         broadcast_step_update
-
-        if interval <= MAX_INLINE_RETRY_SLEEP
-          sleep interval
-          attempt_execute(step_impl, retry_count: retry_count + 1)
-        else
-          # Scheduled retry via job re-enqueue would happen here
-          # For now fall through to inline retry
-          sleep interval
-          attempt_execute(step_impl, retry_count: retry_count + 1)
-        end
+        sleep interval
+        attempt_execute(step_impl, retry_count: retry_count + 1)
       else
-        @step.update!(
-          status: :failed,
-          completed_at: Time.current,
-          retry_count: retry_count,
-          error_message: error.message
-        )
+        # Deferred retry: free the worker. The Orchestrator is expected to
+        # re-enqueue ProvisioningExecuteJob with `wait: interval`. The
+        # step will be picked up again in :retrying status and attempted
+        # from the top of #execute.
+        @step.update!(status: :retrying, retry_count: retry_count + 1, error_message: error.message)
         broadcast_step_update
-        { status: :failed, step: @step, error: error }
+        { status: :deferred, step: @step, retry_count: retry_count + 1, retry_in: interval }
       end
+    end
+
+    def record_final_failure(error, retry_count)
+      @step.update!(
+        status: :failed,
+        completed_at: Time.current,
+        retry_count: retry_count,
+        error_message: error.message
+      )
+      broadcast_step_update
+      { status: :failed, step: @step, error: error }
     end
 
     def backoff_interval(retry_count)

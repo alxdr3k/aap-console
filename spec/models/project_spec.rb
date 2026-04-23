@@ -7,6 +7,31 @@ RSpec.describe Project, type: :model do
     it { is_expected.to validate_presence_of(:name) }
     it { is_expected.to validate_uniqueness_of(:app_id) }
     it { is_expected.to validate_length_of(:name).is_at_least(2).is_at_most(100) }
+
+    it "scopes slug uniqueness to organization" do
+      org = create(:organization)
+      create(:project, organization: org, slug: "chatbot", name: "Chatbot")
+
+      duplicate = build(:project, organization: org, slug: "chatbot", name: "Chatbot Two")
+      expect(duplicate).not_to be_valid
+      expect(duplicate.errors[:slug]).to include("has already been taken")
+    end
+
+    it "allows same slug across different organizations" do
+      slug = "chatbot"
+      create(:project, organization: create(:organization), slug: slug, name: "Chatbot")
+      other = build(:project, organization: create(:organization), slug: slug, name: "Chatbot")
+      expect(other).to be_valid
+    end
+  end
+
+  describe "app_id generation resilience" do
+    it "gives up after a bounded number of collisions" do
+      allow(Project).to receive(:exists?).with(hash_including(:app_id)).and_return(true)
+      project = build(:project, app_id: nil)
+      expect { project.valid? }
+        .to raise_error(Project::AppIdGenerationError)
+    end
   end
 
   describe "associations" do

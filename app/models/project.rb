@@ -17,22 +17,28 @@ class Project < ApplicationRecord
   }
 
   validates :name, presence: true, length: { minimum: 2, maximum: 100 }
-  validates :slug, presence: true
+  validates :slug, presence: true, uniqueness: { scope: :organization_id }
   validates :app_id, presence: true, uniqueness: true
 
   before_validation :generate_app_id, on: :create, if: -> { app_id.blank? }
   before_validation :generate_slug, on: :create, if: -> { slug.blank? && name.present? }
 
+  class AppIdGenerationError < StandardError; end
+
+  APP_ID_MAX_ATTEMPTS = 10
+
   private
 
   def generate_app_id
-    loop do
+    APP_ID_MAX_ATTEMPTS.times do
       candidate = "app-#{SecureRandom.alphanumeric(12)}"
       unless Project.exists?(app_id: candidate)
         self.app_id = candidate
-        break
+        return
       end
     end
+    raise AppIdGenerationError,
+          "Could not generate a unique app_id after #{APP_ID_MAX_ATTEMPTS} attempts"
   end
 
   def generate_slug

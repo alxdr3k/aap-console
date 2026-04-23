@@ -27,6 +27,7 @@ module Projects
           operation: "create",
           status: :pending
         )
+        Provisioning::StepSeeder.call!(provisioning_job)
 
         AuditLog.create!(
           organization: @organization,

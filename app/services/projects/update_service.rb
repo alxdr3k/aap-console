@@ -29,6 +29,7 @@ module Projects
             operation: "update",
             status: :pending
           )
+          Provisioning::StepSeeder.call!(provisioning_job)
           ProvisioningExecuteJob.perform_later(
             provisioning_job.id,
             **@params.slice(*EXTERNAL_FIELDS).merge(current_user_sub: @current_user_sub)

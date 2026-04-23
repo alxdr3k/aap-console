@@ -43,6 +43,18 @@ RSpec.describe Projects::CreateService do
       expect(job).to be_pending
     end
 
+    it "seeds provisioning_steps according to the create plan" do
+      result = described_class.new(organization: organization, params: params, current_user_sub: user_sub).call
+      job = result.data.provisioning_jobs.last
+      expect(job.provisioning_steps.pluck(:name)).to match_array(%w[
+        app_registry_register
+        keycloak_client_create
+        langfuse_project_create
+        config_server_apply
+        health_check
+      ])
+    end
+
     it "writes an audit log" do
       expect {
         described_class.new(organization: organization, params: params, current_user_sub: user_sub).call

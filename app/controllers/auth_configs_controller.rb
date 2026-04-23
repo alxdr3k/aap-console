@@ -13,22 +13,24 @@ class AuthConfigsController < ApplicationController
     end
   end
 
+  # Auth config mutations go through Projects::UpdateService so that any
+  # change which requires Keycloak propagation is enqueued as an update
+  # provisioning job. Keycloak identifiers (client_id, client_uuid) are
+  # server-owned and must not be writable by clients.
   def update
-    config = @project.project_auth_config || @project.build_project_auth_config
+    config = @project.project_auth_config
+    return render json: { error: "Not found" }, status: :not_found unless config
 
-    if config.update(auth_config_params)
-      AuditLog.create!(
-        organization: @organization,
-        project: @project,
-        user_sub: Current.user_sub,
-        action: "auth_config.update",
-        resource_type: "ProjectAuthConfig",
-        resource_id: config.id.to_s,
-        details: { auth_type: config.auth_type }
-      )
-      render json: config
+    result = Projects::UpdateService.new(
+      project: @project,
+      params: permitted_auth_params,
+      current_user_sub: Current.user_sub
+    ).call
+
+    if result.success?
+      render json: config.reload
     else
-      render json: { errors: config.errors.full_messages }, status: :unprocessable_entity
+      render json: { error: result.error }, status: :unprocessable_entity
     end
   end
 
@@ -46,7 +48,13 @@ class AuthConfigsController < ApplicationController
     render json: { error: "Not found" }, status: :not_found
   end
 
-  def auth_config_params
-    params.require(:auth_config).permit(:keycloak_client_id, :keycloak_client_uuid)
+  # Only user-facing auth settings are accepted. Keycloak identifiers
+  # (keycloak_client_id, keycloak_client_uuid) are set by the provisioning
+  # pipeline and are read-only to the API surface.
+  def permitted_auth_params
+    permitted = params
+      .require(:auth_config)
+      .permit(redirect_uris: [], post_logout_redirect_uris: [])
+    permitted.to_h.symbolize_keys
   end
 end

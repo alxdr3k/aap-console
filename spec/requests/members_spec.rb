@@ -66,6 +66,22 @@ RSpec.describe "Members", type: :request do
             params: { member: { role: "write" } }
       expect(response).to have_http_status(:forbidden)
     end
+
+    it "refuses to demote the last admin" do
+      sole_admin_org = create(:organization)
+      create(:org_membership, organization: sole_admin_org, user_sub: user_sub, role: "admin")
+      patch "/organizations/#{sole_admin_org.slug}/members/#{user_sub}",
+            params: { member: { role: "write" } }
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["error"]).to match(/last admin/i)
+    end
+
+    it "allows demotion when another admin exists" do
+      create(:org_membership, organization: org, user_sub: "backup-admin", role: "admin")
+      patch "/organizations/#{org.slug}/members/backup-admin",
+            params: { member: { role: "write" } }
+      expect(response).to have_http_status(:ok)
+    end
   end
 
   describe "DELETE /organizations/:org_slug/members/:user_sub" do
@@ -85,6 +101,22 @@ RSpec.describe "Members", type: :request do
       create(:org_membership, organization: other_org, user_sub: user_sub, role: "read")
       delete "/organizations/#{other_org.slug}/members/target-user"
       expect(response).to have_http_status(:forbidden)
+    end
+
+    it "refuses to remove the last admin (including self)" do
+      sole_admin_org = create(:organization)
+      create(:org_membership, organization: sole_admin_org, user_sub: user_sub, role: "admin")
+      delete "/organizations/#{sole_admin_org.slug}/members/#{user_sub}"
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["error"]).to match(/last admin/i)
+    end
+
+    it "allows self-removal when another admin exists" do
+      create(:org_membership, organization: org, user_sub: "backup-admin", role: "admin")
+      expect {
+        delete "/organizations/#{org.slug}/members/#{user_sub}"
+      }.to change(OrgMembership, :count).by(-1)
+      expect(response).to have_http_status(:ok)
     end
   end
 end

@@ -39,7 +39,14 @@ class MembersController < ApplicationController
   end
 
   def update
-    if @membership.update(role: params.require(:member).permit(:role)[:role])
+    new_role = params.require(:member).permit(:role)[:role]
+
+    if demoting_last_admin?(@membership, new_role)
+      return render json: { error: "Cannot demote the last admin of this organization" },
+                    status: :unprocessable_entity
+    end
+
+    if @membership.update(role: new_role)
       AuditLog.create!(
         organization: @organization,
         user_sub: Current.user_sub,
@@ -55,6 +62,11 @@ class MembersController < ApplicationController
   end
 
   def destroy
+    if removing_last_admin?(@membership)
+      return render json: { error: "Cannot remove the last admin of this organization" },
+                    status: :unprocessable_entity
+    end
+
     @membership.destroy!
     AuditLog.create!(
       organization: @organization,
@@ -79,5 +91,23 @@ class MembersController < ApplicationController
     @membership = @organization.org_memberships.find_by!(user_sub: params[:user_sub])
   rescue ActiveRecord::RecordNotFound
     render json: { error: "Not found" }, status: :not_found
+  end
+
+  # An admin being downgraded to a non-admin role counts as demotion.
+  # If they are the only admin in the org, block it — the org would be
+  # left without a manager.
+  def demoting_last_admin?(membership, new_role)
+    return false unless membership.role == "admin"
+    return false if new_role.to_s == "admin"
+    last_admin?(membership)
+  end
+
+  def removing_last_admin?(membership)
+    return false unless membership.role == "admin"
+    last_admin?(membership)
+  end
+
+  def last_admin?(membership)
+    @organization.org_memberships.where(role: "admin").where.not(id: membership.id).none?
   end
 end
