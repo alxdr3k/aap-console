@@ -42,8 +42,11 @@ module Provisioning
         previous = snapshot["previous_state"]
 
         if uuid && previous
-          keycloak = KeycloakClient.new
-          keycloak.update_client(uuid: uuid, attributes: previous)
+          begin
+            KeycloakClient.new.update_client(uuid: uuid, attributes: previous)
+          rescue BaseClient::NotFoundError
+            # Client already deleted — Keycloak rollback is implicitly done
+          end
         end
 
         if (config = project.project_auth_config)
@@ -56,8 +59,6 @@ module Provisioning
           end
           config.update!(restore) if restore.any?
         end
-      rescue BaseClient::ApiError => e
-        raise unless e.is_a?(BaseClient::NotFoundError)
       end
 
       def already_completed?

@@ -172,6 +172,18 @@ RSpec.describe Provisioning::Steps::KeycloakClientUpdate do
         step = build_step(result_snapshot: snapshot)
         expect { step.rollback }.not_to raise_error
       end
+
+      it "still restores DB auth_config even when Keycloak returns 404" do
+        stub_request(:put, /clients\/#{uuid}/)
+          .to_return(status: 404, body: { error: "not_found" }.to_json,
+                     headers: { "Content-Type" => "application/json" })
+        stub_keycloak_token
+        step = build_step(result_snapshot: snapshot)
+        step.rollback
+        config = auth_config.reload
+        expect(config.redirect_uris).to eq([ "https://old.example.com/cb" ])
+        expect(config.post_logout_redirect_uris).to eq([ "https://old.example.com" ])
+      end
     end
   end
 end
