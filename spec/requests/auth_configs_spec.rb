@@ -60,7 +60,7 @@ RSpec.describe "AuthConfigs", type: :request do
 
       job = project.provisioning_jobs.order(:id).last
       expect(job.operation).to eq("update")
-      expect(job.provisioning_steps.pluck(:name)).to eq(%w[
+      expect(job.provisioning_steps.order(:step_order, :id).pluck(:name)).to eq(%w[
         keycloak_client_update
         config_server_apply
         health_check

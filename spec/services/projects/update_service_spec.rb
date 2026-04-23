@@ -59,7 +59,7 @@ RSpec.describe Projects::UpdateService do
       it "seeds provisioning_steps per the update plan" do
         described_class.new(project: project, params: params, current_user_sub: user_sub).call
         job = project.provisioning_jobs.last
-        expect(job.provisioning_steps.pluck(:name)).to eq(%w[
+        expect(job.provisioning_steps.order(:step_order, :id).pluck(:name)).to eq(%w[
           keycloak_client_update
           config_server_apply
           health_check
