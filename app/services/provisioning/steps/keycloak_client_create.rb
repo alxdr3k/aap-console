@@ -29,12 +29,17 @@ module Provisioning
         uuid = step_record.result_snapshot&.dig("keycloak_client_uuid")
         return false unless uuid
 
-        keycloak = KeycloakClient.new
         auth_config = project.project_auth_config
         return false unless auth_config&.keycloak_client_id
 
-        clients = keycloak.get_client_by_client_id(client_id: auth_config.keycloak_client_id)
-        clients.any?
+        # KeycloakClient#get_client_by_client_id takes a positional client_id
+        # and either returns a single Hash or raises NotFoundError. Passing
+        # a keyword arg lands as a Hash in the positional slot, and treating
+        # the return value as an array was broken on both counts.
+        KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
+        true
+      rescue BaseClient::NotFoundError
+        false
       rescue BaseClient::ApiError
         false
       end
