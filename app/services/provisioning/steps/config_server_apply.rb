@@ -8,6 +8,11 @@ module Provisioning
           return { skipped: true, reason: "no LiteLLM params in update operation" }
         end
 
+        existing = step_record.result_snapshot
+        if resume_local_persistence?(existing)
+          return resume_from_snapshot(existing)
+        end
+
         client = ConfigServerClient.new
         org = project.organization
 
@@ -30,29 +35,24 @@ module Provisioning
 
         version_id = response["version"]
 
-        # Persist the side-effect snapshot before any local DB write so that
-        # RollbackRunner can undo the Config Server change even if the
-        # ConfigVersion insert below raises (e.g. concurrent project delete,
-        # SQLite busy, validation error).
-        snapshot = {
+        # Phase 1: record the external side effect BEFORE attempting any
+        # local DB write. RollbackRunner uses this snapshot to undo the
+        # Config Server change even if Phase 2 raises. `local_persisted: false`
+        # is the flag that distinguishes "external happened" from "step done"
+        # so already_completed? cannot mistakenly skip a half-applied step.
+        partial_snapshot = {
           version_id: version_id,
           previous_version_id: previous_version_id,
           applied: true,
+          local_persisted: false,
           config_snapshot: config
         }
-        record_external_side_effect(snapshot)
+        record_external_side_effect(partial_snapshot)
 
-        ConfigVersion.create!(
-          project: project,
-          provisioning_job: step_record.provisioning_job,
-          version_id: version_id,
-          change_type: step_record.provisioning_job.operation,
-          change_summary: build_change_summary,
-          changed_by_sub: params[:current_user_sub] || "system",
-          snapshot: config
-        )
+        # Phase 2: local persistence.
+        finalize_local_persistence!(version_id: version_id, config: config)
 
-        snapshot
+        partial_snapshot.merge(local_persisted: true)
       end
 
       def rollback
@@ -86,10 +86,54 @@ module Provisioning
       end
 
       def already_completed?
-        step_record.result_snapshot&.dig("applied") == true
+        snap = step_record.result_snapshot
+        return false unless snap
+
+        # Both halves must be true. "applied" alone means the external
+        # Config Server mutation happened; without "local_persisted" the
+        # matching ConfigVersion row is missing and downstream reads
+        # (LitellmConfigsController#show, merged update base) would be wrong.
+        snap["applied"] == true && snap["local_persisted"] == true
       end
 
       private
+
+      def resume_local_persistence?(snap)
+        snap.is_a?(Hash) &&
+          snap["applied"] == true &&
+          snap["local_persisted"] != true
+      end
+
+      # Resumes Phase 2 (local ConfigVersion insert) from a snapshot that
+      # was already committed to disk after the external apply succeeded.
+      # Does NOT re-call Config Server — apply_changes is idempotent by
+      # idempotency key but skipping the network round-trip is cheaper and
+      # keeps the semantics of this method honest.
+      def resume_from_snapshot(snap)
+        version_id = snap["version_id"]
+        config = snap["config_snapshot"] || {}
+
+        finalize_local_persistence!(version_id: version_id, config: config)
+
+        snap.merge("local_persisted" => true)
+      end
+
+      def finalize_local_persistence!(version_id:, config:)
+        # Idempotent: tolerate a prior successful attempt that crashed
+        # after ConfigVersion.create! but before the :completed transition.
+        return if project.config_versions.exists?(version_id: version_id)
+
+        ConfigVersion.create!(
+          project: project,
+          provisioning_job: step_record.provisioning_job,
+          version_id: version_id,
+          change_type: step_record.provisioning_job.operation,
+          change_summary: build_change_summary,
+          changed_by_sub: params[:current_user_sub] || "system",
+          snapshot: config
+        )
+      end
+
 
       def skip_for_update?
         step_record.provisioning_job.operation == "update" &&

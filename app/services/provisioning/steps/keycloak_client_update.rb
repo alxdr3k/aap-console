@@ -10,6 +10,11 @@ module Provisioning
         uuid = auth_config.keycloak_client_uuid
         return { skipped: true, reason: "no_uuid" } unless uuid
 
+        existing = step_record.result_snapshot
+        if resume_local_persistence?(existing)
+          return resume_from_snapshot(existing, auth_config)
+        end
+
         keycloak = KeycloakClient.new
 
         previous_state = keycloak.get_client_by_client_id(auth_config.keycloak_client_id)
@@ -18,26 +23,25 @@ module Provisioning
 
         keycloak.update_client(uuid: uuid, attributes: build_update_payload)
 
-        # Persist rollback metadata before the local DB write so that
-        # RollbackRunner can restore the Keycloak client even if the
-        # auth_config.update! below raises.
-        snapshot = {
+        # Phase 1: persist rollback metadata + "external happened" marker
+        # before any local DB write so that RollbackRunner can restore the
+        # Keycloak client even if Phase 2 (auth_config.update!) raises.
+        # `local_persisted: false` keeps already_completed? from mistakenly
+        # skipping a half-applied step on resume.
+        partial_snapshot = {
           updated: true,
+          local_persisted: false,
           keycloak_client_uuid: uuid,
           previous_state: previous_state,
           previous_redirect_uris: previous_redirect_uris,
           previous_post_logout_redirect_uris: previous_post_logout_redirect_uris
         }
-        record_external_side_effect(snapshot)
+        record_external_side_effect(partial_snapshot)
 
-        db_updates = {}
-        db_updates[:redirect_uris] = params[:redirect_uris] if params.key?(:redirect_uris)
-        if params.key?(:post_logout_redirect_uris)
-          db_updates[:post_logout_redirect_uris] = params[:post_logout_redirect_uris]
-        end
-        auth_config.update!(db_updates) if db_updates.any?
+        # Phase 2: local DB mirror.
+        apply_local_db_updates!(auth_config)
 
-        snapshot
+        partial_snapshot.merge(local_persisted: true)
       end
 
       def rollback
@@ -68,14 +72,45 @@ module Provisioning
       end
 
       def already_completed?
-        step_record.result_snapshot&.dig("updated") == true ||
-          step_record.result_snapshot&.dig("skipped") == true
+        snap = step_record.result_snapshot
+        return false unless snap
+        return true if snap["skipped"] == true
+
+        # Both halves must be true. "updated" alone means the Keycloak
+        # mutation happened but the DB mirror (redirect_uris / post_logout)
+        # is missing, which would let subsequent reads and merges diverge
+        # from the real Keycloak client.
+        snap["updated"] == true && snap["local_persisted"] == true
       end
 
       private
 
       def auth_config_params_present?
         params.key?(:redirect_uris) || params.key?(:post_logout_redirect_uris)
+      end
+
+      def resume_local_persistence?(snap)
+        snap.is_a?(Hash) &&
+          snap["updated"] == true &&
+          snap["local_persisted"] != true
+      end
+
+      # Resumes Phase 2 from a snapshot that was already committed to disk
+      # after Keycloak accepted the update. Does not re-call Keycloak: the
+      # mutation already succeeded once. auth_config.update! is idempotent
+      # for the same values, so repeated resume attempts are safe.
+      def resume_from_snapshot(snap, auth_config)
+        apply_local_db_updates!(auth_config)
+        snap.merge("local_persisted" => true)
+      end
+
+      def apply_local_db_updates!(auth_config)
+        db_updates = {}
+        db_updates[:redirect_uris] = params[:redirect_uris] if params.key?(:redirect_uris)
+        if params.key?(:post_logout_redirect_uris)
+          db_updates[:post_logout_redirect_uris] = params[:post_logout_redirect_uris]
+        end
+        auth_config.update!(db_updates) if db_updates.any?
       end
 
       def build_update_payload

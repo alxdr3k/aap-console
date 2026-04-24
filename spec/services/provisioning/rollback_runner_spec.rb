@@ -125,6 +125,23 @@ RSpec.describe Provisioning::RollbackRunner do
         expect(result).to be(true)
         expect(step.reload.status).to eq("failed")
       end
+
+      it "also rolls back retrying steps with a side-effect snapshot" do
+        step = create(:provisioning_step, :config_server_apply, provisioning_job: job,
+                      status: :retrying,
+                      result_snapshot: { "applied" => true, "version_id" => "v-retry-leak" })
+
+        rollback_called = false
+        allow_any_instance_of(Provisioning::Steps::ConfigServerApply).to receive(:rollback) {
+          rollback_called = true
+        }
+
+        result = described_class.new(provisioning_job: job).run
+
+        expect(result).to be(true)
+        expect(rollback_called).to be(true)
+        expect(step.reload.status).to eq("rolled_back")
+      end
     end
   end
 end
