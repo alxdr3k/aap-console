@@ -5,11 +5,11 @@ module Provisioning
     end
 
     def run
-      completed_steps = @provisioning_job.provisioning_steps
-                                         .where(status: [ :completed, :skipped ])
+      candidate_steps = @provisioning_job.provisioning_steps
                                          .order(step_order: :desc)
+                                         .select { |s| eligible_for_rollback?(s) }
 
-      completed_steps.each do |step|
+      candidate_steps.each do |step|
         rollback_step(step)
       end
 
@@ -20,6 +20,24 @@ module Provisioning
     end
 
     private
+
+    # A step is rolled back when:
+    # - it cleanly completed (the typical case), OR
+    # - it was skipped (idempotent re-entry — treat as completed), OR
+    # - it failed but left a result_snapshot, meaning the external side
+    #   effect succeeded before a later (local DB) write raised. Without
+    #   this branch, partial side effects would leak out of the all-or-
+    #   nothing pipeline (HLD §5.1, FR-7.2).
+    def eligible_for_rollback?(step)
+      case step.status
+      when "completed", "skipped"
+        true
+      when "failed", "retrying"
+        step.result_snapshot.present?
+      else
+        false
+      end
+    end
 
     def rollback_step(step)
       step_impl = build_step_impl(step)

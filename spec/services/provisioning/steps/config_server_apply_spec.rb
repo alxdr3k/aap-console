@@ -68,6 +68,27 @@ RSpec.describe Provisioning::Steps::ConfigServerApply do
         expect(result[:version_id]).to eq("v-create-1")
       end
     end
+
+    context "when external apply succeeds but the local ConfigVersion insert raises" do
+      let(:job) { create(:provisioning_job, :create, project: project) }
+
+      it "persists the side-effect snapshot to the step before raising so RollbackRunner can undo the external change" do
+        stub_config_server_apply_changes(version: "v-leak-1")
+        allow(ConfigVersion).to receive(:create!).and_raise(
+          ActiveRecord::RecordInvalid.new(ConfigVersion.new)
+        )
+
+        step_record = create(:provisioning_step, :config_server_apply, provisioning_job: job)
+        step = described_class.new(step_record: step_record, project: project,
+                                   params: { models: [ "gpt-4" ], s3_retention_days: 90 })
+
+        expect { step.execute }.to raise_error(ActiveRecord::RecordInvalid)
+
+        step_record.reload
+        expect(step_record.result_snapshot).to include("applied" => true,
+                                                      "version_id" => "v-leak-1")
+      end
+    end
   end
 
   describe "#rollback" do

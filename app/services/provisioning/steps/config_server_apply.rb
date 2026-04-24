@@ -30,6 +30,18 @@ module Provisioning
 
         version_id = response["version"]
 
+        # Persist the side-effect snapshot before any local DB write so that
+        # RollbackRunner can undo the Config Server change even if the
+        # ConfigVersion insert below raises (e.g. concurrent project delete,
+        # SQLite busy, validation error).
+        snapshot = {
+          version_id: version_id,
+          previous_version_id: previous_version_id,
+          applied: true,
+          config_snapshot: config
+        }
+        record_external_side_effect(snapshot)
+
         ConfigVersion.create!(
           project: project,
           provisioning_job: step_record.provisioning_job,
@@ -40,7 +52,7 @@ module Provisioning
           snapshot: config
         )
 
-        { version_id: version_id, previous_version_id: previous_version_id, applied: true }
+        snapshot
       end
 
       def rollback

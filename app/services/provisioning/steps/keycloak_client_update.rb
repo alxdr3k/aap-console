@@ -18,6 +18,18 @@ module Provisioning
 
         keycloak.update_client(uuid: uuid, attributes: build_update_payload)
 
+        # Persist rollback metadata before the local DB write so that
+        # RollbackRunner can restore the Keycloak client even if the
+        # auth_config.update! below raises.
+        snapshot = {
+          updated: true,
+          keycloak_client_uuid: uuid,
+          previous_state: previous_state,
+          previous_redirect_uris: previous_redirect_uris,
+          previous_post_logout_redirect_uris: previous_post_logout_redirect_uris
+        }
+        record_external_side_effect(snapshot)
+
         db_updates = {}
         db_updates[:redirect_uris] = params[:redirect_uris] if params.key?(:redirect_uris)
         if params.key?(:post_logout_redirect_uris)
@@ -25,13 +37,7 @@ module Provisioning
         end
         auth_config.update!(db_updates) if db_updates.any?
 
-        {
-          updated: true,
-          keycloak_client_uuid: uuid,
-          previous_state: previous_state,
-          previous_redirect_uris: previous_redirect_uris,
-          previous_post_logout_redirect_uris: previous_post_logout_redirect_uris
-        }
+        snapshot
       end
 
       def rollback

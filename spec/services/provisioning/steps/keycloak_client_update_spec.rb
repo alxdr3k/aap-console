@@ -102,6 +102,25 @@ RSpec.describe Provisioning::Steps::KeycloakClientUpdate do
         expect(result[:updated]).to be(true)
         expect(result[:keycloak_client_uuid]).to eq(uuid)
       end
+
+      it "persists the side-effect snapshot to the step before raising when the local DB write fails" do
+        allow_any_instance_of(ProjectAuthConfig).to receive(:update!).and_raise(
+          ActiveRecord::RecordInvalid.new(ProjectAuthConfig.new)
+        )
+
+        step_record = create(:provisioning_step, :keycloak_client_update, provisioning_job: job)
+        step = described_class.new(step_record: step_record, project: project,
+                                   params: { redirect_uris: [ "https://new.example.com/cb" ] })
+
+        expect { step.execute }.to raise_error(ActiveRecord::RecordInvalid)
+
+        step_record.reload
+        expect(step_record.result_snapshot).to include(
+          "updated" => true,
+          "keycloak_client_uuid" => uuid,
+          "previous_redirect_uris" => [ "https://old.example.com/cb" ]
+        )
+      end
     end
   end
 
