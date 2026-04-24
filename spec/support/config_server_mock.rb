@@ -13,7 +13,7 @@ module ConfigServerMock
   end
 
   def stub_config_server_delete_changes
-    stub_request(:delete, "#{ADMIN_BASE}/changes")
+    stub_request(:delete, /api\/v1\/admin\/changes/)
       .to_return(
         status: 200,
         body: { version: "v-deleted-#{SecureRandom.hex(4)}" }.to_json,

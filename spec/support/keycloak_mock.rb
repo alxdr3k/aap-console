@@ -83,6 +83,12 @@ module KeycloakMock
     user_sub
   end
 
+  def stub_keycloak_update_client(uuid:)
+    stub_keycloak_token
+    stub_request(:put, "#{BASE}/clients/#{uuid}")
+      .to_return(status: 204)
+  end
+
   def stub_keycloak_regenerate_client_secret(uuid:, secret: "new-client-secret")
     stub_keycloak_token
     stub_request(:post, "#{BASE}/clients/#{uuid}/client-secret")

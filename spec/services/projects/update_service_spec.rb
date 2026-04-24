@@ -59,7 +59,7 @@ RSpec.describe Projects::UpdateService do
       it "seeds provisioning_steps per the update plan" do
         described_class.new(project: project, params: params, current_user_sub: user_sub).call
         job = project.provisioning_jobs.last
-        expect(job.provisioning_steps.pluck(:name)).to eq(%w[
+        expect(job.provisioning_steps.order(:step_order, :id).pluck(:name)).to eq(%w[
           keycloak_client_update
           config_server_apply
           health_check
@@ -74,6 +74,34 @@ RSpec.describe Projects::UpdateService do
         result = described_class.new(project: project, params: { name: "New Name" }, current_user_sub: user_sub).call
         expect(result).to be_failure
         expect(result.error).to include("deleted")
+      end
+    end
+
+    context "with auth config fields (redirect_uris)" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:params) { { redirect_uris: [ "https://app.example.com/cb" ], post_logout_redirect_uris: [ "https://app.example.com" ] } }
+
+      it "does not persist redirect URIs to DB immediately (write is deferred to provisioning step)" do
+        described_class.new(project: project, params: params, current_user_sub: user_sub).call
+        config = project.project_auth_config.reload
+        expect(config.redirect_uris).to be_nil
+        expect(config.post_logout_redirect_uris).to be_nil
+      end
+
+      it "does not permit keycloak_client_id or keycloak_client_uuid to be changed" do
+        original_uuid = auth_config.keycloak_client_uuid
+        described_class.new(
+          project: project,
+          params: params.merge(keycloak_client_id: "evil", keycloak_client_uuid: "evil-uuid"),
+          current_user_sub: user_sub
+        ).call
+        expect(auth_config.reload.keycloak_client_uuid).to eq(original_uuid)
+      end
+
+      it "enqueues a provisioning job for auth config changes" do
+        expect {
+          described_class.new(project: project, params: params, current_user_sub: user_sub).call
+        }.to change(ProvisioningJob, :count).by(1)
       end
     end
 

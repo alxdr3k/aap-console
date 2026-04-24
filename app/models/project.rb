@@ -42,6 +42,13 @@ class Project < ApplicationRecord
   end
 
   def generate_slug
-    self.slug = name.downcase.gsub(/[^a-z0-9\s-]/, "").gsub(/\s+/, "-").gsub(/-+/, "-").strip.delete_prefix("-").delete_suffix("-")
+    base = name.downcase.gsub(/[^a-z0-9\s-]/, "").gsub(/\s+/, "-").gsub(/-+/, "-").strip.delete_prefix("-").delete_suffix("-")
+    candidate = base
+    counter = 2
+    while organization&.projects&.exists?(slug: candidate)
+      candidate = "#{base}-#{counter}"
+      counter += 1
+    end
+    self.slug = candidate
   end
 end

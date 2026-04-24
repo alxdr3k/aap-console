@@ -21,6 +21,11 @@ FactoryBot.define do
       step_order { 2 }
     end
 
+    trait :keycloak_client_update do
+      name { "keycloak_client_update" }
+      step_order { 1 }
+    end
+
     trait :config_server_apply do
       name { "config_server_apply" }
       step_order { 3 }

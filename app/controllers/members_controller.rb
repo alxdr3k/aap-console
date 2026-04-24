@@ -41,42 +41,46 @@ class MembersController < ApplicationController
   def update
     new_role = params.require(:member).permit(:role)[:role]
 
-    if demoting_last_admin?(@membership, new_role)
-      return render json: { error: "Cannot demote the last admin of this organization" },
-                    status: :unprocessable_entity
-    end
+    @organization.with_lock do
+      if demoting_last_admin?(@membership, new_role)
+        return render json: { error: "Cannot demote the last admin of this organization" },
+                      status: :unprocessable_entity
+      end
 
-    if @membership.update(role: new_role)
-      AuditLog.create!(
-        organization: @organization,
-        user_sub: Current.user_sub,
-        action: "member.update",
-        resource_type: "OrgMembership",
-        resource_id: @membership.id.to_s,
-        details: { user_sub: @membership.user_sub, role: @membership.role }
-      )
-      render json: @membership
-    else
-      render json: { errors: @membership.errors.full_messages }, status: :unprocessable_entity
+      if @membership.update(role: new_role)
+        AuditLog.create!(
+          organization: @organization,
+          user_sub: Current.user_sub,
+          action: "member.update",
+          resource_type: "OrgMembership",
+          resource_id: @membership.id.to_s,
+          details: { user_sub: @membership.user_sub, role: @membership.role }
+        )
+        render json: @membership
+      else
+        render json: { errors: @membership.errors.full_messages }, status: :unprocessable_entity
+      end
     end
   end
 
   def destroy
-    if removing_last_admin?(@membership)
-      return render json: { error: "Cannot remove the last admin of this organization" },
-                    status: :unprocessable_entity
-    end
+    @organization.with_lock do
+      if removing_last_admin?(@membership)
+        return render json: { error: "Cannot remove the last admin of this organization" },
+                      status: :unprocessable_entity
+      end
 
-    @membership.destroy!
-    AuditLog.create!(
-      organization: @organization,
-      user_sub: Current.user_sub,
-      action: "member.remove",
-      resource_type: "OrgMembership",
-      resource_id: @membership.id.to_s,
-      details: { removed_user_sub: @membership.user_sub }
-    )
-    render json: { message: "Member removed" }
+      @membership.destroy!
+      AuditLog.create!(
+        organization: @organization,
+        user_sub: Current.user_sub,
+        action: "member.remove",
+        resource_type: "OrgMembership",
+        resource_id: @membership.id.to_s,
+        details: { removed_user_sub: @membership.user_sub }
+      )
+      render json: { message: "Member removed" }
+    end
   end
 
   private
