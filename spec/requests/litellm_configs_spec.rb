@@ -18,6 +18,18 @@ RSpec.describe "LitellmConfigs", type: :request do
       expect(response).to have_http_status(:ok)
     end
 
+    it "returns the latest config_version snapshot at the response root" do
+      create(:config_version,
+             project: project,
+             version_id: "v-1",
+             snapshot: { "models" => [ "azure-gpt4" ], "s3_retention_days" => 90,
+                         "s3_path" => "#{org.slug}/#{project.slug}/", "app_id" => project.app_id })
+      get "/organizations/#{org.slug}/projects/#{project.slug}/litellm_config"
+      body = JSON.parse(response.body)
+      expect(body["models"]).to eq([ "azure-gpt4" ])
+      expect(body["s3_retention_days"]).to eq(90)
+    end
+
     it "returns 403 for member without project permission" do
       other_project = create(:project, :active, organization: org)
       get "/organizations/#{org.slug}/projects/#{other_project.slug}/litellm_config"
@@ -31,11 +43,14 @@ RSpec.describe "LitellmConfigs", type: :request do
       create(:project_permission, org_membership: membership, project: project, role: "write")
     end
 
-    it "enqueues update provisioning and redirects" do
+    it "enqueues update provisioning and returns 202 with provisioning_job_id" do
       patch "/organizations/#{org.slug}/projects/#{project.slug}/litellm_config",
             params: { litellm_config: { models: [ "azure-gpt4" ], s3_retention_days: 90 } }
-      expect(response).to have_http_status(:see_other)
-      expect(project.provisioning_jobs.where(operation: "update").count).to eq(1)
+      expect(response).to have_http_status(:accepted)
+      job = project.provisioning_jobs.where(operation: "update").last
+      expect(job).to be_present
+      body = JSON.parse(response.body)
+      expect(body["provisioning_job_id"]).to eq(job.id)
     end
 
     it "returns 403 for read-only member" do
