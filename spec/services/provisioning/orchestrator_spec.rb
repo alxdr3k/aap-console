@@ -146,5 +146,42 @@ RSpec.describe Provisioning::Orchestrator do
         expect(project.reload.status).to eq("update_pending")
       end
     end
+
+    context "when Config Server rollback fails (no RollbackRunner stub — full propagation path)" do
+      let(:update_job) { create(:provisioning_job, :pending, project: project, operation: "update") }
+
+      before do
+        project.update!(status: :update_pending)
+        Provisioning::StepSeeder.call!(update_job)
+
+        # Pre-complete config_server_apply to simulate that it ran successfully before the
+        # forward failure occurred. RollbackRunner will find this step and attempt to revert it.
+        update_job.provisioning_steps.find_by(name: "config_server_apply").update!(
+          status: :completed,
+          result_snapshot: {
+            "applied" => true,
+            "previous_version_id" => "v-prev-1",
+            "version_id" => "v-new-1"
+          }
+        )
+      end
+
+      it "marks job rollback_failed and leaves project in update_pending" do
+        allow_any_instance_of(Provisioning::StepRunner).to receive(:execute) do |runner|
+          step_record = runner.instance_variable_get(:@step)
+          { status: :failed, step: step_record, error: StandardError.new("keycloak down") }
+        end
+
+        stub_config_server_revert_changes_failure(status: 500)
+
+        described_class.new(provisioning_job: update_job).run
+
+        expect(update_job.reload.status).to eq("rollback_failed")
+        expect(project.reload.status).to eq("update_pending")
+
+        config_step = update_job.provisioning_steps.find_by(name: "config_server_apply")
+        expect(config_step.reload.status).to eq("rollback_failed")
+      end
+    end
   end
 end

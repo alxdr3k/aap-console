@@ -18,8 +18,7 @@ class LitellmConfigsController < ApplicationController
     ).call
 
     if result.success?
-      project = result.data
-      provisioning_job = project.provisioning_jobs.where(operation: "update").last
+      provisioning_job = result.data[:provisioning_job]
       if provisioning_job
         redirect_to provisioning_job_path(provisioning_job), status: :see_other
       else

@@ -30,6 +30,24 @@ module ConfigServerMock
       )
   end
 
+  def stub_config_server_revert_changes_failure(status: 500)
+    stub_request(:post, "#{ADMIN_BASE}/changes/revert")
+      .to_return(
+        status: status,
+        body: { error: "internal error" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+  end
+
+  def stub_config_server_delete_changes_failure(status: 500)
+    stub_request(:delete, /api\/v1\/admin\/changes/)
+      .to_return(
+        status: status,
+        body: { error: "internal error" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+  end
+
   def stub_config_server_app_registry_webhook
     stub_request(:post, "#{ADMIN_BASE}/app-registry/webhook")
       .to_return(

@@ -52,11 +52,20 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(original.keycloak_client_uuid).to eq("server-owned-uuid")
     end
 
-    it "enqueues an update provisioning job when redirect_uris change" do
+    it "returns 202 Accepted with provisioning_job_id when redirect_uris change" do
       expect {
         patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
               params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } }
       }.to change(ProvisioningJob, :count).by(1)
+
+      expect(response).to have_http_status(:accepted)
+      body = JSON.parse(response.body)
+      expect(body["provisioning_job_id"]).to eq(project.provisioning_jobs.order(:id).last.id)
+    end
+
+    it "seeds the correct steps for a redirect_uri update" do
+      patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+            params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } }
 
       job = project.provisioning_jobs.order(:id).last
       expect(job.operation).to eq("update")

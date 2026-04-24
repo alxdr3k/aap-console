@@ -1,7 +1,7 @@
 # AAP Console — 구현 상태 매트릭스
 
-> **Version**: 1.0
-> **Date**: 2026-04-23
+> **Version**: 1.1
+> **Date**: 2026-04-24
 > **Status**: Draft
 > **목적**: PRD/HLD/UI Spec 에서 기술한 기능이 현재 코드베이스에서 어느 단계(구현 완료 / 부분 구현 / 미구현)인지 한눈에 파악하기 위한 문서. 외부 리뷰어와 신규 온보딩 개발자가 "문서상 존재하는 기능"과 "실제 동작하는 기능"을 혼동하지 않도록 한다.
 
@@ -46,17 +46,17 @@
 | `Provisioning::StepSeeder` | ✅ | create/update/delete 플랜. idempotent |
 | `Provisioning::Orchestrator` | ✅ | 빈 step 가드, exception → rollback, Rails executor 래핑, health_check severity |
 | `Provisioning::StepRunner` | ✅ | Inline retry (≤ 8s) + Scheduled retry (SolidQueue re-enqueue) |
-| `Provisioning::RollbackRunner` | ✅ | 완료 step 역순 rollback |
+| `Provisioning::RollbackRunner` | ✅ | 완료 step 역순 rollback. step 실패 시 `rollback_failed` 마킹 후 `false` 반환 → Orchestrator 가 job 을 `rollback_failed` 로 전환 |
 | `Provisioning::Steps::KeycloakClientCreate` | 🟡 | OIDC 기본 경로만. SAML/OAuth/PAK 분기 추가 필요 |
 | `Provisioning::Steps::LangfuseProjectCreate` | ✅ | SK/PK ephemeral 전달 |
-| `Provisioning::Steps::ConfigServerApply` | ✅ | Idempotency key 포함 |
+| `Provisioning::Steps::ConfigServerApply` | ✅ | Idempotency key 포함. rollback 실패 시 `BaseClient::ApiError` re-raise → `RollbackRunner` 가 step 을 `rollback_failed` 로 마킹하고 `false` 반환 |
 | `Provisioning::Steps::HealthCheck` | 🟡 | 기본 ping 수준. 서비스별 상세 검증 미구현 |
 | `KeycloakClient` | ✅ | 사용자 검색/조회/사전 생성, Client CRUD |
 | `LangfuseClient` | ✅ | tRPC (NextAuth 세션 쿠키). Thread-safety Mutex 적용 |
 | `ConfigServerClient` | ✅ | Admin API write + 읽기 API |
 | `ProvisioningChannel` (ActionCable) | ✅ | 인가 검증 포함 |
 | `Projects::CreateService` / `UpdateService` / `DestroyService` | ✅ | StepSeeder 통합 완료 |
-| `AuthConfigsController` | ✅ | Keycloak 식별자는 server-owned, mutation 은 provisioning update 로 위임 |
+| `AuthConfigsController` | ✅ | Keycloak 식별자는 server-owned. `PATCH auth_config` 는 프로비저닝을 트리거하는 경우 202 Accepted + `provisioning_job_id` 반환, no-op 는 200 OK |
 | `MembersController` | ✅ | last-admin + self-demotion guard |
 | `ProjectApiKeysController` | ⏳ | 없음. PRD FR-4 PAK 기능 미구현 |
 | `PlaygroundsController` | ⏳ | 없음. FR-10 전체 미구현 |
@@ -77,6 +77,8 @@
 - [x] Members 마지막 admin 방어
 - [x] Project slug scoped uniqueness + app_id 재시도 상한
 - [x] StepRunner 재시도가 worker 를 sleep 으로 장기 점유하지 않음
+- [x] Config Server rollback 실패 시 `BaseClient::ApiError` 전파 경로 완결 (`rollback_failed` 로 정확히 전환)
+- [x] `AuthConfigsController#update` 비동기 응답 — 202 Accepted + `provisioning_job_id` (stale 200 제거)
 - [ ] 외부 리뷰어 피드백 재검증 (통합 smoke)
 - [ ] FR-9 Health Check 실제 검증 로직 구현
 - [ ] FR-8 config 롤백의 Keycloak/Langfuse 복구 경로 완결

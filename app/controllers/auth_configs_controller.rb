@@ -28,7 +28,12 @@ class AuthConfigsController < ApplicationController
     ).call
 
     if result.success?
-      render json: config.reload
+      provisioning_job = result.data[:provisioning_job]
+      if provisioning_job
+        render json: { provisioning_job_id: provisioning_job.id }, status: :accepted
+      else
+        render json: { message: "Auth config updated" }, status: :ok
+      end
     else
       render json: { error: result.error }, status: :unprocessable_entity
     end
