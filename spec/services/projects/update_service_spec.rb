@@ -9,6 +9,12 @@ RSpec.describe Projects::UpdateService do
     context "with metadata-only changes (name, description)" do
       let(:params) { { name: "New Name", description: "New desc" } }
 
+      it "returns nil provisioning_job in result.data when no provisioning is needed" do
+        result = described_class.new(project: project, params: params, current_user_sub: user_sub).call
+        expect(result.data[:project]).to eq(project)
+        expect(result.data[:provisioning_job]).to be_nil
+      end
+
       it "updates the project name without provisioning" do
         result = described_class.new(project: project, params: params, current_user_sub: user_sub).call
         expect(result).to be_success
@@ -34,6 +40,13 @@ RSpec.describe Projects::UpdateService do
 
     context "with external fields requiring provisioning" do
       let(:params) { { models: [ "gpt-4" ], s3_retention_days: 30 } }
+
+      it "returns the new provisioning job in result.data[:provisioning_job]" do
+        result = described_class.new(project: project, params: params, current_user_sub: user_sub).call
+        expect(result.data[:project]).to eq(project)
+        expect(result.data[:provisioning_job]).to be_a(ProvisioningJob)
+        expect(result.data[:provisioning_job].operation).to eq("update")
+      end
 
       it "creates a provisioning job with update operation" do
         expect {

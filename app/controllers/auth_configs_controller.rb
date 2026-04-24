@@ -28,8 +28,7 @@ class AuthConfigsController < ApplicationController
     ).call
 
     if result.success?
-      project = result.data
-      provisioning_job = project.provisioning_jobs.where(operation: "update").last
+      provisioning_job = result.data[:provisioning_job]
       if provisioning_job
         render json: { provisioning_job_id: provisioning_job.id }, status: :accepted
       else

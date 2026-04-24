@@ -20,6 +20,8 @@ module Projects
         return Result.failure("Another provisioning job is in progress") if active_job_exists?
       end
 
+      provisioning_job = nil
+
       ActiveRecord::Base.transaction do
         update_project_metadata if metadata_params.any?
 
@@ -47,7 +49,7 @@ module Projects
         )
       end
 
-      Result.success(@project)
+      Result.success({ project: @project, provisioning_job: provisioning_job })
     rescue ActiveRecord::RecordInvalid => e
       Result.failure(e.message)
     end
