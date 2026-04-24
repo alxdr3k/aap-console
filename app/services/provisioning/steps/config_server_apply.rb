@@ -68,8 +68,9 @@ module Provisioning
             idempotency_key: "config-delete-#{step_record.id}"
           )
         end
-      rescue BaseClient::ApiError
-        Rails.logger.error "Config server rollback failed for project #{project.id}"
+      rescue BaseClient::ApiError => e
+        Rails.logger.error "Config server rollback failed for project #{project.id}: #{e.class}: #{e.message}"
+        raise
       end
 
       def already_completed?

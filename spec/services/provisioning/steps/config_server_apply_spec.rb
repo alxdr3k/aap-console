@@ -135,5 +135,30 @@ RSpec.describe Provisioning::Steps::ConfigServerApply do
         expect(a_request(:any, //)).not_to have_been_made
       end
     end
+
+    context "when Config Server returns a server error on revert (update operation)" do
+      let(:job) { create(:provisioning_job, :update, project: project) }
+
+      it "re-raises BaseClient::ApiError so RollbackRunner can mark the step rollback_failed" do
+        stub_config_server_revert_changes_failure(status: 500)
+        step_record = create(:provisioning_step, :config_server_apply, provisioning_job: job,
+                             result_snapshot: { "applied" => true, "previous_version_id" => "v-prev-abc",
+                                               "version_id" => "v-new-123" })
+        step = described_class.new(step_record: step_record, project: project, params: {})
+        expect { step.rollback }.to raise_error(BaseClient::ApiError)
+      end
+    end
+
+    context "when Config Server returns a server error on delete (create operation)" do
+      let(:job) { create(:provisioning_job, :create, project: project) }
+
+      it "re-raises BaseClient::ApiError so RollbackRunner can mark the step rollback_failed" do
+        stub_config_server_delete_changes_failure(status: 500)
+        step_record = create(:provisioning_step, :config_server_apply, provisioning_job: job,
+                             result_snapshot: { "applied" => true, "version_id" => "v-create-1" })
+        step = described_class.new(step_record: step_record, project: project, params: {})
+        expect { step.rollback }.to raise_error(BaseClient::ApiError)
+      end
+    end
   end
 end
