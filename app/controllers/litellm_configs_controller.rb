@@ -6,10 +6,13 @@ class LitellmConfigsController < ApplicationController
 
   def show
     latest_version = @project.config_versions.order(created_at: :desc).first
-    config = latest_version&.snapshot&.fetch("litellm_config", {}) || {}
-    render json: config
+    render json: latest_version&.snapshot || {}
   end
 
+  # LiteLLM config mutations are routed through Projects::UpdateService and
+  # propagate via a provisioning job. The response mirrors AuthConfigsController#update:
+  # 202 Accepted + provisioning_job_id when a job is enqueued, 200 OK when nothing
+  # external needed to change. See docs/HLD.md §5.6.
   def update
     result = Projects::UpdateService.new(
       project: @project,
@@ -20,9 +23,9 @@ class LitellmConfigsController < ApplicationController
     if result.success?
       provisioning_job = result.data[:provisioning_job]
       if provisioning_job
-        redirect_to provisioning_job_path(provisioning_job), status: :see_other
+        render json: { provisioning_job_id: provisioning_job.id }, status: :accepted
       else
-        render json: { message: "Config updated" }
+        render json: { message: "Config updated" }, status: :ok
       end
     else
       render json: { errors: [ result.error ] }, status: :unprocessable_entity

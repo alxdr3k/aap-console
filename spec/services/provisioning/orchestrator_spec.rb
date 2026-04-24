@@ -147,6 +147,43 @@ RSpec.describe Provisioning::Orchestrator do
       end
     end
 
+    context "when a step returns :deferred (scheduled retry)" do
+      let(:update_job) { create(:provisioning_job, :pending, project: project, operation: "update") }
+      let(:original_params) do
+        { models: [ "azure-gpt4" ], s3_retention_days: 90, redirect_uris: [ "https://a.example/cb" ] }
+      end
+
+      before do
+        project.update!(status: :update_pending)
+        Provisioning::StepSeeder.call!(update_job)
+      end
+
+      it "re-enqueues ProvisioningExecuteJob with the original external params preserved" do
+        allow_any_instance_of(Provisioning::StepRunner).to receive(:execute) do |runner|
+          step_record = runner.instance_variable_get(:@step)
+          if step_record.name == "keycloak_client_update"
+            { status: :deferred, step: step_record, retry_count: 1, retry_in: 16 }
+          else
+            { status: :completed, step: step_record, ephemeral_params: {} }
+          end
+        end
+
+        expect(ProvisioningExecuteJob).to receive(:set).with(wait: 16.seconds).and_call_original
+        expect_any_instance_of(ActiveJob::ConfiguredJob).to receive(:perform_later).with(
+          update_job.id,
+          **original_params.merge(current_user_sub: "user-1")
+        )
+
+        described_class.new(
+          provisioning_job: update_job,
+          params: original_params.dup,
+          current_user_sub: "user-1"
+        ).run
+
+        expect(update_job.reload.status).to eq("retrying")
+      end
+    end
+
     context "when Config Server rollback fails (no RollbackRunner stub — full propagation path)" do
       let(:update_job) { create(:provisioning_job, :pending, project: project, operation: "update") }
 

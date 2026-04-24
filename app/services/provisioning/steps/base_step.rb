@@ -22,6 +22,17 @@ module Provisioning
         raise NotImplementedError, "#{self.class}#already_completed? is not implemented"
       end
 
+      # Persist a snapshot describing a side-effect that has already been
+      # applied to an external system. Steps must call this immediately
+      # after the external call returns success and before any local DB
+      # write that could raise. RollbackRunner uses the persisted snapshot
+      # to undo external state even if the surrounding step record never
+      # reaches `completed`.
+      def record_external_side_effect(snapshot)
+        step_record.update!(result_snapshot: snapshot)
+        snapshot
+      end
+
       private
 
       attr_reader :step_record, :project, :params

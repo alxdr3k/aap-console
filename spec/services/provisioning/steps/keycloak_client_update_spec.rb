@@ -102,6 +102,86 @@ RSpec.describe Provisioning::Steps::KeycloakClientUpdate do
         expect(result[:updated]).to be(true)
         expect(result[:keycloak_client_uuid]).to eq(uuid)
       end
+
+      it "persists the side-effect snapshot to the step before raising when the local DB write fails" do
+        allow_any_instance_of(ProjectAuthConfig).to receive(:update!).and_raise(
+          ActiveRecord::RecordInvalid.new(ProjectAuthConfig.new)
+        )
+
+        step_record = create(:provisioning_step, :keycloak_client_update, provisioning_job: job)
+        step = described_class.new(step_record: step_record, project: project,
+                                   params: { redirect_uris: [ "https://new.example.com/cb" ] })
+
+        expect { step.execute }.to raise_error(ActiveRecord::RecordInvalid)
+
+        step_record.reload
+        expect(step_record.result_snapshot).to include(
+          "updated" => true,
+          "local_persisted" => false,
+          "keycloak_client_uuid" => uuid,
+          "previous_redirect_uris" => [ "https://old.example.com/cb" ]
+        )
+      end
+    end
+
+    context "resume path (snapshot with updated: true but local_persisted: false)" do
+      let!(:auth_config) do
+        create(:project_auth_config, :oidc, project: project,
+               redirect_uris: [ "https://old.example.com/cb" ],
+               post_logout_redirect_uris: [ "https://old.example.com" ])
+      end
+
+      let(:uuid) { auth_config.keycloak_client_uuid }
+
+      it "re-runs local DB update without re-calling Keycloak" do
+        step_record = create(:provisioning_step, :keycloak_client_update, provisioning_job: job,
+                             result_snapshot: {
+                               "updated" => true,
+                               "local_persisted" => false,
+                               "keycloak_client_uuid" => uuid,
+                               "previous_state" => { "id" => uuid,
+                                                     "clientId" => auth_config.keycloak_client_id },
+                               "previous_redirect_uris" => [ "https://old.example.com/cb" ],
+                               "previous_post_logout_redirect_uris" => [ "https://old.example.com" ]
+                             })
+
+        step = described_class.new(step_record: step_record, project: project,
+                                   params: { redirect_uris: [ "https://new.example.com/cb" ] })
+
+        result = step.execute
+
+        expect(a_request(:put, /clients/)).not_to have_been_made
+        expect(a_request(:get, /clients/)).not_to have_been_made
+        expect(auth_config.reload.redirect_uris).to eq([ "https://new.example.com/cb" ])
+        expect(result["local_persisted"]).to be(true)
+      end
+    end
+  end
+
+  describe "#already_completed?" do
+    let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+
+    it "returns false when snapshot has updated: true but local_persisted: false" do
+      step_record = create(:provisioning_step, :keycloak_client_update, provisioning_job: job,
+                           result_snapshot: { "updated" => true, "local_persisted" => false,
+                                              "keycloak_client_uuid" => auth_config.keycloak_client_uuid })
+      step = described_class.new(step_record: step_record, project: project, params: {})
+      expect(step.already_completed?).to be(false)
+    end
+
+    it "returns true only when both updated and local_persisted are true" do
+      step_record = create(:provisioning_step, :keycloak_client_update, provisioning_job: job,
+                           result_snapshot: { "updated" => true, "local_persisted" => true,
+                                              "keycloak_client_uuid" => auth_config.keycloak_client_uuid })
+      step = described_class.new(step_record: step_record, project: project, params: {})
+      expect(step.already_completed?).to be(true)
+    end
+
+    it "still returns true for skipped snapshots (no external work to gate)" do
+      step_record = create(:provisioning_step, :keycloak_client_update, provisioning_job: job,
+                           result_snapshot: { "skipped" => true, "reason" => "pak_auth" })
+      step = described_class.new(step_record: step_record, project: project, params: {})
+      expect(step.already_completed?).to be(true)
     end
   end
 

@@ -29,14 +29,14 @@ module Provisioning
       end
 
       def already_completed?
-        uuid = project.project_auth_config&.keycloak_client_uuid
-        return true unless uuid
+        auth_config = project.project_auth_config
+        return true unless auth_config&.keycloak_client_uuid
 
         keycloak = KeycloakClient.new
-        clients = keycloak.get_client_by_client_id(
-          client_id: project.project_auth_config.keycloak_client_id
-        )
-        clients.empty?
+        keycloak.get_client_by_client_id(auth_config.keycloak_client_id)
+        false
+      rescue BaseClient::NotFoundError
+        true
       rescue BaseClient::ApiError
         false
       end

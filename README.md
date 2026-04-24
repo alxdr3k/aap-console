@@ -90,7 +90,19 @@ Project 생성/수정/삭제 요청은 `ProvisioningExecuteJob` → `Provisionin
 - 병렬 그룹은 동일 `step_order` 로 묶임 (Rails executor + connection pool 래핑)
 - 재시도는 backoff (≤ 8초는 inline, 이상은 SolidQueue scheduled re-enqueue)
 - 실패 시 `RollbackRunner` 가 완료된 step을 역순 롤백
+- `failed` step도 `result_snapshot` 이 남아있으면 롤백 대상에 포함되어 외부 side effect 가 누출되지 않는다 (atomicity gap 방지)
 - `health_check` 실패는 롤백 대신 `completed_with_warnings` 로 처리
+
+### 비동기 Update API 계약
+
+설정 변경(LiteLLM Config, 인증 설정)은 모두 비동기 프로비저닝으로 전파되며, 응답 계약이 통일되어 있다.
+
+| 엔드포인트 | 외부 전파가 필요한 변경 | 외부 전파가 없는 변경 |
+|-----------|----------------------|---------------------|
+| `PATCH /organizations/:org/projects/:slug/auth_config` | `202 Accepted` + `{ provisioning_job_id }` | `200 OK` + `{ message }` |
+| `PATCH /organizations/:org/projects/:slug/litellm_config` | `202 Accepted` + `{ provisioning_job_id }` | `200 OK` + `{ message }` |
+
+API 소비자는 `provisioning_job_id` 로 `GET /provisioning_jobs/:id` 를 polling 하거나 `ProvisioningChannel` (ActionCable) 을 구독해 진행 상태를 받는다.
 
 ## 디렉토리 구조 요약
 
