@@ -16,31 +16,51 @@ module Organizations
       return Result.failure(organization.errors.full_messages.to_sentence) unless organization.valid?
 
       langfuse_org = @langfuse_client.create_organization(name: organization.name)
-      organization.langfuse_org_id = langfuse_org["id"]
+      langfuse_org_id = langfuse_org["id"]
+      organization.langfuse_org_id = langfuse_org_id
 
-      ActiveRecord::Base.transaction do
-        organization.save!
-        organization.org_memberships.create!(
-          user_sub: @current_user_sub,
-          role: "admin",
-          invited_at: Time.current,
-          joined_at: Time.current
-        )
-        AuditLog.create!(
-          organization: organization,
-          user_sub: @current_user_sub,
-          action: "org.create",
-          resource_type: "Organization",
-          resource_id: organization.id.to_s,
-          details: { name: organization.name }
-        )
+      begin
+        ActiveRecord::Base.transaction do
+          organization.save!
+          organization.org_memberships.create!(
+            user_sub: @current_user_sub,
+            role: "admin",
+            invited_at: Time.current,
+            joined_at: Time.current
+          )
+          AuditLog.create!(
+            organization: organization,
+            user_sub: @current_user_sub,
+            action: "org.create",
+            resource_type: "Organization",
+            resource_id: organization.id.to_s,
+            details: { name: organization.name }
+          )
+        end
+      rescue ActiveRecord::RecordInvalid => e
+        # Compensate the Langfuse side-effect so we don't leak orphan orgs
+        # into Langfuse when the Console-side transaction fails. Rollback is
+        # best-effort: a failure here is logged but does not mask the
+        # original DB error.
+        compensate_langfuse(langfuse_org_id)
+        return Result.failure(e.message)
       end
 
       Result.success(organization)
-    rescue ActiveRecord::RecordInvalid => e
-      Result.failure(e.message)
     rescue BaseClient::ApiError => e
       Result.failure("Langfuse error: #{e.message}")
+    end
+
+    private
+
+    def compensate_langfuse(langfuse_org_id)
+      return unless langfuse_org_id
+      @langfuse_client.delete_organization(id: langfuse_org_id)
+    rescue BaseClient::ApiError => e
+      Rails.logger.error(
+        "[Organizations::CreateService] Failed to compensate Langfuse org " \
+        "#{langfuse_org_id} after DB save failure: #{e.class}: #{e.message}"
+      )
     end
   end
 end
