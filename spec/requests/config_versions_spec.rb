@@ -49,16 +49,29 @@ RSpec.describe "ConfigVersions", type: :request do
     end
   end
 
-  describe "POST /config_versions/:id/rollback" do
+  describe "POST /config_versions/:id/rollback (not implemented)" do
     before do
       membership = create(:org_membership, organization: org, user_sub: user_sub, role: "write")
       create(:project_permission, org_membership: membership, project: project, role: "write")
     end
 
-    it "triggers rollback provisioning and returns see_other" do
-      stub_config_server_revert_changes(version: "v2")
+    it "returns 501 Not Implemented for FR-8 (rollback pipeline not yet built)" do
       post "/config_versions/#{config_version.id}/rollback"
-      expect(response).to have_http_status(:see_other)
+      expect(response).to have_http_status(:not_implemented)
+      body = JSON.parse(response.body)
+      expect(body["status"]).to eq("not_implemented")
+    end
+
+    it "does not enqueue a provisioning job" do
+      expect {
+        post "/config_versions/#{config_version.id}/rollback"
+      }.not_to have_enqueued_job(ProvisioningExecuteJob)
+    end
+
+    it "writes an audit log of the attempt" do
+      expect {
+        post "/config_versions/#{config_version.id}/rollback"
+      }.to change { AuditLog.where(action: "config.rollback.attempted").count }.by(1)
     end
 
     it "returns 403 for read-only member" do

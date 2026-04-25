@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>AAP Console — Sign in</title>
+    <%= csrf_meta_tags %>
+  </head>
+  <body>
+    <main style="font-family: sans-serif; max-width: 480px; margin: 6rem auto; text-align: center;">
+      <h1>AAP Console</h1>
+      <p>Redirecting you to single sign-on…</p>
+      <%= form_with url: "/auth/keycloak", method: :post, local: true, id: "sso-form" do |f| %>
+        <%= f.submit "Sign in with SSO", id: "sso-submit" %>
+      <% end %>
+      <noscript>
+        <p>JavaScript is disabled. Click the button above to sign in.</p>
+      </noscript>
+      <script>
+        document.getElementById("sso-form").submit();
+      </script>
+    </main>
+  </body>
+</html>

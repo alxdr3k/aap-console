@@ -18,6 +18,21 @@ RSpec.describe "Api::V1::Apps", type: :request do
         data = JSON.parse(response.body)
         expect(data).to have_key("apps")
       end
+
+      it "filters out projects that are still provisioning, deleting, or failed" do
+        create(:project, :provisioning, organization: org)
+        create(:project, :deleting,    organization: org)
+        create(:project, :provision_failed, organization: org)
+        create(:project, :deleted,     organization: org)
+        create(:project, :update_pending, organization: org)
+
+        get "/api/v1/apps", params: { all: true },
+            headers: { "Authorization" => "Bearer test-inbound-key" }
+        ids = JSON.parse(response.body)["apps"].map { |a| a["app_id"] }
+
+        active_or_pending = Project.where(status: [ :active, :update_pending ]).pluck(:app_id)
+        expect(ids).to match_array(active_or_pending)
+      end
     end
 
     context "with invalid API key" do

@@ -4,7 +4,15 @@ module Api
       before_action :authenticate_inbound_api_key!
 
       def index
-        projects = Project.where.not(status: :deleted).includes(:organization, :project_auth_config)
+        # Config Server uses this registry as the source of truth for app
+        # authentication. Only expose projects that have completed
+        # provisioning (status :active or :completed_with_warnings via
+        # provision_failed/update_pending excluded). In-flight, failed, or
+        # deleting projects must not be advertised, otherwise Config Server
+        # would mint cache entries for apps whose external resources do not
+        # yet (or no longer) exist.
+        projects = Project.where(status: [ :active, :update_pending ])
+                          .includes(:organization, :project_auth_config)
 
         apps = projects.map do |project|
           {

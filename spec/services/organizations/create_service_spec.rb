@@ -51,5 +51,19 @@ RSpec.describe Organizations::CreateService do
       expect(result).to be_failure
       expect(Organization.count).to eq(0)
     end
+
+    it "compensates the Langfuse org if the DB transaction raises" do
+      stub_langfuse_delete_org(org_id: "langfuse-org-1")
+
+      # Force the DB transaction to fail after the Langfuse call.
+      allow(AuditLog).to receive(:create!)
+        .and_raise(ActiveRecord::RecordInvalid.new(AuditLog.new))
+
+      result = described_class.new(params: params, current_user_sub: user_sub).call
+
+      expect(result).to be_failure
+      expect(Organization.count).to eq(0)
+      expect(WebMock).to have_requested(:post, %r{/api/trpc/organizations\.delete}).at_least_once
+    end
   end
 end

@@ -18,36 +18,31 @@ class ConfigVersionsController < ApplicationController
     render json: @config_version
   end
 
+  # FR-8 ConfigVersion rollback is not yet implemented in the provisioning
+  # pipeline — the StepSeeder has no plan for rolling back to a target version
+  # and the previous implementation enqueued a stepless update Job that
+  # immediately fails. Returning 501 here keeps the route reachable for
+  # forward compatibility but signals "do not call yet" instead of silently
+  # creating broken jobs. The audit log is still written so we can see who
+  # tried and when.
   def rollback
     project = @config_version.project
     organization = project.organization
 
-    ActiveRecord::Base.transaction do
-      provisioning_job = project.provisioning_jobs.create!(
-        operation: "update",
-        status: :pending
-      )
+    AuditLog.create!(
+      organization: organization,
+      project: project,
+      user_sub: Current.user_sub,
+      action: "config.rollback.attempted",
+      resource_type: "ConfigVersion",
+      resource_id: @config_version.id.to_s,
+      details: { target_version_id: @config_version.version_id, status: "not_implemented" }
+    )
 
-      AuditLog.create!(
-        organization: organization,
-        project: project,
-        user_sub: Current.user_sub,
-        action: "config.rollback",
-        resource_type: "ConfigVersion",
-        resource_id: @config_version.id.to_s,
-        details: { target_version_id: @config_version.version_id }
-      )
-
-      ProvisioningExecuteJob.perform_later(
-        provisioning_job.id,
-        rollback_to_version_id: @config_version.version_id,
-        current_user_sub: Current.user_sub
-      )
-
-      redirect_to provisioning_job_path(provisioning_job), status: :see_other
-    end
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    render json: {
+      error: "ConfigVersion rollback is not yet implemented",
+      status: "not_implemented"
+    }, status: :not_implemented
   end
 
   private
