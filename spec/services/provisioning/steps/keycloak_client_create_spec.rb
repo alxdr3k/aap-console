@@ -49,4 +49,28 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       end
     end
   end
+
+  describe "#execute side-effect snapshot atomicity" do
+    let!(:auth_config) do
+      create(:project_auth_config, :oidc, project: project,
+             keycloak_client_id: "aap-#{organization.slug}-#{project.slug}-oidc",
+             keycloak_client_uuid: nil)
+    end
+
+    it "persists the keycloak_client_uuid snapshot before the local DB write" do
+      uuid = stub_keycloak_create_client(client_id: auth_config.keycloak_client_id)
+      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
+                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
+
+      step_record = create(:provisioning_step, :keycloak_client_create, provisioning_job: job)
+      step = described_class.new(step_record: step_record, project: project, params: {})
+
+      # Force the local mirror to fail; snapshot must already exist on the step.
+      allow(auth_config).to receive(:update!).and_raise(ActiveRecord::RecordInvalid.new(auth_config))
+      allow(project).to receive(:project_auth_config).and_return(auth_config)
+
+      expect { step.execute }.to raise_error(ActiveRecord::RecordInvalid)
+      expect(step_record.reload.result_snapshot["keycloak_client_uuid"]).to eq(uuid)
+    end
+  end
 end

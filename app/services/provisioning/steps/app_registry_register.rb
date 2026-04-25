@@ -11,7 +11,11 @@ module Provisioning
           idempotency_key: idempotency_key("register")
         )
 
-        { registered: true, app_id: project.app_id }
+        # Persist the side-effect snapshot immediately so RollbackRunner can
+        # deregister the App from Config Server even if the surrounding
+        # step.update! to :completed raises before this method returns.
+        snapshot = { registered: true, app_id: project.app_id }
+        record_external_side_effect(snapshot)
       end
 
       def rollback

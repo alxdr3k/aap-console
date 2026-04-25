@@ -10,9 +10,19 @@ module Provisioning
         keycloak = KeycloakClient.new
 
         client_uuid = create_keycloak_client(keycloak, auth_type, client_id)
-        auth_config.update!(keycloak_client_uuid: client_uuid)
 
-        { keycloak_client_uuid: client_uuid, keycloak_client_id: client_id }
+        # Phase 1: persist the external side-effect snapshot BEFORE writing
+        # to project_auth_config. If the local DB write or the surrounding
+        # step.update! raises, RollbackRunner can still find the Keycloak UUID
+        # and delete the orphaned client.
+        snapshot = { keycloak_client_uuid: client_uuid, keycloak_client_id: client_id }
+        record_external_side_effect(snapshot)
+
+        # Phase 2: mirror the UUID onto the auth_config row for read paths.
+        # Skipped for PAK because no Keycloak client was created (uuid is nil).
+        auth_config.update!(keycloak_client_uuid: client_uuid) if client_uuid
+
+        snapshot
       end
 
       def rollback
