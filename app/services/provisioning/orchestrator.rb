@@ -176,8 +176,12 @@ module Provisioning
     end
 
     def broadcast_completion
-      ActionCable.server.broadcast(
-        "provisioning_job_#{@provisioning_job.id}",
+      # Use the channel's broadcast_to so the stream name is derived the same
+      # way ProvisioningChannel#subscribed derives it via `stream_for`. A raw
+      # ActionCable.server.broadcast string would land on a different stream
+      # and the UI would never see the event.
+      ProvisioningChannel.broadcast_to(
+        @provisioning_job,
         { type: "job_completed", status: @provisioning_job.status }
       )
     end

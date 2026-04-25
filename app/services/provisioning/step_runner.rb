@@ -102,8 +102,11 @@ module Provisioning
     end
 
     def broadcast_step_update
-      ActionCable.server.broadcast(
-        "provisioning_job_#{@provisioning_job.id}",
+      # Pair with ProvisioningChannel#stream_for via broadcast_to so subscribers
+      # actually receive the message — see the matching change in
+      # Provisioning::Orchestrator#broadcast_completion.
+      ProvisioningChannel.broadcast_to(
+        @provisioning_job,
         { type: "step_update", step_id: @step.id, status: @step.status, error: @step.error_message }
       )
     end
