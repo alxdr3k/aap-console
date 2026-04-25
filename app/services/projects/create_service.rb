@@ -23,9 +23,22 @@ module Projects
           auth_type: @params[:auth_type]
         )
 
+        # Snapshot the externally-relevant inputs on the job itself so that
+        # manual retry (and any future operator action) can replay the
+        # provisioning without depending on the ActiveJob args queue, which
+        # is lost on worker crash or queue eviction.
+        input_snapshot = {
+          "auth_type" => @params[:auth_type],
+          "models" => @params[:models],
+          "guardrails" => @params[:guardrails],
+          "s3_retention_days" => @params[:s3_retention_days],
+          "redirect_uris" => @params[:redirect_uris]
+        }.compact
+
         provisioning_job = project.provisioning_jobs.create!(
           operation: "create",
-          status: :pending
+          status: :pending,
+          input_snapshot: input_snapshot
         )
         Provisioning::StepSeeder.call!(provisioning_job)
 

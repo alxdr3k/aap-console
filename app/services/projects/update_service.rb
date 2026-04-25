@@ -27,9 +27,11 @@ module Projects
 
         if needs_provisioning
           @project.update!(status: :update_pending)
+          input_snapshot = @params.slice(*EXTERNAL_FIELDS).deep_stringify_keys
           provisioning_job = @project.provisioning_jobs.create!(
             operation: "update",
-            status: :pending
+            status: :pending,
+            input_snapshot: input_snapshot
           )
           Provisioning::StepSeeder.call!(provisioning_job)
           ProvisioningExecuteJob.perform_later(

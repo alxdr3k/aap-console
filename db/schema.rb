@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_22_005216) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_25_000001) do
   create_table "audit_logs", force: :cascade do |t|
     t.string "action", null: false
     t.datetime "created_at", null: false
@@ -119,6 +119,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_22_005216) do
     t.datetime "completed_at"
     t.datetime "created_at", null: false
     t.text "error_message"
+    t.json "input_snapshot"
     t.string "operation", null: false
     t.integer "project_id", null: false
     t.datetime "started_at"

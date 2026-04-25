@@ -14,7 +14,8 @@ module Projects
 
         provisioning_job = @project.provisioning_jobs.create!(
           operation: "delete",
-          status: :pending
+          status: :pending,
+          input_snapshot: {}
         )
         Provisioning::StepSeeder.call!(provisioning_job)
 
