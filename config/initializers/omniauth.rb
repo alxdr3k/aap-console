@@ -9,5 +9,15 @@ Rails.application.config.middleware.use OmniAuth::Builder do
            name: "keycloak"
 end
 
-OmniAuth.config.allowed_request_methods = [ :post, :get ]
-OmniAuth.config.silence_get_warning = true
+# CSRF posture for OmniAuth initiation (`POST /auth/:provider`):
+#
+# omniauth-rails_csrf_protection rejects GET-initiated auth requests so that
+# a third party cannot embed an <img src="/auth/keycloak"> in a malicious
+# page and silently start an authentication flow. We must therefore only
+# allow POST, and the Console initiates auth by rendering an auto-submitting
+# form bound to the Rails CSRF token (see ApplicationController and
+# app/views/sessions/login.html.erb).
+#
+# The `silence_get_warning = true` from the original config was hiding a
+# real CSRF risk and is removed.
+OmniAuth.config.allowed_request_methods = [ :post ]

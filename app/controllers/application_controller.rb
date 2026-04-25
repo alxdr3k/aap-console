@@ -11,7 +11,14 @@ class ApplicationController < ActionController::Base
   def authenticate_user!
     return if session[:user_sub].present?
 
-    redirect_to "/auth/keycloak", allow_other_host: false
+    # OmniAuth (with omniauth-rails_csrf_protection) only accepts POST on
+    # /auth/:provider — a GET redirect would be rejected as CSRF. Render a
+    # tiny page that auto-submits a CSRF-tokenized POST. See
+    # config/initializers/omniauth.rb for the rationale.
+    respond_to do |format|
+      format.html { render "sessions/login", status: :unauthorized, layout: false }
+      format.json { render json: { error: "Authentication required" }, status: :unauthorized }
+    end
   end
 
   def set_current_user
