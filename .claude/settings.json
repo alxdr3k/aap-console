@@ -89,7 +89,8 @@
       "Edit(**/credentials.yml*)",
       "Edit(**/*.pem)",
       "Edit(**/*.key)"
-    ]
+    ],
+    "defaultMode": "dontAsk"
   },
   "env": {
     "RAILS_ENV": "test",
