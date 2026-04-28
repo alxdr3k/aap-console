@@ -38,10 +38,12 @@
 | 원칙 | 설명 |
 |------|------|
 | **Console Creates, Server Manages** | Console은 "무엇을 설정할지"만 결정하고, Config Server는 "어떻게 저장하고 전파할지"를 담당 |
-| **All-or-Nothing Provisioning** | 프로비저닝은 모든 단계가 성공하거나 전체 롤백. 부분 성공 상태 없음 |
-| **Secret Zero-Store** | Console은 시크릿 평문을 저장하지 않음. 생성 시 일회성 표시 후 폐기 또는 Config Server로 즉시 전달 |
+| **All-or-Nothing Provisioning** | 프로비저닝은 모든 필수 단계가 성공하거나 전체 롤백. Health Check 실패처럼 리소스 생성 이후의 비차단 검증은 `completed_with_warnings`로 분리 |
+| **Secret Zero-Store** | Console은 시크릿 평문을 DB/로그/설정 이력에 영속 저장하지 않음. 사용자 표시용 단기 캐시 또는 Config Server 전달 후 즉시 폐기 |
 | **Auth ≠ Authz** | 인증은 Keycloak(OIDC)에 위임, 인가(RBAC)는 Console DB에서 자체 관리. 단일 원천 |
 | **Server-rendered UI** | Hotwire(Turbo + Stimulus)로 SPA 없이 실시간 UI 구현. JavaScript 프레임워크 미사용 |
+
+> **범위 표기 원칙**: FR 섹션은 최종 제품 요구사항을 설명하고, §9 마일스톤은 구현/노출 순서를 정의한다. 아직 해당 Phase가 아닌 기능(예: Playground, 다중 인증 방식, 전용 관리자 대시보드)은 UI 설계에는 포함할 수 있으나 실제 제품에서는 숨김 또는 disabled 상태로 노출한다.
 
 ### 1.4 대상 사용자
 
@@ -49,7 +51,7 @@
 |------|------|
 | **팀 관리자** | Organization 하위에 Project를 생성하고 서비스 설정을 관리하는 타 부서 담당자 |
 | **플랫폼 관리자** | AAP 전체 Organization을 관리하고 정책을 설정하는 운영팀 |
-| **개발자** | 발급된 인증 정보 및 SDK Key를 활용하여 서비스를 개발하는 사용자 |
+| **개발자** | 발급된 인증 정보(Client Secret 또는 PAK), App ID, 설정 결과를 활용하여 서비스를 개발하는 사용자. Langfuse SDK Key 평문은 개발자에게 직접 노출하지 않는다 |
 
 ---
 
@@ -256,7 +258,7 @@ Realm: aap (단일)
 |------|------|
 | **생성** | Organization 하위에 신규 Project 등록. 이름, 설명 입력. 생성 시 App ID 자동 발급 |
 | **조회** | Project 목록 및 상세 정보 (각 서비스에 추가된 설정 현황, 발급된 App ID) 확인 |
-| **수정** | Project 설정 변경 (인증 방식, 모델 라우팅, S3 Retention 등) |
+| **수정** | Project 설정 변경 (Redirect URI, Client Secret 재발급, 모델 라우팅, S3 Retention 등). 최초 선택한 주 인증 방식(`auth_type`)은 변경하지 않으며, 다른 방식으로 전환하려면 Project 재생성이 필요 |
 | **삭제** | Project 삭제 시 생성/수정 과정에서 추가된 **모든** 내역을 롤백. 아래 전체 대상 참고 |
 
 **삭제 시 롤백 대상**:
@@ -272,7 +274,7 @@ Realm: aap (단일)
 
 ### FR-4. 인증 체계 자동 구성
 
-사용자가 Project 생성 시 인증 방식을 선택하면 자동으로 구성된다.
+사용자가 Project 생성 시 인증 방식을 선택하면 자동으로 구성된다. 최종 목표는 SAML/OIDC/OAuth/PAK 전체 지원이지만, Phase 1에서는 OIDC만 실제 선택 가능하게 하고 SAML/OAuth/PAK는 Phase 4까지 숨김 또는 disabled 상태로 둔다.
 
 | 인증 방식 | 구성 내용 |
 |-----------|-----------|
@@ -282,7 +284,7 @@ Realm: aap (단일)
 | **PAK (Project API Key)** | Console에서 API Key 자동 생성 및 발급 (Keycloak 미사용) |
 
 - **Keycloak Admin REST API**를 직접 호출하여 Client 생성/수정/삭제를 자동화한다. Console의 Service Account 토큰으로 인증한다.
-- 발급된 Keycloak Client Secret 및 PAK는 생성 시 UI에 **일회성으로만 표시**하며, Console에서는 별도로 저장하지 않는다.
+- 발급된 Keycloak Client Secret 및 PAK는 생성 시 UI에 **일회성으로만 표시**하며, Console DB/로그/설정 이력에는 저장하지 않는다. 표시 재시도를 위해 필요한 경우 TTL 10분 이하의 단기 캐시만 허용한다.
 
 **Client 네이밍 컨벤션**:
 
@@ -500,8 +502,8 @@ LiteLLM → LLM Provider → 응답 → Console 서버 → SSE → 브라우저
 
 ### 6.1 보안
 
-- Keycloak Client Secret, PAK는 생성 시 UI에 일회성 표시 후 Console 미저장
-- Langfuse SK/PK는 Console 미저장. Config Server Admin API로 평문 전달 후 즉시 폐기. 암호화/저장/적용은 Config Server가 수행
+- Keycloak Client Secret, PAK는 생성 시 UI에 일회성 표시 후 Console DB/로그/설정 이력에 영속 저장하지 않음. 표시 재시도를 위한 단기 캐시는 TTL 10분 이하로 제한
+- Langfuse SK/PK는 Console DB/로그/설정 이력에 저장하지 않음. Config Server Admin API로 평문 전달 후 즉시 폐기. 암호화/저장/적용은 Config Server가 수행
 - 시크릿 평문은 Config Server의 저장소에 직접 저장되지 않음 (암호화 처리). 시크릿 저장/암호화 방식은 Config Server 내부 관심사
 - Console 접근은 조직 SSO를 통한 인증 필수
 - Organization/Project 단위 RBAC (admin/write/read) 기반 접근제어 — Console DB 자체 관리 (FR-2 참조)

@@ -82,11 +82,11 @@ AAP Console
 │       │       ├── Langfuse 설정 (읽기 전용)
 │       │       ├── LiteLLM Config
 │       │       ├── 변경 이력
-│       │       ├── Playground (AI Chat)
-│       │       └── 프로비저닝 이력
+│       │       ├── Playground (AI Chat, Phase 4)
+│       │       └── 프로비저닝 이력 (상세 내 섹션)
 │       │           └── {Job} (프로비저닝 현황 — 실시간)
 │       └── 멤버 관리
-└── 관리 (super_admin)
+└── 관리 (super_admin, Phase 4)
     └── 전체 Organization 현황
 ```
 
@@ -112,14 +112,16 @@ AAP Console
 | 인증 설정 | `/.../:slug/auth_config` | 인증 방식 상세, Client Secret 재발급 | FR-4 |
 | LiteLLM Config | `/.../:slug/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
 | 변경 이력 | `/.../:slug/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
-| Playground | `/.../:slug/playground` | 모델 선택, AI Chat, 요청 인스펙터 | FR-10 |
-| 프로비저닝 이력 | `/.../:slug/provisioning_jobs` | 과거 Job 목록 (유형, 상태, 일시, 소요시간) | FR-7.3 |
+| Playground | `/.../:slug/playground` | 모델 선택, AI Chat, 요청 인스펙터. Phase 4 전까지 숨김 또는 disabled | FR-10 |
+| 프로비저닝 이력 | Project 상세의 이력 탭/섹션 | 과거 Job 요약 목록 (유형, 상태, 일시, 소요시간). 별도 목록 URL은 필요 시 추가 | FR-7.3 |
 
 ### 4.3 프로비저닝
 
 | 페이지 | URL 패턴 | 주요 기능 | 관련 FR |
 |--------|---------|-----------|---------|
 | 프로비저닝 현황 | `/provisioning_jobs/:id` | 실시간 Step 상태, 오류 표시, 수동 재시도 | FR-7.3 |
+
+> **범위 표기 원칙**: 이 문서는 최종 UI를 함께 정의한다. Phase 4 기능(Playground, 다중 인증 방식 전체 지원, 전용 관리자 대시보드)은 디자인 시스템에는 포함하되, 구현 전 제품 화면에서는 숨기거나 disabled 상태와 "준비 중" 툴팁으로 처리한다.
 
 ---
 
@@ -170,6 +172,7 @@ AAP Console
 **적용 대상**: Keycloak Client Secret, PAK
 
 > Langfuse SDK Key(PK/SK)는 Console이 저장하지 않고 Config Server로 직접 전달되므로 사용자에게 표시하지 않는다 (PRD FR-5 참조).
+> Keycloak Client Secret과 PAK도 Console DB/로그/설정 이력에는 저장하지 않으며, TTL 10분 이하의 단기 캐시로만 재조회 UX를 제공한다.
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -419,7 +422,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 - Project 테이블: 이름, App ID, 프로비저닝 상태 배지
 - 멤버 요약: 역할별 인원수 + 멤버 관리 페이지 링크
 - Project 상태 배지: 최근 프로비저닝 Job의 상태를 반영 (5절 매핑 적용)
-- **삭제 버튼** (super_admin): 위험 액션 확인(6.2절) → Org 삭제 프로비저닝 현황으로 리다이렉트
+- **삭제 버튼** (super_admin): 위험 액션 확인(6.2절) → 하위 Project 삭제 작업을 시작하고 Org 목록 또는 삭제 진행 요약으로 이동. Project별 상세 진행은 각 프로비저닝 Job 화면에서 확인
 
 **Project 행 클릭 동작** (Project 의 `projects.status` 와 최근 ProvisioningJob 상태 조합 기준):
 
@@ -576,7 +579,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │                                          │
 │          │  ┌─ Langfuse 설정 (FR-5) ───────────────┐ │
 │          │  │  Langfuse Project: acme-chatbot       │ │
-│          │  │  SDK Key: 발급됨 ✓ (PK: pk-lf-****)  │ │
+│          │  │  SDK Key: 발급됨 ✓ (값 비공개)        │ │
 │          │  │  트레이싱: 연동됨 ✓                    │ │
 │          │  │  [Langfuse 대시보드 열기 ↗]           │ │
 │          │  └──────────────────────────────────────┘ │
@@ -610,10 +613,10 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 - **[이름/설명 편집]**: Turbo Frame으로 인라인 편집 폼 표시 (별도 페이지 이동 없음). 저장 시 Flash 알림
 - **탭 네비게이션**: 인증 / Langfuse / LiteLLM / 이력 — 각 탭은 Turbo Frame으로 로드하여 페이지 전환 없이 탭 전환. 하위 페이지 URL(`/.../:slug/auth_config` 등)로 직접 접근도 가능
 - 인증 설정 탭: 인증 방식, Client ID, Secret 재발급 버튼, [상세 편집] 링크 (8.11로 이동)
-- Langfuse 탭: Langfuse Project 이름, SDK Key 발급 상태 (마스킹된 PK prefix), 트레이싱 연동 상태, Langfuse 대시보드 외부 링크
+- Langfuse 탭: Langfuse Project 이름, SDK Key 발급 상태(값은 표시하지 않음), 트레이싱 연동 상태, Langfuse 대시보드 외부 링크
 - LiteLLM 탭: 모델 목록, 가드레일, S3 설정 요약, [설정 편집] 링크 (8.8로 이동)
 - 이력 탭: 변경 이력 최근 3건 + [전체 이력 보기] (8.9로 이동), 프로비저닝 이력 최근 Job + [전체 보기]
-- Playground 링크 (Phase 4) — 탭 외부, 상단 우측에 별도 배치
+- Playground 링크 (Phase 4) — 구현 전까지 숨김 또는 disabled 처리. 구현 후 탭 외부, 상단 우측에 별도 배치
 - 삭제 버튼: 위험 액션 확인(6.2절) → 삭제 프로비저닝 현황(8.7)으로 리다이렉트
 
 ### 8.6 Project 생성 — FR-3
@@ -634,7 +637,8 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │  ── 인증 설정 ──                          │
 │          │                                          │
 │          │  인증 방식 *                               │
-│          │  ○ OIDC  ○ SAML  ○ OAuth  ○ PAK          │
+│          │  ● OIDC  ○ SAML(준비 중)  ○ OAuth(준비 중)│
+│          │  ○ PAK(준비 중)                           │
 │          │                                          │
 │          │  ── LiteLLM Config ──                    │
 │          │                                          │
@@ -671,7 +675,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 
 > **삭제 프로비저닝**: Project 삭제 시에도 6.2절 위험 액션 확인 → 프로비저닝 현황 페이지로 리다이렉트 → 완료 시 Org 상세로 이동. 시크릿 표시 단계 없음.
 >
-> **Org 삭제**: 하위 모든 Project의 삭제 프로비저닝을 순차 실행한 뒤 Langfuse Org 삭제 + Console DB 정리. Org 삭제 전용 프로비저닝 현황 페이지에서 "Project별 삭제 진행률 + Org 정리" 단계를 표시. 완료 시 Org 목록으로 이동.
+> **Org 삭제**: 하위 모든 Project의 삭제 프로비저닝을 순차 실행한 뒤 Langfuse Org 삭제 + Console DB 정리. 현재 `provisioning_jobs`는 Project 단위 리소스이므로 Org 삭제 전용 Job을 별도로 만들지 않는다. 필요 시 UI에서 Project별 삭제 Job 링크를 모은 진행 요약을 제공한다.
 
 **수동 재시도 후 동작**: [수동 재시도] 클릭 시 같은 프로비저닝 Job의 상태가 `failed` → `retrying` → `in_progress`로 리셋되며, 같은 페이지에서 실시간으로 진행 상태가 다시 표시된다 (새 Job이 생성되지 않음).
 
@@ -856,7 +860,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 3. 프로비저닝 현황 페이지(8.7, update 유형)로 리다이렉트 — 실시간 진행 상태 표시
 4. 완료 시 Project 상세로 이동 가능
 
-### 8.10 Playground — FR-10
+### 8.10 Playground — FR-10 (Phase 4)
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -945,7 +949,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │          │  [Client Secret 재발급]                    │
 │          │  ⚠ 재발급 시 기존 Secret은 즉시 무효화됩니다│
 │          │                                          │
-│          │  ── PAK (별도 추가) ──                     │
+│          │  ── PAK (별도 추가, Phase 4) ──            │
 │          │                                          │
 │          │  발급된 PAK: 1개                           │
 │          │  ┌──────────────────────────────────────┐ │
@@ -962,7 +966,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 - 인증 방식 표시 (변경은 Project 재생성 필요 — 읽기 전용)
 - 프로토콜별 설정 필드 (OIDC: Redirect URI 등, SAML: SP 메타데이터 다운로드 등)
 - Client Secret 재발급 버튼 → 위험 액션 확인(6.2절) 후 일회성 시크릿 표시(6.1절)
-- PAK 관리: 목록 + 신규 발급/폐기. 발급 시 일회성 표시(6.1절)
+- PAK 관리: 목록 + 신규 발급/폐기. 발급 시 일회성 표시(6.1절). Phase 4 전까지 숨김 또는 disabled 처리
 
 ---
 
@@ -982,7 +986,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 |------|------|:----:|------------|------|
 | 이름 | text | ✓ | 2~100자, Org 내 중복 불가 | |
 | 설명 | textarea | — | 최대 500자 | |
-| 인증 방식 | radio | ✓ | OIDC / SAML / OAuth / PAK 중 택 1 | Phase 1은 OIDC만 |
+| 인증 방식 | radio | ✓ | OIDC / SAML / OAuth / PAK 중 택 1 | Phase 1은 OIDC만 활성화. SAML/OAuth/PAK는 disabled + "준비 중" 표시 |
 | 모델 선택 | checkbox 목록 | ✓ | 최소 1개 선택 | 사용 가능 모델 목록은 서버에서 제공 |
 | 가드레일 | checkbox 목록 | — | | |
 | S3 Retention (일) | number | — | 1~3650 (기본값: 90) | |
@@ -1024,8 +1028,8 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 | `user-search` | 멤버 추가 모달 | Keycloak 사용자 검색 자동완성 (디바운스 300ms) |
 | `confirmation` | 삭제 확인, Config 변경 확인 | 이름 입력 일치 시 삭제 버튼 활성화 / 변경 확인 모달 |
 | `provisioning` | 프로비저닝 현황 | ActionCable 연결 관리 + Turbo Stream 수신 + 완료 시 시크릿 영역 표시 |
-| `playground-chat` | Playground | SSE 스트리밍 응답 처리, 대화 관리 |
-| `playground-params` | Playground | 파라미터 패널 토글, 모델 선택 |
+| `playground-chat` | Playground (Phase 4) | SSE 스트리밍 응답 처리, 대화 관리 |
+| `playground-params` | Playground (Phase 4) | 파라미터 패널 토글, 모델 선택 |
 | `collapsible` | 요청/응답 인스펙터 등 | 접기/펼치기 토글 |
 | `form-validation` | 각종 폼 | 클라이언트 사이드 실시간 유효성 검사 (보조) |
 | `flash` | 전역 (레이아웃) | Flash 알림 자동 닫힘 타이머 + 수동 닫기 |
