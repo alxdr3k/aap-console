@@ -31,7 +31,7 @@ module Organizations
             details: { name: @organization.name, changed_fields: changed_fields }
           )
         end
-      rescue ActiveRecord::RecordInvalid => e
+      rescue ActiveRecord::ActiveRecordError => e
         compensate_langfuse_name(old_name)
         return Result.failure(e.message)
       end

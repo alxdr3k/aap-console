@@ -74,5 +74,24 @@ RSpec.describe Organizations::UpdateService do
       expect(result).to be_failure
       expect(organization.reload.name).to eq("Acme Corp")
     end
+
+    it "compensates Langfuse name changes when a non-validation DB failure rolls back" do
+      stub_langfuse_update_org(org_id: "lf-org-1", name: "New Name")
+      stub_langfuse_update_org(org_id: "lf-org-1", name: "Acme Corp")
+      allow(AuditLog).to receive(:create!).and_raise(ActiveRecord::StatementInvalid.new("statement failed"))
+
+      result = described_class.new(
+        organization: organization,
+        params: { name: "New Name" },
+        current_user_sub: user_sub
+      ).call
+
+      expect(result).to be_failure
+      expect(organization.reload.name).to eq("Acme Corp")
+      expect(WebMock).to have_requested(:post, "#{LangfuseMock::TRPC_BASE}/organizations.update")
+        .with { |request| JSON.parse(request.body).dig("json", "name") == "New Name" }
+      expect(WebMock).to have_requested(:post, "#{LangfuseMock::TRPC_BASE}/organizations.update")
+        .with { |request| JSON.parse(request.body).dig("json", "name") == "Acme Corp" }
+    end
   end
 end
