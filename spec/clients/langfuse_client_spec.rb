@@ -16,6 +16,17 @@ RSpec.describe LangfuseClient do
     end
   end
 
+  describe "#update_organization" do
+    it "sends the organization id and new name" do
+      stub_langfuse_update_org(org_id: "lf-org-1", name: "New Name")
+
+      result = client.update_organization(id: "lf-org-1", name: "New Name")
+
+      expect(result["id"]).to eq("lf-org-1")
+      expect(result["name"]).to eq("New Name")
+    end
+  end
+
   describe "#create_project" do
     it "returns created project data" do
       stub_langfuse_create_project(name: "acme-chatbot", project_id: "lf-proj-1")

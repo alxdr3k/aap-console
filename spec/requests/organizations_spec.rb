@@ -29,6 +29,18 @@ RSpec.describe "Organizations", type: :request do
         expect(response).to redirect_to(organization_path(Organization.last.slug))
       end
 
+      it "assigns a designated initial admin when provided" do
+        stub_langfuse_create_org(name: "Acme Corp")
+
+        post "/organizations",
+             params: { organization: { name: "Acme Corp", initial_admin_user_sub: "selected-admin-sub" } }
+
+        org = Organization.last
+        membership = org.org_memberships.find_by(user_sub: "selected-admin-sub")
+        expect(membership.role).to eq("admin")
+        expect(membership.joined_at).to be_nil
+      end
+
       it "renders form on validation failure" do
         post "/organizations", params: { organization: { name: "A" } }
         expect(response).to have_http_status(:unprocessable_entity)
@@ -60,10 +72,12 @@ RSpec.describe "Organizations", type: :request do
   end
 
   describe "PATCH /organizations/:slug" do
-    let!(:org) { create(:organization) }
+    let!(:org) { create(:organization, langfuse_org_id: "lf-123") }
     before { create(:org_membership, organization: org, user_sub: user_sub, role: "admin") }
 
     it "updates the org and redirects" do
+      stub_langfuse_update_org(org_id: org.langfuse_org_id, name: "New Name")
+
       patch "/organizations/#{org.slug}", params: { organization: { name: "New Name" } }
       expect(org.reload.name).to eq("New Name")
       expect(response).to redirect_to(organization_path(org.slug))

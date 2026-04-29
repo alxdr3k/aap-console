@@ -38,6 +38,7 @@
 | `app/services/projects/destroy_service.rb` | Project deletion flow |
 | `app/services/project_api_keys/` | PAK issue/revoke/verify services. Plaintext token is returned only from issue response |
 | `app/services/organizations/create_service.rb` | Organization create flow |
+| `app/services/organizations/update_service.rb` | Organization update flow with Langfuse org name sync |
 | `app/services/organizations/destroy_service.rb` | Organization deletion flow |
 | `app/services/provisioning/step_seeder.rb` | Operation별 provisioning step plan |
 | `app/services/provisioning/orchestrator.rb` | Step group execution, retry scheduling, rollback decision, completion broadcast |
