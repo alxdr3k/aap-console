@@ -27,6 +27,7 @@
 | `app/channels/provisioning_channel.rb` | Provisioning job status용 ActionCable stream |
 | `app/controllers/api/v1/project_api_keys_controller.rb` | Inbound PAK verification API |
 | `app/jobs/provisioning_execute_job.rb` | Provisioning orchestration을 실행하는 SolidQueue job |
+| `app/jobs/organization_destroy_finalize_job.rb` | 하위 Project delete 완료 후 Langfuse/Console Organization 삭제를 마무리하는 finalizer |
 | `app/jobs/provisioning_jobs_cleanup_job.rb` | Retention window가 지난 성공 계열 terminal provisioning job/step cleanup |
 | `app/jobs/app_registry_webhook_job.rb` | Standalone app registry webhook retry job. Current provisioning steps call the webhook inline |
 
@@ -100,5 +101,4 @@ There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 | Path | Reason |
 |---|---|
 | `app/views/` / `app/javascript/` | Core product UI, Hotwire provisioning timeline/retry UX, secret reveal, config UI, Playground, and dashboard leaves are planned in `UI-5A.*`, `UI-5B.*`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
-| `app/services/organizations/destroy_service.rb` | Current org delete starts child project delete jobs and returns; final org cleanup after async project deletion is `CORE-5A.3` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

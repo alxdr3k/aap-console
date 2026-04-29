@@ -508,6 +508,7 @@ app/
 │
 ├── jobs/
 │   ├── provisioning_execute_job.rb       # FR-7: SolidQueue Job
+│   ├── organization_destroy_finalize_job.rb # FR-1: Org delete finalizer after child project deletes
 │   ├── provisioning_jobs_cleanup_job.rb  # OPS retention cleanup
 │   ├── app_registry_webhook_job.rb       # standalone webhook retry helper; current step plan calls webhook inline
 │   └── audit_logs_archive_job.rb         # planned: audit log archive target

@@ -41,12 +41,12 @@ module LangfuseMock
       )
   end
 
-  def stub_langfuse_delete_org(org_id:)
+  def stub_langfuse_delete_org(org_id:, status: 200)
     stub_langfuse_login
     stub_request(:post, "#{TRPC_BASE}/organizations.delete")
       .to_return(
-        status: 200,
-        body: { result: { data: { success: true } } }.to_json,
+        status: status,
+        body: status == 200 ? { result: { data: { success: true } } }.to_json : { error: "Internal Server Error" }.to_json,
         headers: { "Content-Type" => "application/json" }
       )
   end
