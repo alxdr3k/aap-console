@@ -57,18 +57,18 @@ Gate status:
 |---|---|---|---|---|---|---|
 | `P0-M1` | Organization / Project CRUD와 Console DB RBAC가 동작한다 | 2026-04-25 | `accepted` | `AC-001` / `AC-002` / `AC-003` | `spec/requests/organizations_spec.rb`, `spec/requests/projects_spec.rb`, `spec/requests/members_spec.rb` | MVP foundation |
 | `P0-M2` | OIDC, Langfuse, LiteLLM, Config Server 기본 프로비저닝 경로가 동작한다 | 2026-04-25 | `accepted` | `AC-004` / `AC-005` / `AC-006` | `app/services/provisioning/`, `spec/services/provisioning/` | Health check 상세 검증은 `P0-M3` |
-| `P0-M3` | 운영 안정성 release gate를 닫는다 |  | `in_progress` | `AC-007` / `AC-008` / `AC-009` | `docs/03_RISK_SPIKES.md` | Health check, config rollback, 통합 smoke 남음 |
-| `P0-M4` | SAML/OAuth/PAK 범위를 확정하고 구현한다 |  | `planned` | `AC-010` / `AC-011` | `docs/07_QUESTIONS_REGISTER.md#q-001` | MVP 범위 결정 필요 |
+| `P0-M3` | 운영 안정성 release gate를 닫는다 |  | `in_progress` | `AC-007` / `AC-008` / `AC-009` / `AC-010` | `docs/03_RISK_SPIKES.md` | Health check, config rollback, 통합 smoke 남음 |
+| `P0-M4` | SAML/OAuth/PAK 범위를 확정하고 구현한다 |  | `planned` | `AC-011` | `docs/07_QUESTIONS_REGISTER.md#q-001` | MVP 범위 결정 필요 |
 | `P0-M5` | Playground를 제품 화면에 노출한다 |  | `deferred` | `AC-012` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | Phase 4 |
-| `DOC-M1` | Boilerplate 문서 체계가 repo에 적용된다 | 2026-04-29 | `landed` | `AC-DOC-001` | `AGENTS.md`, `docs/context/current-state.md`, `docs/current/`, `.github/pull_request_template.md` | PR/merge acceptance 남음 |
+| `DOC-M1` | Boilerplate 문서 체계가 repo에 적용된다 | 2026-04-29 | `accepted` | `AC-DOC-001` | `AGENTS.md`, `docs/context/current-state.md`, `docs/current/`, `.github/pull_request_template.md`, PR #24 | Merged on 2026-04-29 |
 
 ## Tracks
 
 | Track | Purpose | Active phase | Status | Notes |
 |---|---|---|---|---|
-| `DOC` | Boilerplate migration, source-of-truth 정리, agent guidance | `DOC-1A` | `landed` | 최신 roadmap taxonomy와 maintenance drift workflow 반영 |
+| `DOC` | Boilerplate migration, source-of-truth 정리, agent guidance | `DOC-1A` | `accepted` | 최신 roadmap taxonomy와 maintenance drift workflow 반영 |
 | `CORE` | Organization, Project, member, RBAC core | `CORE-1A` | `accepted` | CRUD와 권한 guard 구현됨 |
-| `PROV` | Provisioning pipeline, step orchestration, rollback | `PROV-3A` | `in_progress` | 기본 경로 accepted, 운영 안정성 보강 중 |
+| `PROV` | Provisioning pipeline, step orchestration, rollback | `PROV-2A` | `accepted` | 기본 경로 accepted. P0-M3 운영 보강은 `OPS-3A`에서 추적 |
 | `INTEG` | Keycloak, Langfuse, Config Server client integration | `INTEG-2A` | `accepted` | 테스트는 WebMock 기반 |
 | `UI` | Hotwire 화면과 realtime 진행 상태 | `UI-2B` | `landed` | Provisioning detail UI는 부분 구현 |
 | `AUTH` | 인증 방식 확장과 PAK | `AUTH-4A` | `planned` | OIDC 외 범위 결정 필요 |
@@ -79,24 +79,24 @@ Gate status:
 
 | Slice | Milestone | Track | Phase | Goal | Depends | Gate | Gate status | Status | Evidence | Next |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `DOC-1A.1` | `DOC-M1` | `DOC` | `DOC-1A` | Boilerplate skeleton과 numbered PRD/HLD path 도입 |  | `AC-DOC-001` | `passing` | `landed` | `AGENTS.md`, `docs/00_PROJECT_DELIVERY_PLAYBOOK.md`, `docs/01_PRD.md`, `docs/02_HLD.md` | PR review |
-| `DOC-1A.2` | `DOC-M1` | `DOC` | `DOC-1A` | Roadmap/status ledger를 최신 taxonomy로 작성 | `DOC-1A.1` | `AC-DOC-001` | `passing` | `landed` | `docs/04_IMPLEMENTATION_PLAN.md` | PR review |
-| `DOC-1A.3` | `DOC-M1` | `DOC` | `DOC-1A` | Current-state/current docs와 agent guidance 최신화 | `DOC-1A.2` | `AC-DOC-001` | `passing` | `landed` | `docs/context/current-state.md`, `docs/current/`, `CLAUDE.md` | PR review |
-| `DOC-1A.4` | `DOC-M1` | `DOC` | `DOC-1A` | Maintenance drift workflow를 PR template과 doc-freshness 예시에 반영 | `DOC-1A.3` | `AC-DOC-001` | `passing` | `landed` | `.github/pull_request_template.md`, `.github/workflows/doc-freshness.yml.example`, `docs/DOCUMENTATION.md` | PR review |
-| `CORE-1A.1` | `P0-M1` | `CORE` | `CORE-1A` | Organization CRUD |  | `AC-001` / `TEST-001` | `passing` | `app/controllers/organizations_controller.rb`, `spec/requests/organizations_spec.rb` | 유지보수 |
-| `CORE-1A.2` | `P0-M1` | `CORE` | `CORE-1A` | Member/RBAC, last-admin/self-demotion guard | `CORE-1A.1` | `AC-002` / `TEST-002` | `passing` | `app/models/authorization.rb`, `spec/requests/members_spec.rb`, `spec/models/authorization_spec.rb` | 유지보수 |
-| `CORE-1A.3` | `P0-M1` | `CORE` | `CORE-1A` | Project CRUD와 App ID lifecycle | `CORE-1A.1` | `AC-003` / `TEST-003` | `passing` | `app/services/projects/`, `spec/requests/projects_spec.rb` | 유지보수 |
-| `PROV-2A.1` | `P0-M2` | `PROV` | `PROV-2A` | Create/update/delete step seeding | `CORE-1A.3` | `AC-006` / `TEST-006` | `passing` | `app/services/provisioning/step_seeder.rb`, `spec/services/provisioning/step_seeder_spec.rb` | 유지보수 |
-| `PROV-2A.2` | `P0-M2` | `PROV` | `PROV-2A` | Parallel execution, retry, rollback status transitions | `PROV-2A.1` | `AC-006` / `TEST-007` | `passing` | `app/services/provisioning/orchestrator.rb`, `step_runner.rb`, `rollback_runner.rb`, related specs | 유지보수 |
-| `INTEG-2A.1` | `P0-M2` | `INTEG` | `INTEG-2A` | OIDC Keycloak client provisioning | `PROV-2A.1` | `AC-004` / `TEST-004` | `passing` | `app/services/provisioning/steps/keycloak_client_create.rb`, `spec/services/provisioning/steps/keycloak_client_create_spec.rb` | SAML/OAuth는 `AUTH-4A` |
-| `INTEG-2A.2` | `P0-M2` | `INTEG` | `INTEG-2A` | Langfuse project와 Config Server apply | `PROV-2A.1` | `AC-005` / `TEST-005` | `passing` | `app/clients/langfuse_client.rb`, `app/clients/config_server_client.rb`, related specs | 유지보수 |
-| `UI-2B.1` | `P0-M3` | `UI` | `UI-2B` | ActionCable provisioning stream | `PROV-2A.2` | `AC-007` / `TEST-008` | `passing` | `app/channels/provisioning_channel.rb`, `spec/channels/provisioning_channel_spec.rb` | ERB timeline/retry UX 보강 |
-| `OPS-3A.1` | `P0-M3` | `OPS` | `OPS-3A` | 외부 리뷰어 피드백 통합 smoke 재검증 | `P0-M2` | `AC-008` | `not_run` | `docs/06_ACCEPTANCE_TESTS.md` | Smoke 절차 실행 |
-| `OPS-3A.2` | `P0-M3` | `OPS` | `OPS-3A` | Health check 상세 assertion 구현 | `PROV-2A.2` | `AC-009` | `defined` | `app/services/provisioning/steps/health_check.rb` | `SPIKE-001` 결과 반영 |
-| `OPS-3A.3` | `P0-M3` | `OPS` | `OPS-3A` | Config rollback의 Keycloak/Langfuse 복구 경로 완결 | `INTEG-2A.2` | `AC-010` | `defined` | `app/controllers/config_versions_controller.rb`, `spec/requests/config_versions_spec.rb` | `SPIKE-002` 결과 반영 |
-| `AUTH-4A.1` | `P0-M4` | `AUTH` | `AUTH-4A` | SAML/OAuth 지원 범위 결정 및 구현 | `Q-001` | `AC-011` | `defined` | `docs/07_QUESTIONS_REGISTER.md#q-001` | MVP 범위 결정 |
-| `AUTH-4A.2` | `P0-M4` | `AUTH` | `AUTH-4A` | PAK 발급/폐기/검증 API와 UI | `Q-001` | `AC-011` | `defined` | `app/models/project_api_key.rb`, `spec/factories/project_api_keys.rb` | Controller/service 추가 여부 결정 |
-| `PLAY-4A.1` | `P0-M5` | `PLAY` | `PLAY-4A` | Playground SSE chat 화면 | `P0-M4` | `AC-012` | `defined` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | P0-M4 이후 착수 |
+| `DOC-1A.1` | `DOC-M1` | `DOC` | `DOC-1A` | Boilerplate skeleton과 numbered PRD/HLD path 도입 |  | `AC-DOC-001` | `passing` | `accepted` | `AGENTS.md`, `docs/00_PROJECT_DELIVERY_PLAYBOOK.md`, `docs/01_PRD.md`, `docs/02_HLD.md` | 유지보수 |
+| `DOC-1A.2` | `DOC-M1` | `DOC` | `DOC-1A` | Roadmap/status ledger를 최신 taxonomy로 작성 | `DOC-1A.1` | `AC-DOC-001` | `passing` | `accepted` | `docs/04_IMPLEMENTATION_PLAN.md` | 유지보수 |
+| `DOC-1A.3` | `DOC-M1` | `DOC` | `DOC-1A` | Current-state/current docs와 agent guidance 최신화 | `DOC-1A.2` | `AC-DOC-001` | `passing` | `accepted` | `docs/context/current-state.md`, `docs/current/`, `CLAUDE.md` | 유지보수 |
+| `DOC-1A.4` | `DOC-M1` | `DOC` | `DOC-1A` | Maintenance drift workflow를 PR template과 doc-freshness 예시에 반영 | `DOC-1A.3` | `AC-DOC-001` | `passing` | `accepted` | `.github/pull_request_template.md`, `.github/workflows/doc-freshness.yml.example`, `docs/DOCUMENTATION.md` | 유지보수 |
+| `CORE-1A.1` | `P0-M1` | `CORE` | `CORE-1A` | Organization CRUD |  | `AC-001` / `TEST-001` | `passing` | `accepted` | `app/controllers/organizations_controller.rb`, `spec/requests/organizations_spec.rb` | 유지보수 |
+| `CORE-1A.2` | `P0-M1` | `CORE` | `CORE-1A` | Member/RBAC, last-admin/self-demotion guard | `CORE-1A.1` | `AC-002` / `TEST-002` | `passing` | `accepted` | `app/models/authorization.rb`, `spec/requests/members_spec.rb`, `spec/models/authorization_spec.rb` | 유지보수 |
+| `CORE-1A.3` | `P0-M1` | `CORE` | `CORE-1A` | Project CRUD와 App ID lifecycle | `CORE-1A.1` | `AC-003` / `TEST-003` | `passing` | `accepted` | `app/services/projects/`, `spec/requests/projects_spec.rb` | 유지보수 |
+| `PROV-2A.1` | `P0-M2` | `PROV` | `PROV-2A` | Create/update/delete step seeding | `CORE-1A.3` | `AC-006` / `TEST-006` | `passing` | `accepted` | `app/services/provisioning/step_seeder.rb`, `spec/services/provisioning/step_seeder_spec.rb` | 유지보수 |
+| `PROV-2A.2` | `P0-M2` | `PROV` | `PROV-2A` | Parallel execution, retry, rollback status transitions | `PROV-2A.1` | `AC-006` / `TEST-007` | `passing` | `accepted` | `app/services/provisioning/orchestrator.rb`, `step_runner.rb`, `rollback_runner.rb`, related specs | 유지보수 |
+| `INTEG-2A.1` | `P0-M2` | `INTEG` | `INTEG-2A` | OIDC Keycloak client provisioning | `PROV-2A.1` | `AC-004` / `TEST-004` | `passing` | `accepted` | `app/services/provisioning/steps/keycloak_client_create.rb`, `spec/services/provisioning/steps/keycloak_client_create_spec.rb` | SAML/OAuth는 `AUTH-4A` |
+| `INTEG-2A.2` | `P0-M2` | `INTEG` | `INTEG-2A` | Langfuse project와 Config Server apply | `PROV-2A.1` | `AC-005` / `TEST-005` | `passing` | `accepted` | `app/clients/langfuse_client.rb`, `app/clients/config_server_client.rb`, related specs | 유지보수 |
+| `UI-2B.1` | `P0-M3` | `UI` | `UI-2B` | ActionCable provisioning stream | `PROV-2A.2` | `AC-007` / `TEST-008` | `passing` | `landed` | `app/channels/provisioning_channel.rb`, `spec/channels/provisioning_channel_spec.rb` | ERB timeline/retry UX 보강 |
+| `OPS-3A.1` | `P0-M3` | `OPS` | `OPS-3A` | 외부 리뷰어 피드백 통합 smoke 재검증 | `P0-M2` | `AC-008` | `not_run` | `ready` | `docs/06_ACCEPTANCE_TESTS.md` | Smoke 절차 실행 |
+| `OPS-3A.2` | `P0-M3` | `OPS` | `OPS-3A` | Health check 상세 assertion 구현 | `PROV-2A.2` | `AC-009` | `defined` | `planned` | `app/services/provisioning/steps/health_check.rb` | `SPIKE-001` 결과 반영 |
+| `OPS-3A.3` | `P0-M3` | `OPS` | `OPS-3A` | Config rollback의 Keycloak/Langfuse 복구 경로 완결 | `INTEG-2A.2` | `AC-010` | `defined` | `planned` | `app/controllers/config_versions_controller.rb`, `spec/requests/config_versions_spec.rb` | `SPIKE-002` 결과 반영 |
+| `AUTH-4A.1` | `P0-M4` | `AUTH` | `AUTH-4A` | SAML/OAuth 지원 범위 결정 및 구현 | `Q-001` | `AC-011` | `defined` | `planned` | `docs/07_QUESTIONS_REGISTER.md#q-001` | MVP 범위 결정 |
+| `AUTH-4A.2` | `P0-M4` | `AUTH` | `AUTH-4A` | PAK 발급/폐기/검증 API와 UI | `Q-001` | `AC-011` | `defined` | `planned` | `app/models/project_api_key.rb`, `spec/factories/project_api_keys.rb` | Controller/service 추가 여부 결정 |
+| `PLAY-4A.1` | `P0-M5` | `PLAY` | `PLAY-4A` | Playground SSE chat 화면 | `P0-M4` | `AC-012` | `defined` | `deferred` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | P0-M4 이후 착수 |
 
 ## Gates / Acceptance
 

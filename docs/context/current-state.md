@@ -12,10 +12,11 @@ LiteLLM config, SolidQueue provisioning job, ActionCable status stream을
 
 ## Current Roadmap Position
 
-- current milestone: `P0-M3` 운영 안정성 release gate, plus `DOC-M1` boilerplate migration landed on the working branch
-- active tracks: `DOC`, `PROV`, `OPS`, `UI`
-- active phase: `DOC-1A`, `OPS-3A`
-- active slice: `DOC-1A.1` / `DOC-1A.2` / `DOC-1A.3` / `DOC-1A.4`
+- current milestone: `P0-M3` 운영 안정성 release gate
+- recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
+- active tracks: `OPS`
+- active phase: `OPS-3A`
+- active slice: `OPS-3A.1` / `OPS-3A.2` / `OPS-3A.3`
 - last accepted gate: `AC-006` provisioning saga core, `AC-007` ActionCable authorization/broadcast path
 - last passing doc gate: `AC-DOC-001`
 - next gate: `AC-008`, `AC-009`, `AC-010`
@@ -27,7 +28,7 @@ LiteLLM config, SolidQueue provisioning job, ActionCable status stream을
 - Project create/update/delete용 provisioning job seeding.
 - Parallel step group, scheduled retry, rollback, warning step handling을 가진 provisioning orchestrator.
 - Keycloak OIDC client path, Langfuse project create path, Config Server apply/delete path.
-- Config version listing과 rollback entry point.
+- Config version listing과 rollback entry point. `POST /config_versions/:id/rollback`는 현재 501 Not Implemented를 반환하고 audit log만 남긴다.
 - Authorization check를 포함한 ActionCable `ProvisioningChannel`.
 - Core request, model, service, job, client, channel path에 대한 RSpec/WebMock coverage.
 
@@ -48,9 +49,9 @@ LiteLLM config, SolidQueue provisioning job, ActionCable status stream을
 
 ## Current Priorities
 
-1. Boilerplate migration, maintenance drift workflow, stale guidance cleanup 마무리.
-2. `docs/current/TESTING.md`의 release smoke check 실행.
-3. `FR-9` health check와 `FR-8` rollback gap을 닫거나 명시적으로 defer.
+1. `docs/current/TESTING.md`의 release smoke check 실행.
+2. `FR-9` health check와 `FR-8` rollback gap을 닫거나 명시적으로 defer.
+3. `Q-001`로 SAML/OAuth/PAK MVP 범위를 결정.
 
 ## Current Risks / Unknowns
 
