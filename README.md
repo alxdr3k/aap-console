@@ -2,8 +2,8 @@
 
 AI Assistant Platform (AAP) 셀프서비스 관리 콘솔. Organization / Project 온보딩 시 Keycloak, Langfuse, LiteLLM, Config Server 등 공유 서비스 설정을 자동으로 프로비저닝한다.
 
-> **문서 기준점**: [PRD](./docs/PRD.md) · [HLD](./docs/HLD.md) · [UI Spec](./docs/ui-spec.md) · [ADR](./docs/adr/)
-> **구현 상태 매트릭스**: [docs/implementation-status.md](./docs/implementation-status.md)
+> **문서 기준점**: [PRD](./docs/01_PRD.md) · [HLD](./docs/02_HLD.md) · [UI Spec](./docs/ui-spec.md) · [ADR](./docs/adr/)
+> **현재 상태**: [current-state](./docs/context/current-state.md) · [roadmap/status ledger](./docs/04_IMPLEMENTATION_PLAN.md) · [current docs](./docs/current/)
 
 ---
 
@@ -133,4 +133,4 @@ docs/                # PRD / HLD / ADR / UI Spec (한글)
 - 커밋 메시지는 영문, `<type>(<scope>): <description>` 규칙 (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `harness`)
 - 문서 prose는 한글
 - PR 전 필수: `bin/rspec`, `bin/rubocop`, `bin/brakeman`, `bin/bundler-audit`
-- 배포 가능 상태 확인은 [릴리스 체크리스트](./docs/implementation-status.md#release-gate) 참조
+- 배포 가능 상태 확인은 [roadmap/status ledger](./docs/04_IMPLEMENTATION_PLAN.md)와 [acceptance gates](./docs/06_ACCEPTANCE_TESTS.md) 참조
