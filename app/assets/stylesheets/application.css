@@ -588,9 +588,21 @@ textarea {
 }
 
 .status-banner {
+  display: grid;
+  gap: 8px;
   padding: 12px 14px;
   border-radius: 6px;
   font-size: 14px;
+}
+
+.status-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-banner__actions form {
+  margin: 0;
 }
 
 .status-banner--warning {

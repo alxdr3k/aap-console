@@ -75,7 +75,8 @@
 | `app/javascript/controllers/user_search_controller.js` / `role_permissions_controller.js` | Member management autocomplete and role-aware Project permission visibility |
 
 Importmap, Turbo, and Stimulus are wired as the UI baseline. Provisioning show
-ERB and ActionCable/Stimulus step replacement are present; retry and secret reveal UI remain planned.
+ERB, ActionCable/Stimulus step replacement, manual retry controls, and active-job
+warning banners are present; secret reveal UI remains planned.
 
 ## Data / Persistence
 
@@ -113,5 +114,5 @@ ERB and ActionCable/Stimulus step replacement are present; retry and secret reve
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Hotwire provisioning realtime/retry UX, secret reveal, config UI, Playground, and dashboard leaves remain planned in `UI-5B.2+`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | Secret reveal, config UI, Playground, and dashboard leaves remain planned in `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

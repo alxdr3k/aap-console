@@ -100,7 +100,7 @@ current `ConfigVersion` model.
 | Flow | State |
 |---|---|
 | Organization/member/project completion | Designated initial admin and Langfuse org name sync are landed in `CORE-5A.1`; Keycloak pre-assignment and project permission CRUD API are landed in `CORE-5A.2`; org delete finalization is landed in `CORE-5A.3`; Organization list/detail/new/edit UI is landed in `UI-5A.1` / `UI-5A.2`; member management UI is landed in `UI-5A.3`; Project list/detail/new/delete UI is landed in `UI-5A.4` |
-| Hotwire provisioning detail UI | ERB timeline and ActionCable/Stimulus step replacement are landed in `UI-5B.1` / `UI-5B.2`, but retry UX and secret reveal are not complete. `Q-002` is resolved by `DEC-004`; follow-up is `UI-5B.3` / `SEC-5B.1` / `AC-015` |
+| Hotwire provisioning detail UI | ERB timeline, ActionCable/Stimulus step replacement, manual retry UX, and active-job warning banners are landed in `UI-5B.1` / `UI-5B.2` / `UI-5B.3`, but secret reveal is not complete. `Q-002` is resolved by `DEC-004`; follow-up is `SEC-5B.1` / `AC-015` |
 | Secret reveal cache write path | `ProvisioningJobsController#secrets` reads cache, but provisioning steps do not write Keycloak/PAK secrets to the TTL cache yet. Tracked by `SEC-5B.1` |
 | Config/product UI | Auth config, LiteLLM config, and config-version APIs exist, but server-rendered product UI is `UI-5C.*` |
 | Full external config rollback | Current rollback restores Config Server and reports Keycloak/Langfuse as non-snapshotted diagnostics. Full Keycloak/Langfuse snapshot restore is `OPS-7A.5` / `AC-022` |
