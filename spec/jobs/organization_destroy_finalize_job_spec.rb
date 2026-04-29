@@ -40,6 +40,18 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
       expect(Rails.logger).to have_received(:error).with(/Failed to finalize organization/)
     end
 
+    it "re-enqueues itself when final organization deletion is deferred" do
+      create(:project, :deleted, organization: organization)
+      service = instance_double(Organizations::DestroyService, call: Result.success(deferred: true))
+      allow(Organizations::DestroyService).to receive(:new)
+        .with(organization: organization, current_user_sub: user_sub)
+        .and_return(service)
+
+      expect {
+        described_class.perform_now(organization.id, current_user_sub: user_sub)
+      }.to have_enqueued_job(described_class)
+    end
+
     it "no-ops when the organization is already gone" do
       expect {
         described_class.perform_now(-1, current_user_sub: user_sub)

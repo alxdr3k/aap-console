@@ -87,7 +87,10 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
       current_user_sub: current_user_sub
     ).call
 
-    return if result.success?
+    if result.success?
+      reschedule_deferred_destroy!(organization.id, current_user_sub) if result.data.is_a?(Hash) && result.data[:deferred]
+      return
+    end
 
     Rails.logger.error(
       "[OrganizationDestroyFinalizeJob] Failed to finalize organization " \
@@ -100,5 +103,9 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
     projects.any? do |project|
       project.provisioning_jobs.where(operation: "delete", status: ProvisioningJob::ACTIVE_STATUSES).exists?
     end
+  end
+
+  def reschedule_deferred_destroy!(organization_id, current_user_sub)
+    self.class.set(wait: RETRY_DELAY).perform_later(organization_id, current_user_sub: current_user_sub)
   end
 end
