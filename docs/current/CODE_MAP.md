@@ -92,7 +92,6 @@ There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 
 | Path | Reason |
 |---|---|
-| `app/services/provisioning/steps/health_check.rb` | Assertion depth가 placeholder 수준이다. `SPIKE-001` 참고 |
 | `app/controllers/config_versions_controller.rb` | External rollback completeness 확인 필요. `SPIKE-002` 참고 |
 | `app/models/project_api_key.rb` | Model은 있으나 route/controller/service가 없다. `Q-001` 참고 |
 | `app/views/` / `app/javascript/` | Hotwire provisioning timeline/retry UX는 ADR target이지만 current repo에는 아직 없다. `Q-002` 참고 |

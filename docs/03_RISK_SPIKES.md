@@ -11,7 +11,7 @@
 - Owner: Platform TG
 - Time-box: 1-2 days
 - Start / End: anchor missing
-- Status: open
+- Status: completed
 
 **Experiment**
 
@@ -19,12 +19,12 @@ Keycloak client, Langfuse project, Config Server applied config를 각각 어떤
 
 **Result**
 
-Not run.
+`Steps::HealthCheck`가 Keycloak client lookup, Config Server LiteLLM config readback, Langfuse API key listing을 수행하도록 구현했고 `spec/services/provisioning/steps/health_check_spec.rb`로 mismatch warning path를 검증한다.
 
 **Decision / Next Step**
 
-- Decision: pending
-- Follow-up: `OPS-3A.2`, `AC-009`
+- Decision: `OPS-3A.2` / `AC-009` accepted.
+- Follow-up: 유지보수.
 
 ---
 
