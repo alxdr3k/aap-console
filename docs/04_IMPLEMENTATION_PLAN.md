@@ -70,7 +70,7 @@ Gate status:
 | `CORE` | Organization, Project, member, RBAC core | `CORE-1A` | `accepted` | CRUD와 권한 guard 구현됨 |
 | `PROV` | Provisioning pipeline, step orchestration, rollback | `PROV-2A` | `accepted` | 기본 경로 accepted. P0-M3 운영 보강은 `OPS-3A`에서 추적 |
 | `INTEG` | Keycloak, Langfuse, Config Server client integration | `INTEG-2A` | `accepted` | 테스트는 WebMock 기반 |
-| `UI` | Hotwire 화면과 realtime 진행 상태 | `UI-2B` | `landed` | Provisioning detail UI는 부분 구현 |
+| `UI` | Realtime status path와 server-rendered UI | `UI-2B` | `landed` | ActionCable path landed. Hotwire/ERB timeline UX는 남음 |
 | `AUTH` | 인증 방식 확장과 PAK | `AUTH-4A` | `planned` | OIDC 외 범위 결정 필요 |
 | `OPS` | Runbook, deployment, health check, rollback operation | `OPS-3A` | `in_progress` | Release gate 잔여 항목 |
 | `PLAY` | Playground AI chat | `PLAY-4A` | `deferred` | P0-M5 이후 |
@@ -84,7 +84,7 @@ Gate status:
 | `DOC-1A.3` | `DOC-M1` | `DOC` | `DOC-1A` | Current-state/current docs와 agent guidance 최신화 | `DOC-1A.2` | `AC-DOC-001` | `passing` | `accepted` | `docs/context/current-state.md`, `docs/current/`, `CLAUDE.md` | 유지보수 |
 | `DOC-1A.4` | `DOC-M1` | `DOC` | `DOC-1A` | Maintenance drift workflow를 PR template과 doc-freshness 예시에 반영 | `DOC-1A.3` | `AC-DOC-001` | `passing` | `accepted` | `.github/pull_request_template.md`, `.github/workflows/doc-freshness.yml.example`, `docs/DOCUMENTATION.md` | 유지보수 |
 | `CORE-1A.1` | `P0-M1` | `CORE` | `CORE-1A` | Organization CRUD |  | `AC-001` / `TEST-001` | `passing` | `accepted` | `app/controllers/organizations_controller.rb`, `spec/requests/organizations_spec.rb` | 유지보수 |
-| `CORE-1A.2` | `P0-M1` | `CORE` | `CORE-1A` | Member/RBAC, last-admin/self-demotion guard | `CORE-1A.1` | `AC-002` / `TEST-002` | `passing` | `accepted` | `app/models/authorization.rb`, `spec/requests/members_spec.rb`, `spec/models/authorization_spec.rb` | 유지보수 |
+| `CORE-1A.2` | `P0-M1` | `CORE` | `CORE-1A` | Member/RBAC, last-admin/self-demotion guard | `CORE-1A.1` | `AC-002` / `TEST-002` | `passing` | `accepted` | `app/models/authorization.rb`, `spec/requests/members_spec.rb`, `spec/requests/users_spec.rb`, `spec/models/authorization_spec.rb` | 유지보수 |
 | `CORE-1A.3` | `P0-M1` | `CORE` | `CORE-1A` | Project CRUD와 App ID lifecycle | `CORE-1A.1` | `AC-003` / `TEST-003` | `passing` | `accepted` | `app/services/projects/`, `spec/requests/projects_spec.rb` | 유지보수 |
 | `PROV-2A.1` | `P0-M2` | `PROV` | `PROV-2A` | Create/update/delete step seeding | `CORE-1A.3` | `AC-006` / `TEST-006` | `passing` | `accepted` | `app/services/provisioning/step_seeder.rb`, `spec/services/provisioning/step_seeder_spec.rb` | 유지보수 |
 | `PROV-2A.2` | `P0-M2` | `PROV` | `PROV-2A` | Parallel execution, retry, rollback status transitions | `PROV-2A.1` | `AC-006` / `TEST-007` | `passing` | `accepted` | `app/services/provisioning/orchestrator.rb`, `step_runner.rb`, `rollback_runner.rb`, related specs | 유지보수 |

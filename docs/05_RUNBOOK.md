@@ -19,16 +19,21 @@ bin/rails db:setup
 
 ## Local Run
 
+Web server:
+
 ```bash
 bin/dev
 ```
 
-Alternative split process:
+`bin/dev` currently execs `bin/rails server`; it does not start a worker.
+
+Worker, in a separate shell when provisioning jobs must run locally:
 
 ```bash
-bin/rails server
-bundle exec solid_queue:start
+bin/jobs
 ```
+
+Equivalent worker command: `bundle exec solid_queue:start`.
 
 ## Environment Variables
 
@@ -67,7 +72,7 @@ procedure.
 | App health | `GET /up` |
 | Provisioning job | Inspect `provisioning_jobs.status`, `error_message`, `warnings` |
 | Provisioning steps | Inspect `provisioning_steps.status`, `error_message`, `result_snapshot` |
-| Background jobs | SolidQueue process from `bin/dev` or `bundle exec solid_queue:start` |
+| Background jobs | Local worker from `bin/jobs` or `bundle exec solid_queue:start`; production may run SolidQueue in Puma via `SOLID_QUEUE_IN_PUMA=true` |
 | External API mocks in test | `spec/support/keycloak_mock.rb`, `spec/support/langfuse_mock.rb`, `spec/support/config_server_mock.rb` |
 
 ## Common Incidents
@@ -93,7 +98,7 @@ procedure.
 - Symptom: Config lookup/apply views or steps fail, while local Console CRUD may still work.
 - Detection: `ConfigServerClient` errors in job or request path.
 - Mitigation: Confirm `CONFIG_SERVER_URL` and `CONFIG_SERVER_API_KEY`; retry provisioning if side effects are safe.
-- Root-cause investigation: Check Config Server availability and Console `app_registry_webhook_job` retries.
+- Root-cause investigation: Check Config Server availability and inline app-registry provisioning step retries. `AppRegistryWebhookJob` exists as a standalone retry helper but is not used by the current step plan.
 - Related: `AC-005`
 
 ## Data Operations

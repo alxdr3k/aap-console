@@ -24,7 +24,7 @@
 | `app/controllers/provisioning_jobs_controller.rb` | Provisioning job show/retry/secrets endpoint |
 | `app/channels/provisioning_channel.rb` | Provisioning job status용 ActionCable stream |
 | `app/jobs/provisioning_execute_job.rb` | Provisioning orchestration을 실행하는 SolidQueue job |
-| `app/jobs/app_registry_webhook_job.rb` | App registry webhook retry path |
+| `app/jobs/app_registry_webhook_job.rb` | Standalone app registry webhook retry job. Current provisioning steps call the webhook inline |
 
 ## Domain / Services
 
@@ -44,6 +44,17 @@
 | `app/clients/langfuse_client.rb` | Langfuse tRPC client |
 | `app/clients/config_server_client.rb` | Config Server Admin/read API client |
 | `app/services/result.rb` | Service result object |
+
+## Views / Assets
+
+| Path | Purpose |
+|---|---|
+| `app/views/layouts/application.html.erb` | Minimal application layout |
+| `app/views/sessions/login.html.erb` | SSO auto-submit login page |
+| `app/views/pwa/` | Generated PWA placeholder views |
+| `app/assets/stylesheets/application.css` | Placeholder stylesheet |
+
+There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 
 ## Data / Persistence
 
@@ -84,3 +95,4 @@
 | `app/services/provisioning/steps/health_check.rb` | Assertion depth가 placeholder 수준이다. `SPIKE-001` 참고 |
 | `app/controllers/config_versions_controller.rb` | External rollback completeness 확인 필요. `SPIKE-002` 참고 |
 | `app/models/project_api_key.rb` | Model은 있으나 route/controller/service가 없다. `Q-001` 참고 |
+| `app/views/` / `app/javascript/` | Hotwire provisioning timeline/retry UX는 ADR target이지만 current repo에는 아직 없다. `Q-002` 참고 |

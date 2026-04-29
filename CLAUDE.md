@@ -4,7 +4,7 @@
 
 ## Project Identity
 
-AAP Console is a **Rails 8 + Hotwire + SolidQueue + SQLite** self-service management console for onboarding Organizations and Projects onto the AI Assistant Platform (AAP). It orchestrates **Keycloak**, **Langfuse**, **LiteLLM**, and an internal **Config Server** through provisioning pipelines with all-or-nothing semantics.
+AAP Console is a **Rails 8 + SolidQueue + SQLite** self-service management console for onboarding Organizations and Projects onto the AI Assistant Platform (AAP). It orchestrates **Keycloak**, **Langfuse**, **LiteLLM**, and an internal **Config Server** through provisioning pipelines with all-or-nothing semantics. Hotwire is the accepted UI target in ADR-006, but the current repo only has minimal server-rendered ERB and no Turbo/Stimulus wiring yet.
 
 The repository contains an implemented Rails app with RSpec/WebMock coverage. Code, tests, migrations, and generated schemas are authoritative for implemented behavior.
 
@@ -71,7 +71,7 @@ app/
   jobs/              # SolidQueue jobs
   channels/          # ActionCable channels
   models/            # ActiveRecord models and policy helpers
-  views/             # Hotwire/ERB views
+  views/             # minimal ERB views; Hotwire is target architecture
 spec/
   factories/
   support/           # WebMock helpers
@@ -87,7 +87,7 @@ Use `docs/current/TESTING.md` as the canonical command source.
 
 ```bash
 bin/rspec
-bin/rubocop
+RUBOCOP_CACHE_ROOT=tmp/rubocop bin/rubocop
 bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error
 bin/bundler-audit
 bin/rails db:migrate:status

@@ -34,7 +34,7 @@ You clean up documentation bloat without editing files. You produce a report the
 - docs/02_HLD.md:567-590 — PRD §5.4와 중복 (권위 파일: PRD)
 
 ### 축소 권장
-- docs/adr-002-...:80-120 — HLD 영역 침범 (구현 상세)
+- docs/adr/adr-002-...:80-120 — HLD 영역 침범 (구현 상세)
 
 ### 정리 불필요
 docs/ui-spec.md — 이슈 없음
