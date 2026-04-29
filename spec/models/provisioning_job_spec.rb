@@ -9,7 +9,7 @@ RSpec.describe ProvisioningJob, type: :model do
   describe "associations" do
     it { is_expected.to belong_to(:project) }
     it { is_expected.to have_many(:provisioning_steps).dependent(:destroy) }
-    it { is_expected.to have_one(:config_version) }
+    it { is_expected.to have_many(:config_versions).dependent(:nullify) }
   end
 
   describe "status enum" do

@@ -73,6 +73,7 @@ procedure.
 | Provisioning job | Inspect `provisioning_jobs.status`, `error_message`, `warnings` |
 | Provisioning steps | Inspect `provisioning_steps.status`, `error_message`, `result_snapshot` |
 | Background jobs | Local worker from `bin/jobs` or `bundle exec solid_queue:start`; production may run SolidQueue in Puma via `SOLID_QUEUE_IN_PUMA=true` |
+| Provisioning retention cleanup | Production recurring key `provisioning_jobs_cleanup`; job class `ProvisioningJobsCleanupJob` |
 | External API mocks in test | `spec/support/keycloak_mock.rb`, `spec/support/langfuse_mock.rb`, `spec/support/config_server_mock.rb` |
 
 ## Common Incidents
@@ -108,6 +109,7 @@ procedure.
 | Test DB prepare | `bin/rails db:test:prepare` |
 | Local DB recreate | `bin/rails db:drop db:create db:migrate` |
 | Migration status | `bin/rails db:migrate:status` |
+| Manual provisioning retention cleanup | `bin/rails runner "ProvisioningJobsCleanupJob.perform_now"` |
 | Schema source | `db/schema.rb`, `db/*_schema.rb` |
 
 ## Validation Before Release

@@ -13,14 +13,14 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Roadmap Position
 
-- current milestone: `P0-M3` 운영 안정성 release gate
+- current milestone: `P0-M4` SAML/OAuth/PAK scope and implementation
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
-- active tracks: `OPS`
-- active phase: `OPS-3A`
-- active slice: `OPS-3A.4`
-- last accepted gate: `AC-010` config rollback external restore/diagnostics
+- active tracks: `AUTH`
+- active phase: `AUTH-4A`
+- active slice: `AUTH-4A.1`
+- last accepted gate: `AC-013` provisioning job retention cleanup
 - last passing doc gate: `AC-DOC-001`
-- next gate: `AC-013`
+- next gate: `AC-011`
 - canonical ledger: `docs/04_IMPLEMENTATION_PLAN.md`
 
 ## Implemented
@@ -35,10 +35,10 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - `OPS-3A.1` release smoke validation accepted on 2026-04-29.
 - `OPS-3A.2` health check service-specific assertions for Keycloak, LiteLLM Config Server, and Langfuse.
 - `OPS-3A.3` config rollback external restore/diagnostics path.
+- `OPS-3A.4` provisioning job retention cleanup for old successful terminal jobs.
 
 ## Planned
 
-- `OPS-3A.4`: provisioning job retention cleanup.
 - `UI-2B`: Hotwire/ERB provisioning timeline and retry UX.
 - `AUTH-4A`: SAML/OAuth/PAK scope decision and implementation.
 - `PLAY-4A`: auth/ops maturity 이후 Playground.
@@ -52,12 +52,11 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Priorities
 
-1. Provisioning job retention cleanup gap을 닫거나 명시적으로 defer.
-2. `Q-001`로 SAML/OAuth/PAK MVP 범위를 결정.
+1. `Q-001`로 SAML/OAuth/PAK MVP 범위를 결정.
+2. `AC-011`을 충족하는 auth/PAK slice를 구현하거나 명시적으로 defer.
 
 ## Current Risks / Unknowns
 
-- `OPS-3A.4`: provisioning job retention cleanup scope.
 - `Q-001`: SAML/OAuth/PAK MVP scope.
 - `Q-002`: provisioning detail UI release gate.
 
@@ -65,13 +64,12 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 - Acceptance gates: `docs/06_ACCEPTANCE_TESTS.md`
 - Test command source: `docs/current/TESTING.md`
-- Current known open gates: `AC-011`, `AC-012`, `AC-013`
+- Current known open gates: `AC-011`, `AC-012`
 
 ## Needs Audit
 
 - `docs/implementation-status.md`는 legacy pointer이며 다시 canonical status가 되면 안 된다.
 - Deployment command와 rollback procedure는 아직 검증되지 않았다.
-- Retention cleanup release gate가 열려 있다.
 
 ## Links
 
