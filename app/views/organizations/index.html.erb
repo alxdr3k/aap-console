@@ -1,0 +1,45 @@
+<% content_for :title, "Organizations | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; Organizations</div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">Organizations</h1>
+      <p class="page-description">접근 가능한 Organization과 역할을 확인합니다.</p>
+    </div>
+
+    <% if current_authorization.super_admin? %>
+      <%= link_to "새 Organization", new_organization_path, class: "button" %>
+    <% end %>
+  </header>
+
+  <% if @organizations.any? %>
+    <div class="resource-list">
+      <% @organizations.each do |organization| %>
+        <%= link_to organization_path(organization.slug), class: "resource-row" do %>
+          <div>
+            <h2 class="resource-row__title"><%= organization.name %></h2>
+            <% if organization.description.present? %>
+              <p class="resource-row__description"><%= organization.description %></p>
+            <% end %>
+          </div>
+
+          <div class="resource-row__meta">
+            <span><%= pluralize(organization_project_count(organization), "Project") %></span>
+            <span class="badge"><%= organization_role_label(organization) %></span>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  <% elsif current_authorization.super_admin? %>
+    <%= render "shared/empty_state",
+               title: "Organization이 없습니다.",
+               body: "새 Organization을 생성하여 시작하세요.",
+               action: link_to("새 Organization 생성", new_organization_path, class: "button") %>
+  <% else %>
+    <%= render "shared/empty_state",
+               title: "소속된 Organization이 없습니다.",
+               body: "관리자에게 권한을 요청하세요." %>
+  <% end %>
+</section>

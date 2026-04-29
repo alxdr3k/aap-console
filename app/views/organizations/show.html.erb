@@ -1,0 +1,68 @@
+<% content_for :title, "#{@organization.name} | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; <%= @organization.name %></div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title"><%= @organization.name %></h1>
+      <% if @organization.description.present? %>
+        <p class="page-description"><%= @organization.description %></p>
+      <% end %>
+    </div>
+
+    <% if current_authorization.super_admin? %>
+      <%= button_to "Organization 삭제",
+                    organization_path(@organization.slug),
+                    method: :delete,
+                    class: "button button--secondary",
+                    data: { turbo_confirm: "Organization 삭제를 시작할까요?" } %>
+    <% end %>
+  </header>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">Projects</h2>
+    </header>
+
+    <% if @projects.any? %>
+      <div class="table-list">
+        <div class="table-list__row table-list__row--head">
+          <span>이름</span>
+          <span>App ID</span>
+          <span>상태</span>
+        </div>
+        <% @projects.each do |project| %>
+          <div class="table-list__row">
+            <span><%= project.name %></span>
+            <span><%= project.app_id %></span>
+            <span><%= project.status %></span>
+          </div>
+        <% end %>
+      </div>
+    <% elsif current_authorization.can?(:manage_org, @organization) %>
+      <%= render "shared/empty_state",
+                 title: "Project가 없습니다.",
+                 body: "Project 생성 화면은 다음 UI leaf에서 연결됩니다." %>
+    <% else %>
+      <%= render "shared/empty_state",
+                 title: "접근 가능한 Project가 없습니다.",
+                 body: "관리자에게 Project 권한을 요청하세요." %>
+    <% end %>
+  </section>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">멤버 요약</h2>
+    </header>
+
+    <div class="summary-grid">
+      <% OrgMembership::ROLES.each do |role| %>
+        <div class="summary-item">
+          <span class="summary-item__label"><%= role %></span>
+          <strong class="summary-item__value"><%= @member_counts.fetch(role, 0) %></strong>
+        </div>
+      <% end %>
+    </div>
+  </section>
+</section>

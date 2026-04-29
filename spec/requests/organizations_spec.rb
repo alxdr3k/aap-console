@@ -9,11 +9,89 @@ RSpec.describe "Organizations", type: :request do
     let!(:org) { create(:organization) }
     let!(:other_org) { create(:organization) }
 
-    before { create(:org_membership, organization: org, user_sub: user_sub) }
+    before { create(:org_membership, organization: org, user_sub: user_sub, role: "admin") }
 
     it "returns 200 with accessible orgs" do
       get "/organizations"
       expect(response).to have_http_status(:ok)
+    end
+
+    it "renders the authenticated application shell for HTML" do
+      create(:project, :active, organization: org)
+
+      get "/organizations"
+
+      expect(response.body).to include("AAP Console")
+      expect(response.body).to include("Organizations")
+      expect(response.body).to include(org.name)
+      expect(response.body).to include("1 Project")
+      expect(response.body).to include("admin")
+      expect(response.body).not_to include("새 Organization 생성")
+      expect(response.media_type).to eq("text/html")
+    end
+
+    it "keeps JSON response compatibility" do
+      get "/organizations", headers: { "ACCEPT" => "application/json" }
+
+      payload = response.parsed_body
+      expect(payload.pluck("slug")).to contain_exactly(org.slug)
+    end
+
+    context "with no memberships" do
+      before do
+        OrgMembership.delete_all
+      end
+
+      it "renders a non-admin empty state without a create CTA" do
+        get "/organizations"
+
+        expect(response.body).to include("소속된 Organization이 없습니다.")
+        expect(response.body).to include("관리자에게 권한을 요청하세요.")
+        expect(response.body).not_to include("새 Organization 생성")
+      end
+    end
+
+    context "as super_admin" do
+      before do
+        login_as(user_sub, realm_roles: [ "super_admin" ])
+      end
+
+      it "renders all organizations with the create affordance" do
+        get "/organizations"
+
+        expect(response.body).to include(org.name)
+        expect(response.body).to include(other_org.name)
+        expect(response.body).to include("새 Organization")
+      end
+
+      it "renders the super_admin empty state with a create CTA" do
+        Project.delete_all
+        OrgMembership.delete_all
+        Organization.delete_all
+
+        get "/organizations"
+
+        expect(response.body).to include("Organization이 없습니다.")
+        expect(response.body).to include("새 Organization 생성")
+      end
+    end
+  end
+
+  describe "GET /organizations/new" do
+    it "returns 403 for regular users" do
+      get "/organizations/new"
+
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it "renders the new form for super_admin" do
+      login_as(user_sub, realm_roles: [ "super_admin" ])
+
+      get "/organizations/new"
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("새 Organization 생성")
+      expect(response.body).to include("초기 관리자 user_sub")
     end
   end
 
@@ -62,6 +140,18 @@ RSpec.describe "Organizations", type: :request do
     it "returns 200" do
       get "/organizations/#{org.slug}"
       expect(response).to have_http_status(:ok)
+    end
+
+    it "renders the organization detail shell for HTML" do
+      create(:project, :active, organization: org, name: "Chatbot")
+
+      get "/organizations/#{org.slug}"
+
+      expect(response.media_type).to eq("text/html")
+      expect(response.body).to include(org.name)
+      expect(response.body).to include("Projects")
+      expect(response.body).to include("멤버 요약")
+      expect(response.body).to include("접근 가능한 Project가 없습니다.")
     end
 
     it "returns 403 for non-member" do

@@ -19,10 +19,45 @@
     <link rel="apple-touch-icon" href="/icon.png">
 
     <%# Includes all stylesheet files in app/assets/stylesheets %>
-    <%= stylesheet_link_tag "application" %>
+    <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
   </head>
 
-  <body>
-    <%= yield %>
+  <body class="app-body">
+    <div class="app-shell">
+      <header class="topbar">
+        <%= link_to "AAP Console", organizations_path, class: "brand" %>
+        <div class="topbar__user">
+          <span class="user-chip"><%= current_user_label %></span>
+          <%= button_to "로그아웃", logout_path, method: :delete, class: "button button--secondary" %>
+        </div>
+      </header>
+
+      <aside class="sidebar" aria-label="Primary navigation">
+        <nav class="sidebar__nav">
+          <%= link_to "Organizations", organizations_path, class: "sidebar__link sidebar__link--primary" %>
+
+          <% if navigation_organizations.any? %>
+            <div class="sidebar__group">
+              <% navigation_organizations.each do |organization| %>
+                <%= link_to organization.name, organization_path(organization.slug), class: "sidebar__link" %>
+              <% end %>
+            </div>
+          <% end %>
+
+          <% if current_authorization.super_admin? %>
+            <div class="sidebar__group sidebar__group--admin">
+              <span class="sidebar__label">관리</span>
+              <span class="sidebar__link sidebar__link--disabled">전체 현황</span>
+            </div>
+          <% end %>
+        </nav>
+      </aside>
+
+      <main class="main" id="main-content">
+        <%= render "shared/flash" %>
+        <%= yield %>
+      </main>
+    </div>
   </body>
 </html>

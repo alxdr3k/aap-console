@@ -4,7 +4,7 @@ Rails.application.routes.draw do
   # Auth
   get  "auth/keycloak/callback", to: "sessions#create"
   get  "auth/failure",           to: "sessions#failure"
-  delete "auth/logout",          to: "sessions#destroy"
+  delete "auth/logout",          to: "sessions#destroy", as: :logout
 
   # User search (Keycloak proxy)
   get "users/search", to: "users#search"

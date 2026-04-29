@@ -1,0 +1,8 @@
+<div class="empty-state">
+  <div class="empty-state__mark" aria-hidden="true"></div>
+  <h2 class="empty-state__title"><%= title %></h2>
+  <p class="empty-state__body"><%= body %></p>
+  <% if local_assigns[:action].present? %>
+    <%= action %>
+  <% end %>
+</div>

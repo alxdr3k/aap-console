@@ -58,11 +58,18 @@
 | Path | Purpose |
 |---|---|
 | `app/views/layouts/application.html.erb` | Minimal application layout |
+| `app/views/shared/` | Flash and empty-state partials for product UI pages |
+| `app/views/organizations/index.html.erb` | Organization index shell with role-aware create affordance and empty states |
+| `app/views/organizations/show.html.erb` | Organization detail shell with project/member summary empty states |
+| `app/views/organizations/new.html.erb` | Initial super-admin Organization creation form |
 | `app/views/sessions/login.html.erb` | SSO auto-submit login page |
 | `app/views/pwa/` | Generated PWA placeholder views |
-| `app/assets/stylesheets/application.css` | Placeholder stylesheet |
+| `app/assets/stylesheets/application.css` | Application shell, navigation, forms, flash, and empty-state styling |
+| `app/javascript/application.js` | Importmap entrypoint for Turbo and Stimulus |
+| `app/javascript/controllers/flash_controller.js` | Flash dismissal/autoclose Stimulus controller |
 
-There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
+Importmap, Turbo, and Stimulus are wired as the UI baseline. Provisioning timeline
+consumer/controllers remain planned in `UI-5B.*`.
 
 ## Data / Persistence
 
@@ -100,5 +107,5 @@ There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Core product UI, Hotwire provisioning timeline/retry UX, secret reveal, config UI, Playground, and dashboard leaves are planned in `UI-5A.*`, `UI-5B.*`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | Organization detail/member/project pages, Hotwire provisioning timeline/retry UX, secret reveal, config UI, Playground, and dashboard leaves remain planned in `UI-5A.2+`, `UI-5B.*`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

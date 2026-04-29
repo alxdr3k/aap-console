@@ -5,6 +5,10 @@ gem "sqlite3", ">= 2.1"
 gem "puma", ">= 5.0"
 gem "jbuilder"
 gem "tzinfo-data", platforms: %i[ windows jruby ]
+gem "propshaft"
+gem "importmap-rails"
+gem "turbo-rails"
+gem "stimulus-rails"
 
 # Solid stack (SQLite-backed cache, queue, cable)
 gem "solid_cache"

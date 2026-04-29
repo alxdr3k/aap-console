@@ -70,7 +70,7 @@
 | **External API Client** | 외부 서비스 HTTP 통신 추상화 | FR-1,2,4,5,6 |
 | **Job** | SolidQueue 기반 비동기 작업. 프로비저닝 오케스트레이션, App Registry webhook. Health Check는 프로비저닝 파이프라인 내 인라인 단계이므로 별도 Job 아님 | FR-7,9 |
 | **Channel** | ActionCable WebSocket. 프로비저닝 현황 실시간 스트리밍 | FR-7.3 |
-| **View** | Rails ERB 기반 서버 렌더링 UI. Hotwire(Turbo + Stimulus)는 ADR-006의 target architecture이며 current repo에는 아직 wired asset/controller가 없다 | 전체 |
+| **View** | Rails ERB 기반 서버 렌더링 UI. Importmap-backed Turbo/Stimulus baseline과 application shell이 wired 상태이며 product pages는 `UI-5A.*`부터 단계적으로 구현한다 | 전체 |
 | **Model** | ActiveRecord 모델. DB 스키마, 상태 머신, 유효성 검증 | 전체 |
 
 ---

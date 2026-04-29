@@ -17,6 +17,8 @@ class Authorization
   end
 
   def organizations
+    return Organization.all if super_admin?
+
     Organization.joins(:org_memberships).where(org_memberships: { user_sub: @user_sub })
   end
 
@@ -33,6 +35,8 @@ class Authorization
   end
 
   def accessible_projects(organization)
+    return organization.projects.where.not(status: :deleted) if super_admin?
+
     membership = org_membership(organization)
     return Project.none unless membership
 
