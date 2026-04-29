@@ -138,7 +138,7 @@ class MembersController < ApplicationController
         format.json { render json: { message: "Member removed" } }
         format.html do
           flash[:success] = "멤버가 제거되었습니다."
-          redirect_to organization_members_path(@organization.slug), status: :see_other
+          redirect_to member_destroy_redirect_path, status: :see_other
         end
       end
     end
@@ -264,6 +264,10 @@ class MembersController < ApplicationController
     @projects = active_projects
     @users_by_sub = {}
     render :index, status: status
+  end
+
+  def member_destroy_redirect_path
+    @membership.user_sub == Current.user_sub ? organizations_path : organization_members_path(@organization.slug)
   end
 
   def clear_project_permissions_for_admin!(membership)

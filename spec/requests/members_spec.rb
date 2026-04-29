@@ -288,6 +288,16 @@ RSpec.describe "Members", type: :request do
 
       expect(response).to redirect_to(organization_members_path(org.slug))
     end
+
+    it "redirects self-removal HTML to the organizations list" do
+      create(:org_membership, organization: org, user_sub: "backup-admin", role: "admin")
+
+      expect {
+        delete "/organizations/#{org.slug}/members/#{user_sub}", headers: html_headers
+      }.to change(OrgMembership, :count).by(-1)
+
+      expect(response).to redirect_to(organizations_path)
+    end
   end
 
   describe "Project permission management" do
