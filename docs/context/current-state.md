@@ -15,12 +15,12 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 - current milestone: `P0-M5` core product UI / provisioning detail / FR-1~3 completion
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
-- active tracks: `CORE`, `UI`, `SEC`
-- active phases: `CORE-5A`, `UI-5A`, `UI-5B`, `UI-5C`, `SEC-5B`
-- active slices: `CORE-5A.1` and `CORE-5A.2` landed; next candidates are `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`
+- active tracks: `UI`, `SEC`
+- active phases: `UI-5A`, `UI-5B`, `UI-5C`, `SEC-5B`
+- active slices: `CORE-5A.1`, `CORE-5A.2`, and `CORE-5A.3` landed; next candidates are `UI-5A.1`, `UI-5A.2`, `UI-5A.3`
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
-- next gates: `AC-014`, `AC-015`, `AC-016`, `AC-018`
+- next gates: `AC-014`, `AC-015`, `AC-016`
 - canonical ledger: `docs/04_IMPLEMENTATION_PLAN.md`
 
 ## Implemented
@@ -42,10 +42,11 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - `Q-002` resolved by `DEC-004`: provisioning detail UI is `P0-M5` product UI work, not a reopened `P0-M3` gate.
 - `CORE-5A.1` landed: organization creation supports a designated initial admin, organization update uses a service object, and Langfuse org name sync is covered.
 - `CORE-5A.2` landed: member create validates/pre-assigns users through Keycloak, member list can hydrate Keycloak user details, project permission grant/update/revoke API is present, and member/project-permission audit logs are covered.
+- `CORE-5A.3` landed: organization delete starts/observes child project delete jobs, records pending project/job summaries, and finalizes Langfuse/Console org deletion once all projects are deleted.
 
 ## Planned
 
-- `P0-M5`: core server-rendered UI, provisioning detail, secret reveal, org/member completion gaps.
+- `P0-M5`: core server-rendered UI, provisioning detail, and secret reveal.
 - `P1-M1`: SAML/OAuth/PAK product UI.
 - `P1-M2`: production deploy/rollback/Litestream restore evidence and audit archive.
 - `P2-M1`: Playground.
@@ -60,8 +61,8 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Priorities
 
-1. `CORE-5A.3`로 remaining FR-1 completion gap을 닫는다.
-2. `UI-5A.*` / `UI-5B.*` / `SEC-5B.1`로 server-rendered UI와 provisioning detail/secret reveal을 구현한다.
+1. `UI-5A.*`로 server-rendered core product UI를 구현한다.
+2. `UI-5B.*` / `SEC-5B.1`로 provisioning detail/secret reveal을 구현한다.
 3. `UI-5C.*`로 auth/LiteLLM/config-version UI를 제품화한다.
 
 ## Current Risks / Unknowns
@@ -75,7 +76,7 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 - Acceptance gates: `docs/06_ACCEPTANCE_TESTS.md`
 - Test command source: `docs/current/TESTING.md`
-- Current known open gates: `AC-012`, `AC-014`~`AC-022`
+- Current known open gates: `AC-012`, `AC-014`~`AC-017`, `AC-019`~`AC-022`
 
 ## Needs Audit
 
