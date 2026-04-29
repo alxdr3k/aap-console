@@ -12,10 +12,8 @@ module ProjectApiKeys
                 .where(id: project_api_key.id, revoked_at: nil)
                 .update_all(revoked_at: revoked_at, updated_at: revoked_at)
 
-      if updated == 1
-        project_api_key.reload
-        audit!("project_api_key.revoke")
-      end
+      project_api_key.reload
+      audit!("project_api_key.revoke") if updated == 1
 
       Result.success(project_api_key)
     end
