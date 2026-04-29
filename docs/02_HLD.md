@@ -639,6 +639,14 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 | GET | `/organizations/:org_slug/projects/:slug/auth_config` | 인증 설정 조회 | Project `read`+ |
 | PATCH | `/organizations/:org_slug/projects/:slug/auth_config` | 인증 방식 변경 | Project `write`+ |
 
+#### Project API Keys — FR-4
+
+| Method | Path | 설명 | 권한 |
+|--------|------|------|------|
+| GET | `/organizations/:org_slug/projects/:slug/project_api_keys` | PAK 목록. 평문 token/digest는 노출하지 않음 | Project `read`+ |
+| POST | `/organizations/:org_slug/projects/:slug/project_api_keys` | PAK 발급. 평문 token은 응답에서 1회만 반환 | Project `write`+ |
+| DELETE | `/organizations/:org_slug/projects/:slug/project_api_keys/:id` | PAK soft revoke (`revoked_at` 설정) | Project `write`+ |
+
 #### LiteLLM Config — FR-6
 
 | Method | Path | 설명 | 권한 |
@@ -682,6 +690,7 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 | Method | Path | 설명 | 인증 |
 |--------|------|------|------|
 | GET | `/api/v1/apps?all=true` | App Registry 벌크 조회 | `Authorization: Bearer <CONSOLE_INBOUND_API_KEY>` + K8s Network Policy |
+| POST | `/api/v1/project_api_keys/verify` | `active` / `update_pending` Project의 PAK digest 검증과 `last_used_at` 갱신 | `Authorization: Bearer <CONSOLE_INBOUND_API_KEY>` + K8s Network Policy |
 
 > **인증**: Network Policy는 네임스페이스 내 다른 Pod의 오남용을 막지 못하므로, Console이 사전 발급한 Bearer 토큰을 Config Server 환경변수에 주입하고 Console은 요청 헤더로 검증한다. 토큰은 `CONSOLE_INBOUND_API_KEY`로 관리하며, Config Server Admin API 호출에 사용하는 `CONFIG_SERVER_API_KEY`와 대칭을 이룬다.
 
@@ -732,6 +741,7 @@ Rails.application.routes.draw do
       resource :auth_config, only: [:show, :update]
       resource :litellm_config, only: [:show, :update]
       resources :config_versions, only: [:index]
+      resources :project_api_keys, only: [:index, :create, :destroy]
     end
   end
 
@@ -752,6 +762,7 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       resources :apps, only: [:index]
+      post "project_api_keys/verify", to: "project_api_keys#verify"
     end
   end
 
@@ -1431,7 +1442,7 @@ Health Check 실패는 프로비저닝 전체를 롤백하지 않고 **경고(wa
 | **FR-1** | Organization CRUD | `organizations`, `org_memberships` | `OrganizationsController` | `Organizations::*Service` | `LangfuseClient` (Org) | — |
 | **FR-2** | RBAC | `org_memberships`, `project_permissions` | `MembersController`, `ApplicationController` (인가) | — | `KeycloakClient` (사용자 검색/조회) | — |
 | **FR-3** | Project CRUD | `projects`, `project_auth_configs`, `project_permissions` | `ProjectsController` | `Projects::*Service` | — | `ProvisioningJob` |
-| **FR-4** | 인증 체계 자동 구성 | `project_auth_configs`, `project_api_keys` | `AuthConfigsController` | `Steps::KeycloakClientCreate` | `KeycloakClient` (Client) | — |
+| **FR-4** | 인증 체계 자동 구성 | `project_auth_configs`, `project_api_keys` | `AuthConfigsController`, `ProjectApiKeysController`, `Api::V1::ProjectApiKeysController` | `Steps::KeycloakClientCreate`, `ProjectApiKeys::*Service` | `KeycloakClient` (Client) | — |
 | **FR-5** | Langfuse 프로젝트/Key | — (Console 미저장) | — | `Steps::LangfuseProjectCreate` | `LangfuseClient` | — |
 | **FR-6** | LiteLLM Config | — (Config Server 위임) | `LitellmConfigsController` | `Steps::ConfigServerApply` | `ConfigServerClient` | — |
 | **FR-7.1** | 상태 머신 | `provisioning_jobs` | — | `Provisioning::Orchestrator` | — | `ProvisioningJob` |

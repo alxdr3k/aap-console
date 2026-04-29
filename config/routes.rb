@@ -17,6 +17,7 @@ Rails.application.routes.draw do
       resource  :auth_config,    only: [ :show, :update ]
       resource  :litellm_config, only: [ :show, :update ]
       resources :config_versions, only: [ :index ]
+      resources :project_api_keys, only: [ :index, :create, :destroy ]
     end
   end
 
@@ -37,6 +38,7 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       resources :apps, only: [ :index ]
+      post "project_api_keys/verify", to: "project_api_keys#verify"
     end
   end
 

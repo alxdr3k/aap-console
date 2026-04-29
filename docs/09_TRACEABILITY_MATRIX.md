@@ -11,7 +11,7 @@ Question, decision, requirement, acceptance gate, test, slice를 연결한다.
 | `TRACE-003` |  | ADR-002 | FR-5 | `AC-005` / `TEST-005` | `INTEG-2A.2` | Langfuse tRPC integration |
 | `TRACE-004` |  | ADR-005 | NFR availability / persistence | `AC-008` | `OPS-3A.1` | SQLite + Litestream operational gate |
 | `TRACE-005` |  | ADR-006 | UI / realtime | `AC-007` / `TEST-008` | `UI-2B.1` | ActionCable JSON stream landed; Hotwire UI target remains open |
-| `TRACE-006` | `Q-001` | pending | FR-4 | `AC-011` | `AUTH-4A.1`, `AUTH-4A.2` | SAML/OAuth/PAK scope decision |
+| `TRACE-006` | `Q-001` | pending | FR-4 | `AC-011` / `TEST-011A` | `AUTH-4A.1`, `AUTH-4A.2` | PAK API landed; SAML/OAuth scope decision remains |
 | `TRACE-007` |  | `DEC-001` | DOC-M1 | `AC-DOC-001` | `DOC-1A.2`, `DOC-1A.3`, `DOC-1A.4` | Roadmap/status taxonomy and maintenance drift workflow migration |
 | `TRACE-008` |  | `DEC-002` | DOC-M1 | `AC-DOC-001` | `DOC-1A.1` | Numbered PRD/HLD canonical paths |
 | `TRACE-009` |  | pending | FR-9 | `AC-009` / `TEST-009` | `OPS-3A.2` | Health check verifies Keycloak, LiteLLM Config Server, and Langfuse read paths |

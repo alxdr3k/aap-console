@@ -53,7 +53,7 @@ Current `ConfigVersion` snapshot은 LiteLLM Config Server 설정만 보유한다
 
 ### SPIKE-003: SAML/OAuth/PAK MVP 범위
 
-- Hypothesis: OIDC 외 인증 방식과 PAK는 schema/model 일부가 존재하지만, 제품 MVP에서는 scope 축소 또는 Phase 4 이동이 필요할 수 있다.
+- Hypothesis: OIDC 외 인증 방식과 PAK는 구현 범위가 다르므로 제품 MVP에서는 scope 축소 또는 Phase 4 이동이 필요할 수 있다.
 - Owner: Platform TG
 - Time-box: 1 day
 - Start / End: anchor missing
@@ -61,11 +61,11 @@ Current `ConfigVersion` snapshot은 LiteLLM Config Server 설정만 보유한다
 
 **Experiment**
 
-PRD FR-4, UI Spec phase gating, 현재 `ProjectApiKey` model/schema, Keycloak step 구현 범위를 비교해 `implement`, `defer`, `drop` 후보를 나눈다.
+PRD FR-4, UI Spec phase gating, 현재 PAK API와 Keycloak SAML/OAuth step 구현 범위를 비교해 `implement`, `defer`, `drop` 후보를 나눈다.
 
 **Result**
 
-Not run.
+Partial: PAK issue/revoke/verify API is implemented. SAML/OAuth UI/metadata scope remains open.
 
 **Decision / Next Step**
 

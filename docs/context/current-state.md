@@ -36,11 +36,12 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - `OPS-3A.2` health check service-specific assertions for Keycloak, LiteLLM Config Server, and Langfuse.
 - `OPS-3A.3` config rollback external restore/diagnostics path.
 - `OPS-3A.4` provisioning job retention cleanup for old successful terminal jobs.
+- `AUTH-4A.2` PAK issue/revoke/verify API and inbound verification endpoint.
 
 ## Planned
 
 - `UI-2B`: Hotwire/ERB provisioning timeline and retry UX.
-- `AUTH-4A`: SAML/OAuth/PAK scope decision and implementation.
+- `AUTH-4A`: SAML/OAuth scope decision and PAK UI follow-up.
 - `PLAY-4A`: auth/ops maturity 이후 Playground.
 
 ## Explicit Non-goals
@@ -52,12 +53,12 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Priorities
 
-1. `Q-001`로 SAML/OAuth/PAK MVP 범위를 결정.
-2. `AC-011`을 충족하는 auth/PAK slice를 구현하거나 명시적으로 defer.
+1. `Q-001`의 SAML/OAuth MVP 범위를 결정.
+2. `AC-011` 잔여 범위(SAML/OAuth, PAK UI)를 구현하거나 명시적으로 defer.
 
 ## Current Risks / Unknowns
 
-- `Q-001`: SAML/OAuth/PAK MVP scope.
+- `Q-001`: SAML/OAuth MVP scope.
 - `Q-002`: provisioning detail UI release gate.
 
 ## Current Validation

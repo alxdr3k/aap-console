@@ -9,13 +9,13 @@
 - Opened: 2026-04-29
 - Owner: Platform TG
 - Status: open
-- Proposed Answer: OIDC는 유지하고, SAML/OAuth/PAK는 `P0-M4`로 분리한다. PAK는 schema/model이 있으므로 제품 요구가 있으면 API/UI slice를 별도 착수한다.
+- Proposed Answer: OIDC는 유지하고, SAML/OAuth/PAK는 `P0-M4`로 분리한다. PAK API는 먼저 착수하고, SAML/OAuth UI/metadata 범위는 별도 확정한다.
 - Blocks: `AUTH-4A.1`, `AUTH-4A.2`, `AC-011`
-- Resolution: pending
+- Resolution: partial — PAK issue/revoke/verify API landed; SAML/OAuth scope remains pending.
 
 **Context**
 
-현재 `ProjectApiKey` model/schema/factory는 있으나 controller/route/service가 없고, Keycloak provisioning step은 OIDC 기본 경로 중심이다.
+현재 `ProjectApiKey` model/schema/factory와 PAK issue/revoke/verify API는 존재한다. SAML/OAuth Keycloak client path는 일부 구현되어 있으나 UI/metadata 입력 범위가 아직 확정되지 않았다.
 
 **Discussion**
 
