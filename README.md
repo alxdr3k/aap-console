@@ -12,10 +12,10 @@ AI Assistant Platform (AAP) 셀프서비스 관리 콘솔. Organization / Projec
 | 영역 | 기술 |
 |------|------|
 | Backend | Ruby on Rails 8 |
-| Frontend | Hotwire (Turbo + Stimulus) |
+| Frontend | Rails server-rendered ERB. Hotwire/Turbo/Stimulus는 ADR-006의 target architecture이며 현재 repo에는 아직 wired asset/controller가 없다 |
 | Background Job | SolidQueue |
 | Realtime | ActionCable + SolidCable |
-| Database | SQLite (WAL) + Litestream 백업 |
+| Database | SQLite (WAL). Litestream 백업은 ADR/배포 target이며 현재 repo 배포 설정에는 아직 wired sidecar가 없다 |
 | Auth | Keycloak (OIDC) + Console DB RBAC |
 
 ## 로컬 개발 환경
@@ -55,10 +55,10 @@ bin/rails db:setup   # db:create + db:migrate + db:seed
 ### 4. 실행
 
 ```bash
-bin/dev           # Procfile.dev: Rails + SolidQueue worker 동시 기동
+bin/dev           # Rails server only
 # 또는
 bin/rails server
-bundle exec solid_queue:start   # 별도 쉘
+bin/jobs          # SolidQueue worker in a separate shell
 ```
 
 ## 테스트
@@ -132,5 +132,5 @@ docs/                # PRD / HLD / ADR / UI Spec (한글)
 
 - 커밋 메시지는 영문, `<type>(<scope>): <description>` 규칙 (`feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `harness`)
 - 문서 prose는 한글
-- PR 전 필수: `bin/rspec`, `bin/rubocop`, `bin/brakeman`, `bin/bundler-audit`
+- PR 전 필수: `bin/rspec`, `RUBOCOP_CACHE_ROOT=tmp/rubocop bin/rubocop`, `bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error`, `bin/bundler-audit`
 - 배포 가능 상태 확인은 [roadmap/status ledger](./docs/04_IMPLEMENTATION_PLAN.md)와 [acceptance gates](./docs/06_ACCEPTANCE_TESTS.md) 참조

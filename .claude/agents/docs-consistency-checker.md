@@ -16,7 +16,7 @@ Find cross-document inconsistencies before they reach review. Flag them concisel
 
 - `docs/01_PRD.md` — functional requirements (FR-N), glossary (§2), API endpoints per integration.
 - `docs/02_HLD.md` — schemas, component boundaries, FR traceability matrix (§12).
-- `docs/adr-*.md` — accepted design decisions. Each has a single scope.
+- `docs/adr/adr-*.md` — accepted design decisions. Each has a single scope.
 - `docs/ui-spec.md` — screens, state-to-UI mapping.
 - `docs/business-objectives.md` — BO-N drives PRD FRs.
 

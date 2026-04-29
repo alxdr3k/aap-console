@@ -22,7 +22,7 @@ gate / acceptance 상태만 관리한다.
 | ID | REQ/NFR | Scenario | Verification | Status |
 |---|---|---|---|---|
 | `AC-001` | FR-1 | Given a signed-in authorized user, when they create/read/update/delete organizations, then persisted organization state and authorization checks behave as expected | automated `TEST-001` | `passing` |
-| `AC-002` | FR-2 | Given org roles and project permissions, when users access member/project resources, then RBAC, last-admin guard, and self-demotion guard are enforced | automated `TEST-002` | `passing` |
+| `AC-002` | FR-2 | Given org roles and project permissions, when users access member/project/user-search resources, then RBAC, last-admin guard, and self-demotion guard are enforced | automated `TEST-002` | `passing` |
 | `AC-003` | FR-3 | Given an organization, when a project is created/updated/deleted, then app ID, slug uniqueness, status transitions, and provisioning job creation are correct | automated `TEST-003` | `passing` |
 | `AC-004` | FR-4 | Given an OIDC auth config, when provisioning runs, then Keycloak client create/update/delete paths are called through mocked Admin API and server-owned identifiers are persisted | automated `TEST-004` | `passing` |
 | `AC-005` | FR-5 / FR-6 | Given a provisioning job, when Langfuse and Config Server steps run, then Langfuse project keys are handed off ephemerally and LiteLLM config is applied via Config Server | automated `TEST-005` | `passing` |
@@ -40,7 +40,7 @@ gate / acceptance 상태만 관리한다.
 | ID | Name | Location | Covers |
 |---|---|---|---|
 | `TEST-001` | Organization request specs | `spec/requests/organizations_spec.rb`, `spec/services/organizations/*_spec.rb`, `spec/models/organization_spec.rb` | `AC-001` |
-| `TEST-002` | RBAC/member specs | `spec/requests/members_spec.rb`, `spec/models/authorization_spec.rb`, `spec/models/org_membership_spec.rb` | `AC-002` |
+| `TEST-002` | RBAC/member specs | `spec/requests/members_spec.rb`, `spec/requests/users_spec.rb`, `spec/models/authorization_spec.rb`, `spec/models/org_membership_spec.rb` | `AC-002` |
 | `TEST-003` | Project lifecycle specs | `spec/requests/projects_spec.rb`, `spec/services/projects/*_spec.rb`, `spec/models/project_spec.rb` | `AC-003` |
 | `TEST-004` | Keycloak/auth config specs | `spec/requests/auth_configs_spec.rb`, `spec/clients/keycloak_client_spec.rb`, `spec/services/provisioning/steps/keycloak_client_*_spec.rb` | `AC-004` |
 | `TEST-005` | Langfuse/Config Server specs | `spec/clients/langfuse_client_spec.rb`, `spec/clients/config_server_client_spec.rb`, `spec/services/provisioning/steps/langfuse_project_create_spec.rb`, `spec/services/provisioning/steps/config_server_apply_spec.rb` | `AC-005` |

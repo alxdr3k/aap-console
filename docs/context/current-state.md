@@ -5,10 +5,11 @@
 
 ## Product / Project
 
-AAP Console은 Organization / Project 온보딩을 위한 Rails 8 + Hotwire 기반
-self-service management console이다. Keycloak, Langfuse, Config Server를 통한
-LiteLLM config, SolidQueue provisioning job, ActionCable status stream을
-오케스트레이션한다.
+AAP Console은 Organization / Project 온보딩을 위한 Rails 8 기반 self-service
+management console이다. Keycloak, Langfuse, Config Server를 통한 LiteLLM config,
+SolidQueue provisioning job, ActionCable status stream을 오케스트레이션한다.
+Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stimulus wiring
+없이 minimal ERB/API surface만 있다.
 
 ## Current Roadmap Position
 
@@ -29,7 +30,7 @@ LiteLLM config, SolidQueue provisioning job, ActionCable status stream을
 - Parallel step group, scheduled retry, rollback, warning step handling을 가진 provisioning orchestrator.
 - Keycloak OIDC client path, Langfuse project create path, Config Server apply/delete path.
 - Config version listing과 rollback entry point. `POST /config_versions/:id/rollback`는 현재 501 Not Implemented를 반환하고 audit log만 남긴다.
-- Authorization check를 포함한 ActionCable `ProvisioningChannel`.
+- Authorization check와 JSON `step_update` / `job_completed` payload를 포함한 ActionCable `ProvisioningChannel`.
 - Core request, model, service, job, client, channel path에 대한 RSpec/WebMock coverage.
 
 ## Planned
@@ -37,6 +38,7 @@ LiteLLM config, SolidQueue provisioning job, ActionCable status stream을
 - `OPS-3A.1`: release gate용 full smoke validation.
 - `OPS-3A.2`: health check service-specific assertion.
 - `OPS-3A.3`: config rollback external restore path.
+- `UI-2B`: Hotwire/ERB provisioning timeline and retry UX.
 - `AUTH-4A`: SAML/OAuth/PAK scope decision and implementation.
 - `PLAY-4A`: auth/ops maturity 이후 Playground.
 

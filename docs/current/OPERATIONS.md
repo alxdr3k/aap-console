@@ -4,14 +4,23 @@
 
 ## Local Run
 
+Web server:
+
 ```bash
 bin/dev
 ```
 
-Alternative:
+`bin/dev` currently execs `bin/rails server`; it does not start a worker.
+
+Worker, in a separate shell when provisioning jobs must run locally:
 
 ```bash
-bin/rails server
+bin/jobs
+```
+
+Equivalent worker command:
+
+```bash
 bundle exec solid_queue:start
 ```
 
@@ -60,8 +69,9 @@ bin/rails db:test:prepare
 
 - Runtime job backend: SolidQueue.
 - Main job: `app/jobs/provisioning_execute_job.rb`.
-- App registry retry job: `app/jobs/app_registry_webhook_job.rb`.
-- Local worker: `bundle exec solid_queue:start` 또는 `bin/dev`.
+- App registry retry job: `app/jobs/app_registry_webhook_job.rb` exists, but the current provisioning steps call the app-registry webhook inline.
+- Local worker: `bin/jobs` 또는 `bundle exec solid_queue:start`. `bin/dev`는 worker를 시작하지 않는다.
+- Production Kamal config sets `SOLID_QUEUE_IN_PUMA=true`, so the web Puma process runs the SolidQueue supervisor unless deployment config changes.
 
 ## Deployment
 
@@ -73,6 +83,7 @@ Deployment artifact는 존재한다.
 
 정확한 production deployment command와 rollback procedure는 이 migration에서
 검증하지 않았다. Deployment를 accepted gate로 보기 전에 여기에 기록해야 한다.
+Litestream sidecar/restore wiring도 현재 repo 배포 설정에는 아직 없다.
 
 ## Troubleshooting
 

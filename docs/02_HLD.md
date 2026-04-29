@@ -70,7 +70,7 @@
 | **External API Client** | 외부 서비스 HTTP 통신 추상화 | FR-1,2,4,5,6 |
 | **Job** | SolidQueue 기반 비동기 작업. 프로비저닝 오케스트레이션, App Registry webhook. Health Check는 프로비저닝 파이프라인 내 인라인 단계이므로 별도 Job 아님 | FR-7,9 |
 | **Channel** | ActionCable WebSocket. 프로비저닝 현황 실시간 스트리밍 | FR-7.3 |
-| **View** | Hotwire (Turbo + Stimulus) 기반 서버 렌더링 UI | 전체 |
+| **View** | Rails ERB 기반 서버 렌더링 UI. Hotwire(Turbo + Stimulus)는 ADR-006의 target architecture이며 current repo에는 아직 wired asset/controller가 없다 | 전체 |
 | **Model** | ActiveRecord 모델. DB 스키마, 상태 머신, 유효성 검증 | 전체 |
 
 ---
@@ -318,7 +318,7 @@ provisioning ── create 성공 ──▶ active
 
 **동시성 제어**: 동일 `project_id`에 대해 `pending` / `in_progress` / `retrying` / `rolling_back` 상태의 job이 있으면 새 job 생성을 거부한다 (앱 레벨 검증 + `(project_id)` 부분 인덱스로 활성 Job 유일성 보장). 상세는 §5.5 참조.
 
-**retention**: 180일 보관 후 일일 배치 Job(`ProvisioningJobsCleanupJob`)이 `completed` / `rolled_back` / `completed_with_warnings` 레코드를 아카이빙(S3)하고 삭제. `failed` / `rollback_failed`는 관리자 확인 전까지 보존. `audit_logs`(365일)보다 짧은 이유는 프로비저닝 로그가 감사 증적이 아닌 운영 진단 목적이며, 상태 변경 이벤트 자체는 `audit_logs`에 별도로 기록되기 때문이다.
+**retention target**: 180일 보관 후 일일 배치 Job(`ProvisioningJobsCleanupJob`)이 `completed` / `rolled_back` / `completed_with_warnings` 레코드를 아카이빙(S3)하고 삭제. `failed` / `rollback_failed`는 관리자 확인 전까지 보존. Current repo에는 아직 `ProvisioningJobsCleanupJob`이 없으며, retention cleanup은 `AC-008` 운영 gate에서 닫아야 한다.
 
 #### provisioning_steps — FR-7.2
 
@@ -342,7 +342,7 @@ provisioning ── create 성공 ──▶ active
 
 | name | step_order | 설명 | 롤백 동작 |
 |------|-----------|------|-----------|
-| `app_registry_register` | 1 | Config Server webhook (fire-and-forget) | webhook `action: delete` |
+| `app_registry_register` | 1 | Config Server webhook (inline 확인) | webhook `action: delete` |
 | `keycloak_client_create` | 2 | Keycloak Client 생성 (FR-4) | Client 삭제 |
 | `langfuse_project_create` | 2 | Langfuse Project + SDK Key (FR-5) | Project 삭제 |
 | `config_server_apply` | 3 | Config Server 설정/시크릿 반영 (FR-6) | 설정 삭제 |
@@ -364,7 +364,7 @@ provisioning ── create 성공 ──▶ active
 | `snapshot` | JSON | 변경 시점의 설정 스냅샷. Keycloak/Langfuse 롤백 시 사용 |
 | `created_at` | datetime | |
 
-**retention**: `config_versions`는 운영상 롤백 이력이므로 기본적으로 **영구 보존**한다. Project 가 삭제되면(`projects.status = deleted`) 연관 레코드도 cascade 삭제한다. 저장 공간 문제가 되면 Project당 최근 100개 + 최근 1년 이내 레코드만 유지하는 정책으로 전환한다 (`ConfigVersionsPruneJob`).
+**retention**: `config_versions`는 운영상 롤백 이력이므로 기본적으로 **영구 보존**한다. Project 가 삭제되면(`projects.status = deleted`) 연관 레코드도 cascade 삭제한다. 저장 공간 문제가 되면 Project당 최근 100개 + 최근 1년 이내 레코드만 유지하는 정책으로 전환한다. Current repo에는 아직 `ConfigVersionsPruneJob`이 없다.
 
 #### audit_logs — FR-8
 
@@ -380,7 +380,7 @@ provisioning ── create 성공 ──▶ active
 | `details` | JSON | 액션별 추가 정보 |
 | `created_at` | datetime | |
 
-**retention**: 감사 로그는 **1년(365일)** 보관 후 일일 배치(`AuditLogsArchiveJob`)가 S3(Litestream 백업 버킷과 분리된 archive prefix)로 JSONL 형식 아카이빙 후 레코드 삭제. Project/Organization 삭제 시에도 감사 로그는 유지(참조 FK를 NULL 허용으로 설계).
+**retention target**: 감사 로그는 **1년(365일)** 보관 후 일일 배치(`AuditLogsArchiveJob`)가 S3(Litestream 백업 버킷과 분리된 archive prefix)로 JSONL 형식 아카이빙 후 레코드 삭제. Project/Organization 삭제 시에도 감사 로그는 유지(참조 FK를 NULL 허용으로 설계). Current repo에는 아직 `AuditLogsArchiveJob`이 없다.
 
 ### 2.3 인덱스
 
@@ -504,7 +504,7 @@ app/
 │
 ├── jobs/
 │   ├── provisioning_execute_job.rb       # FR-7: SolidQueue Job
-│   └── app_registry_webhook_job.rb       # fire-and-forget + async retry
+│   └── app_registry_webhook_job.rb       # standalone webhook retry helper; current step plan calls webhook inline
 │
 ├── channels/
 │   └── provisioning_channel.rb           # FR-7.3: WebSocket 스트리밍
@@ -620,7 +620,7 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 | POST | `/organizations/:org_slug/members` | 멤버 추가 | Org `admin` |
 | PATCH | `/organizations/:org_slug/members/:user_sub` | 권한 변경 | Org `admin` |
 | DELETE | `/organizations/:org_slug/members/:user_sub` | 멤버 제거 | Org `admin` |
-| GET | `/users/search?q=` | 사용자 검색 (Keycloak 프록시) | Org `admin` |
+| GET | `/users/search?q=` | 사용자 검색 (Keycloak 프록시) | Any Org `admin` 또는 `super_admin` |
 
 #### Project — FR-3
 
@@ -828,7 +828,7 @@ Orchestrator.run(job)
 
 | 단계 | max_retries | 재시도 간격 | 비고 |
 |------|-------------|------------|------|
-| `app_registry_register` | 5 | Exponential (2, 4, 8, 16, 32초) | fire-and-forget이지만 프로비저닝 내에서는 확인 |
+| `app_registry_register` | 5 | Exponential (2, 4, 8, 16, 32초) | Config Server webhook을 inline으로 확인 |
 | `keycloak_client_create` | 3 | Exponential (2, 4, 8초) | |
 | `langfuse_project_create` | 3 | Exponential (2, 4, 8초) | |
 | `config_server_apply` | 3 | Exponential (2, 4, 8초) | |
@@ -842,12 +842,15 @@ Orchestrator.run(job)
 
 ### 5.4 ActionCable 상태 브로드캐스트 — FR-7.3
 
-`StepRunner`는 각 단계 상태 변경 시 ActionCable로 Turbo Stream을 브로드캐스트한다:
+`StepRunner`는 각 단계 상태 변경 시 `ProvisioningChannel.broadcast_to`로 JSON payload를 브로드캐스트한다:
 
 1. `execute` → 상태를 `in_progress`로 변경 + 브로드캐스트
 2. 성공 시 → `completed` + `result_snapshot` 저장 + 브로드캐스트
 3. 실패 시 → 재시도 가능하면 `retrying`, 불가하면 `failed` + 예외 전파
-4. 모든 상태 변경은 `Turbo::StreamsChannel.broadcast_replace_to`로 해당 step의 partial을 실시간 교체
+4. payload shape: `{ type: "step_update", step_id:, status:, error: }`
+
+Turbo Stream partial 교체는 Hotwire UI가 들어올 때의 target flow이며, current repo에는
+matching Turbo Stream view/Stimulus consumer가 없다.
 
 > **`after_commit` 브로드캐스트**: 상태 변경은 반드시 DB 트랜잭션 커밋 이후 브로드캐스트한다(`after_commit` 콜백 또는 `ActiveRecord::Base.transaction` 블록 종료 후 명시적 호출). 트랜잭션 내부에서 브로드캐스트하면 구독자가 아직 커밋되지 않은 상태를 읽어 오래된 데이터를 표시할 수 있다.
 
@@ -882,7 +885,7 @@ Orchestrator.run(job)
 
 | Step | 멱등성 확인 방법 | 비고 |
 |------|-----------------|------|
-| `app_registry_register` | Config Server App 목록 조회하여 app_id 존재 여부 확인 | GET API 호출 |
+| `app_registry_register` | `result_snapshot.registered == true` | Config Server webhook은 idempotency key로 보호 |
 | `keycloak_client_create` | `GET /admin/realms/{realm}/clients?clientId={clientId}`로 Client 존재 확인 | clientId 네이밍 규칙으로 검색 |
 | `langfuse_project_create` | `step_record.result_snapshot`의 `langfuse_project_id` 존재 + Langfuse API로 확인 | 이전 실행의 result_snapshot 활용 |
 | `config_server_apply` | Config Server에서 해당 app의 설정 존재 여부 조회 | GET API 호출 |
@@ -979,20 +982,28 @@ Orchestrator.run(job)
 `ProvisioningChannel` (`app/channels/provisioning_channel.rb`):
 
 - `subscribed`: `job_id` 파라미터로 Job 조회 → 해당 Project에 대한 `read`+ 권한 검증 → `stream_for job`
-- 클라이언트는 `turbo_stream_from "provisioning_job_#{@job.id}"`로 구독
+- 클라이언트는 ActionCable consumer로 `job_id`를 전달해 구독한다. Hotwire UI가 추가되면 `turbo_stream_from` wrapper를 둘 수 있다.
 
-### 6.2 Turbo Stream 연동
+### 6.2 Current JSON Payloads / Target Turbo Stream UI
+
+Current implementation:
+
+- `StepRunner` broadcasts `{ type: "step_update", step_id:, status:, error: }`.
+- `Orchestrator` broadcasts `{ type: "job_completed", status: }`.
+- `GET /provisioning_jobs/:id` returns the full job/step JSON for polling.
+
+Target Hotwire UI:
 
 | 뷰 | 역할 |
 |----|------|
-| `provisioning_jobs/show.html.erb` | `turbo_stream_from`으로 채널 구독 + step 목록 렌더링 |
-| `provisioning_steps/_step.html.erb` | `turbo_frame_tag dom_id(step)`으로 개별 step 렌더링. 상태 아이콘/이름/상태/에러 표시 |
-
-Step 상태 변경 시 서버에서 `broadcast_replace_to`로 해당 step의 partial을 실시간 교체한다.
+| planned `provisioning_jobs/show.html.erb` | `turbo_stream_from`으로 채널 구독 + step 목록 렌더링 |
+| planned `provisioning_steps/_step.html.erb` | `turbo_frame_tag dom_id(step)`으로 개별 step 렌더링. 상태 아이콘/이름/상태/에러 표시 |
 
 ### 6.3 Job 완료 시 알림
 
-Job 완료 시 `Orchestrator`가 `job.status`를 갱신하고 `broadcast_replace_to`로 전체 상태 partial을 교체한다.
+Job 완료 시 `Orchestrator`가 `job.status`를 갱신하고 JSON `job_completed` payload를
+`ProvisioningChannel.broadcast_to`로 전송한다. 전체 상태 partial 교체는 target Hotwire
+UI에서 추가한다.
 
 ### 6.4 SolidCable 폴링 주기
 
@@ -1001,7 +1012,7 @@ ActionCable의 pub/sub adapter로 `SolidCable`(SQLite 기반)을 사용한다. S
 | 파라미터 | 기본값 | Console 설정 | 근거 |
 |---------|-------|-------------|------|
 | `polling_interval` | `0.1s` | `0.1s` 유지 | 프로비저닝 현황 실시간성(PRD 6.2 목표 ≤1초) 충족. SQLite WAL 모드에서 100ms 폴링의 부하는 무시할 수준 |
-| `message_retention` | `1.day` | `1.hour` | 프로비저닝 Job 평균 수명이 분 단위이므로 1시간이면 충분. 저장 공간 절약 |
+| `message_retention` | `1.day` | `1.day` | 현재 `config/cable.yml` production 값 |
 | `connect_timeout` | `20s` | 기본값 | ActionCable 연결 실패 시 UI가 빠르게 재연결 배너를 띄우도록 |
 
 `config/cable.yml`에 production 환경으로 명시한다.
@@ -1025,7 +1036,9 @@ Target flow는 다음 경로를 사용한다:
 4. 컨트롤러는 매 호출마다 요청 사용자의 해당 Project `write`+ 권한을 다시 검증하고, 캐시가 존재하면 값을 응답한다. 캐시는 TTL 만료 시에만 자동 삭제되며 **응답 즉시 무효화하지 않는다** — "누가 먼저 fetch 했는지" 로 나머지 관리자가 차단되는 구조를 피하기 위함.
 5. UI 측 Stimulus 컨트롤러는 "확인 — 안전하게 저장했습니다" 클릭 시 **해당 브라우저 세션에서만** 재조회 방지 플래그를 기록한다(localStorage). 이는 UX 힌트이며 서버는 여전히 응답한다.
 
-캐시 저장소는 Rails 8 `solid_cache_store` 기본값을 사용한다 (SQLite 기반). Pod 재시작 시 캐시가 소실되면 시크릿 재발급 플로우(인증 설정 편집 → Secret 재발급)로 복구한다.
+캐시 저장소는 production에서 `solid_cache_store`를 사용한다. development는
+`:memory_store`, test는 `:null_store`다. Pod 재시작 시 캐시가 소실되면 시크릿
+재발급 플로우(인증 설정 편집 → Secret 재발급)로 복구한다.
 
 > **설계 의도**: ActionCable 브로드캐스트를 쓰지 않는 이유는 **세션별 인가 검증이 불가능** 하기 때문이다. `GET /secrets` 는 매 요청마다 `project_permissions` 를 확인하므로, 권한이 있는 세션은 TTL 내에 언제든 접근할 수 있고 권한이 없는 세션은 차단된다. "한 번 본 사람만 다시 볼 수 있는" 기능은 이 흐름의 보안 요건이 아니다.
 

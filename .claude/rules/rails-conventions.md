@@ -8,7 +8,7 @@ paths:
 
 # Rails Conventions
 
-Load only when editing Ruby under `app/`, `spec/`, or `config/`. Rails 8 + Hotwire + SolidQueue + SQLite.
+Load only when editing Ruby under `app/`, `spec/`, or `config/`. Rails 8 + SolidQueue + SQLite; Hotwire is the target UI architecture, not fully wired in current code.
 
 ## TDD is non-negotiable
 
@@ -55,6 +55,6 @@ Load only when editing Ruby under `app/`, `spec/`, or `config/`. Rails 8 + Hotwi
 
 ## Hotwire defaults
 
-- Default to server-rendered ERB + Turbo. Reach for Stimulus only when a DOM-local interaction has no server counterpart.
-- ActionCable broadcasts go through `Turbo::StreamsChannel.broadcast_replace_to` with a `dom_id`-keyed frame.
+- Default to server-rendered ERB + Turbo when adding UI. Reach for Stimulus only when a DOM-local interaction has no server counterpart.
+- Current provisioning realtime code broadcasts JSON via `ProvisioningChannel.broadcast_to`; only switch to `Turbo::StreamsChannel.broadcast_replace_to` when the matching Turbo Stream views/frames exist.
 - Keep Stimulus controllers small and single-purpose. No client-side state that duplicates server state.
