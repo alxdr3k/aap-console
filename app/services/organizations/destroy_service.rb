@@ -15,7 +15,7 @@ module Organizations
       end
 
       non_deleted_projects.each do |project|
-        next if project.deleting?
+        next if active_delete_job_exists?(project)
 
         result = Projects::DestroyService.new(project: project, current_user_sub: @current_user_sub).call
         return result if result.failure?
@@ -59,10 +59,19 @@ module Organizations
 
     def blocking_project_with_active_job(projects)
       projects.find do |project|
-        next false if project.deleting?
-
-        project.provisioning_jobs.where(status: ProvisioningJob::ACTIVE_STATUSES).exists?
+        active_non_delete_job_exists?(project)
       end
+    end
+
+    def active_delete_job_exists?(project)
+      project.provisioning_jobs.where(operation: "delete", status: ProvisioningJob::ACTIVE_STATUSES).exists?
+    end
+
+    def active_non_delete_job_exists?(project)
+      project.provisioning_jobs
+             .where(status: ProvisioningJob::ACTIVE_STATUSES)
+             .where.not(operation: "delete")
+             .exists?
     end
 
     def audit_deferred_destroy!(pending_projects)

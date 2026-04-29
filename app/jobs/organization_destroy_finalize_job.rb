@@ -39,6 +39,7 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
       "[OrganizationDestroyFinalizeJob] Failed to finalize organization " \
       "#{organization.id} destroy: #{result.error}"
     )
+    self.class.set(wait: RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
   end
 
   def delete_in_progress?(projects)

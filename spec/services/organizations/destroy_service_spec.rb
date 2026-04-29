@@ -74,6 +74,16 @@ RSpec.describe Organizations::DestroyService do
         expect(result.data[:deferred]).to be true
       end
 
+      it "restarts a stalled deleting project with no active delete job" do
+        project.update!(status: :deleting)
+
+        expect {
+          described_class.new(organization: organization, current_user_sub: user_sub).call
+        }.to change { project.provisioning_jobs.where(operation: "delete").count }.by(1)
+
+        expect(project.reload.status).to eq("deleting")
+      end
+
       it "does not start partial project deletes when another project has an active non-delete job" do
         clear_project = create(:project, :active, organization: organization)
         blocked_project = create(:project, :update_pending, organization: organization)

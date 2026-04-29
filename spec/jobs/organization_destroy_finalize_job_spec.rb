@@ -27,6 +27,19 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
       expect(WebMock).to have_requested(:post, %r{organizations\.delete})
     end
 
+    it "re-enqueues itself when final organization deletion fails" do
+      create(:project, :deleted, organization: organization)
+      stub_langfuse_delete_org(org_id: organization.langfuse_org_id, status: 500)
+      allow(Rails.logger).to receive(:error)
+
+      expect {
+        described_class.perform_now(organization.id, current_user_sub: user_sub)
+      }.to have_enqueued_job(described_class)
+
+      expect(organization.reload).to be_present
+      expect(Rails.logger).to have_received(:error).with(/Failed to finalize organization/)
+    end
+
     it "no-ops when the organization is already gone" do
       expect {
         described_class.perform_now(-1, current_user_sub: user_sub)
