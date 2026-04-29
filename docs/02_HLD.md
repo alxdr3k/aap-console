@@ -520,7 +520,7 @@ app/
     ├── layouts/
     ├── organizations/                    # FR-1 planned product ERB
     ├── projects/                         # FR-3 planned product ERB
-    ├── provisioning_jobs/                # FR-7.3 planned 현황 화면
+    ├── provisioning_jobs/                # FR-7.3 현황 화면
     ├── config_versions/                  # FR-8 planned product ERB
     └── playgrounds/                      # FR-10 planned/deferred: AI Chat UI
 ```
@@ -1021,7 +1021,7 @@ Target Hotwire UI:
 
 | 뷰 | 역할 |
 |----|------|
-| planned `provisioning_jobs/show.html.erb` | `turbo_stream_from`으로 채널 구독 + step 목록 렌더링 |
+| `provisioning_jobs/show.html.erb` | persisted step 목록 렌더링. `turbo_stream_from` step replacement는 `UI-5B.2` follow-up |
 | planned `provisioning_steps/_step.html.erb` | `turbo_frame_tag dom_id(step)`으로 개별 step 렌더링. 상태 아이콘/이름/상태/에러 표시 |
 
 ### 6.3 Job 완료 시 알림

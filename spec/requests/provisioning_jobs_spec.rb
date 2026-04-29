@@ -5,6 +5,8 @@ RSpec.describe "ProvisioningJobs", type: :request do
   let!(:org) { create(:organization) }
   let!(:project) { create(:project, :active, organization: org) }
   let!(:provisioning_job) { create(:provisioning_job, project: project, operation: "create", status: :completed) }
+  let(:wildcard_headers) { { "ACCEPT" => "*/*" } }
+  let(:html_headers) { { "ACCEPT" => "text/html" } }
 
   before { login_as(user_sub) }
 
@@ -13,8 +15,51 @@ RSpec.describe "ProvisioningJobs", type: :request do
       before { create(:org_membership, organization: org, user_sub: user_sub, role: "admin") }
 
       it "returns 200" do
-        get "/provisioning_jobs/#{provisioning_job.id}"
+        get "/provisioning_jobs/#{provisioning_job.id}", headers: wildcard_headers
         expect(response).to have_http_status(:ok)
+      end
+
+      it "preserves the JSON default for API-like provisioning job requests" do
+        create(:provisioning_step, :app_registry_register, :completed, provisioning_job: provisioning_job)
+        create(:provisioning_step, :health_check, :completed, provisioning_job: provisioning_job)
+
+        get "/provisioning_jobs/#{provisioning_job.id}", headers: wildcard_headers
+
+        expect(response.media_type).to eq("application/json")
+        expect(response.parsed_body["status"]).to eq("completed")
+        expect(response.parsed_body["steps"].map { |step| step["name"] }).to eq(%w[app_registry_register health_check])
+      end
+
+      it "renders the browser timeline from persisted job and step state" do
+        provisioning_job.update!(
+          status: :completed_with_warnings,
+          started_at: 2.minutes.ago,
+          completed_at: 1.minute.ago,
+          warnings: [ "Health check warning" ]
+        )
+        create(:provisioning_step, :app_registry_register, :completed, provisioning_job: provisioning_job)
+        create(:provisioning_step, :langfuse_project_create, :failed,
+               provisioning_job: provisioning_job,
+               retry_count: 3,
+               error_message: "Connection refused")
+
+        get "/provisioning_jobs/#{provisioning_job.id}", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("Project 생성 프로비저닝")
+        expect(response.body).to include(project.name)
+        expect(response.body).to include("completed_with_warnings")
+        expect(response.body).to include("App Registry Register")
+        expect(response.body).to include("Langfuse Project Create")
+        expect(response.body).to include("Connection refused")
+        expect(response.body).to include("Health check warning")
+      end
+
+      it "renders the not found shell for HTML" do
+        get "/provisioning_jobs/999999", headers: html_headers
+
+        expect(response).to have_http_status(:not_found)
+        expect(response.body).to include("프로비저닝 Job을 찾을 수 없습니다.")
       end
     end
 
@@ -25,14 +70,14 @@ RSpec.describe "ProvisioningJobs", type: :request do
       end
 
       it "returns 200" do
-        get "/provisioning_jobs/#{provisioning_job.id}"
+        get "/provisioning_jobs/#{provisioning_job.id}", headers: html_headers
         expect(response).to have_http_status(:ok)
       end
     end
 
     it "returns 403 for member without project permission" do
       create(:org_membership, organization: org, user_sub: user_sub, role: "read")
-      get "/provisioning_jobs/#{provisioning_job.id}"
+      get "/provisioning_jobs/#{provisioning_job.id}", headers: html_headers
       expect(response).to have_http_status(:forbidden)
     end
   end

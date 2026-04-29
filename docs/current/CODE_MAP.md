@@ -65,6 +65,7 @@
 | `app/views/organizations/not_found.html.erb` | HTML 404 shell for missing Organization routes |
 | `app/views/members/index.html.erb` | Member management page with pending badges, role forms, and project permission controls |
 | `app/views/projects/` | Project index/new/show pages, OIDC-only create form, metadata edit, delete provisioning redirect, and recent config/provisioning summaries |
+| `app/views/provisioning_jobs/` | Provisioning show timeline and HTML 404 shell for persisted job/step state |
 | `app/views/sessions/login.html.erb` | SSO auto-submit login page |
 | `app/views/pwa/` | Generated PWA placeholder views |
 | `app/assets/stylesheets/application.css` | Application shell, navigation, forms, flash, and empty-state styling |
@@ -72,8 +73,8 @@
 | `app/javascript/controllers/flash_controller.js` | Flash dismissal/autoclose Stimulus controller |
 | `app/javascript/controllers/user_search_controller.js` / `role_permissions_controller.js` | Member management autocomplete and role-aware Project permission visibility |
 
-Importmap, Turbo, and Stimulus are wired as the UI baseline. Provisioning timeline
-consumer/controllers remain planned in `UI-5B.*`.
+Importmap, Turbo, and Stimulus are wired as the UI baseline. Provisioning show
+ERB is present; realtime consumer/controllers remain planned in `UI-5B.2`.
 
 ## Data / Persistence
 
@@ -111,5 +112,5 @@ consumer/controllers remain planned in `UI-5B.*`.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Hotwire provisioning timeline/retry UX, secret reveal, config UI, Playground, and dashboard leaves remain planned in `UI-5B.*`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | Hotwire provisioning realtime/retry UX, secret reveal, config UI, Playground, and dashboard leaves remain planned in `UI-5B.2+`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

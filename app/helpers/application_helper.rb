@@ -85,6 +85,48 @@ module ApplicationHelper
     distance_of_time_in_words(job.started_at, job.completed_at)
   end
 
+  def provisioning_operation_title(job)
+    case job.operation
+    when "create"
+      "Project 생성 프로비저닝"
+    when "update"
+      "설정 변경 프로비저닝"
+    when "delete"
+      "Project 삭제 프로비저닝"
+    else
+      "프로비저닝"
+    end
+  end
+
+  def provisioning_step_label(step)
+    step.name.tr("_", " ").titleize
+  end
+
+  def provisioning_step_status_badge_class(step)
+    case step.status
+    when "completed"
+      "badge"
+    when "failed", "rollback_failed"
+      "badge badge--danger"
+    when "skipped", "rolled_back"
+      "badge badge--muted"
+    else
+      "badge badge--warning"
+    end
+  end
+
+  def provisioning_target_path(job)
+    if job.operation == "delete" || job.project.deleted?
+      organization_path(job.project.organization.slug)
+    else
+      organization_project_path(job.project.organization.slug, job.project.slug)
+    end
+  end
+
+  def provisioning_target_label(job)
+    job.operation == "delete" || job.project.deleted? ? "Organization으로 이동" : "Project 상세로 이동"
+  end
+
   def flash_class(level)
     case level.to_sym
     when :notice, :success
