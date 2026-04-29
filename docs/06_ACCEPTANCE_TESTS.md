@@ -28,11 +28,12 @@ gate / acceptance 상태만 관리한다.
 | `AC-005` | FR-5 / FR-6 | Given a provisioning job, when Langfuse and Config Server steps run, then Langfuse project keys are handed off ephemerally and LiteLLM config is applied via Config Server | automated `TEST-005` | `passing` |
 | `AC-006` | FR-7.1 / FR-7.2 | Given create/update/delete jobs, when steps succeed, fail, retry, or rollback, then job/step/project states transition according to the saga contract | automated `TEST-006`, `TEST-007` | `passing` |
 | `AC-007` | FR-7.3 | Given an authorized subscriber, when a provisioning job changes state, then ActionCable streams only the authorized job status | automated `TEST-008`; ERB timeline/retry UX remains tracked outside this gate | `passing` |
-| `AC-008` | Release gate | Given the current dev branch, when full smoke validation is run, then RSpec/lint/security checks pass and docs status remains consistent | manual + automated command set in `docs/current/TESTING.md` | `not_run` |
+| `AC-008` | Release gate | Given the current dev branch, when full smoke validation is run, then RSpec/lint/security checks pass and docs status remains consistent | manual + automated command set in `docs/current/TESTING.md`; last run 2026-04-29 | `passing` |
 | `AC-009` | FR-9 | Given configured external services, when health check runs, then it verifies service-specific post-provisioning consistency rather than only placeholder reachability | spike/manual + future automated tests | `defined` |
 | `AC-010` | FR-8 | Given a config version rollback request, when rollback completes, then Config Server, Keycloak, Langfuse, and Console snapshot state are restored or diagnosed | future automated request/service specs | `defined` |
 | `AC-011` | FR-4 | Given SAML/OAuth/PAK scope decision, when enabled, then auth selection, provisioning, PAK issuance, revocation, and verification paths are covered | future automated request/service/model specs | `defined` |
 | `AC-012` | FR-10 | Given an authorized project user, when Playground is enabled, then chat streaming, request inspection, and trace links work without exposing secrets | future system/request specs | `defined` |
+| `AC-013` | OPS retention | Given completed provisioning jobs older than the retention window, when retention cleanup runs, then terminal job/step records are archived or deleted while failed/manual-intervention records remain available | future job/service specs | `defined` |
 | `AC-DOC-001` | DOC-M1 | Given a new session or PR, when an agent follows repo guidance, then it reaches `current-state`, `04_IMPLEMENTATION_PLAN`, `current/*`, canonical PRD/HLD paths, and the PR template/doc-freshness guidance without stale doc-only guidance | link check + doc review | `passing` |
 
 ## Tests
@@ -47,6 +48,7 @@ gate / acceptance 상태만 관리한다.
 | `TEST-006` | Provisioning orchestration specs | `spec/services/provisioning/orchestrator_spec.rb`, `spec/services/provisioning/step_seeder_spec.rb`, `spec/jobs/provisioning_execute_job_spec.rb` | `AC-006` |
 | `TEST-007` | Retry/rollback specs | `spec/services/provisioning/step_runner_spec.rb`, `spec/services/provisioning/rollback_runner_spec.rb`, step specs under `spec/services/provisioning/steps/` | `AC-006` |
 | `TEST-008` | Realtime provisioning specs | `spec/channels/provisioning_channel_spec.rb`, `spec/channels/application_cable/connection_spec.rb`, `spec/requests/provisioning_jobs_spec.rb` | `AC-007` |
+| `TEST-013` | Provisioning retention cleanup specs | planned `spec/jobs/provisioning_jobs_cleanup_job_spec.rb` 또는 service spec | `AC-013` |
 
 ## Definition of Done
 
