@@ -85,6 +85,10 @@ Deployment artifact는 존재한다.
 정확한 production deployment command와 rollback procedure는 이 migration에서
 검증하지 않았다. Deployment를 accepted gate로 보기 전에 여기에 기록해야 한다.
 Litestream sidecar/restore wiring도 현재 repo 배포 설정에는 아직 없다.
+이 남은 운영 work는 `OPS-7A.1` / `OPS-7A.2` / `AC-019`에서 추적한다.
+Audit log archive job은 아직 없으며 `OPS-7A.3` / `AC-020`에서 추적한다.
+Full Keycloak/Langfuse config rollback은 아직 diagnostics-only이며
+`OPS-7A.5` / `AC-022`에서 추적한다.
 
 ## Troubleshooting
 

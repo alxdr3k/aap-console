@@ -53,5 +53,9 @@ Code, migrations, schemas, generated references가 authoritative source다. 이 
 
 | Area | Gap |
 |---|---|
+| Organization/member completion | Designated initial admin selection, Keycloak user pre-assignment, project permission CRUD API/UI, Langfuse org update, and final org delete cleanup are tracked by `CORE-5A.*` / `AC-018` |
 | Auth UI | PAK UI와 SAML/OAuth UI/metadata 입력 범위는 아직 구현되지 않음 |
+| Secret reveal | `ProvisioningJobsController#secrets` can read a TTL cache entry, but provisioning steps do not write generated Keycloak/PAK secrets into that cache yet |
+| Config rollback snapshots | Current `ConfigVersion` snapshot does not carry Keycloak/Langfuse mutable config required for full FR-8 restore; tracked by `OPS-7A.5` / `AC-022` |
+| Audit archive | `audit_logs` retention archive job is a target design item, not current code |
 | Generated docs | `docs/generated/`는 있으나 active generator는 아직 없음 |

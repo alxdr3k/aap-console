@@ -47,7 +47,7 @@ Current `ConfigVersion` snapshot은 LiteLLM Config Server 설정만 보유한다
 **Decision / Next Step**
 
 - Decision: `OPS-3A.3` / `AC-010` accepted.
-- Follow-up: Keycloak/Langfuse snapshot rollback이 제품 요구로 승격되면 별도 schema/service slice로 추적한다.
+- Follow-up: Keycloak/Langfuse snapshot rollback is tracked as `OPS-7A.5` / `AC-022`.
 
 ---
 

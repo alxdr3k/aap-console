@@ -13,14 +13,14 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Roadmap Position
 
-- current milestone: `P0-M5` Playground exposure
+- current milestone: `P0-M5` core product UI / provisioning detail / FR-1~3 completion
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
-- active tracks: `PLAY`
-- active phase: `PLAY-4A`
-- active slice: `PLAY-4A.1`
+- active tracks: `CORE`, `UI`, `SEC`
+- active phases: `CORE-5A`, `UI-5A`, `UI-5B`, `UI-5C`, `SEC-5B`
+- active slices: roadmap selection pending; highest priority candidates are `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
-- next gate: `AC-012`
+- next gates: `AC-014`, `AC-015`, `AC-016`, `AC-018`
 - canonical ledger: `docs/04_IMPLEMENTATION_PLAN.md`
 
 ## Implemented
@@ -39,11 +39,15 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - `AUTH-4A.2` PAK issue/revoke/verify API and inbound verification endpoint.
 - `AUTH-4A.1` SAML/OAuth backend provisioning coverage for Keycloak client create.
 - `Q-001` resolved by `DEC-003`: auth expansion gate is backend/API; UI follow-up is non-gating.
+- `Q-002` resolved by `DEC-004`: provisioning detail UI is `P0-M5` product UI work, not a reopened `P0-M3` gate.
 
 ## Planned
 
-- `UI-2B`: Hotwire/ERB provisioning timeline and retry UX.
-- `PLAY-4A`: auth/ops maturity 이후 Playground.
+- `P0-M5`: core server-rendered UI, provisioning detail, secret reveal, org/member completion gaps.
+- `P1-M1`: SAML/OAuth/PAK product UI.
+- `P1-M2`: production deploy/rollback/Litestream restore evidence and audit archive.
+- `P2-M1`: Playground.
+- `P2-M2`: super-admin operations dashboard.
 
 ## Explicit Non-goals
 
@@ -54,18 +58,22 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Priorities
 
-1. `AC-012` Playground request/streaming scope를 확정하고 구현하거나 명시적으로 defer.
-2. `Q-002` provisioning detail UI release gate 여부를 결정.
+1. `P0-M5` leaf 중 `CORE-5A.*`로 FR-1/2 completion gap을 닫는다.
+2. `UI-5A.*` / `UI-5B.*` / `SEC-5B.1`로 server-rendered UI와 provisioning detail/secret reveal을 구현한다.
+3. `UI-5C.*`로 auth/LiteLLM/config-version UI를 제품화한다.
 
 ## Current Risks / Unknowns
 
-- `Q-002`: provisioning detail UI release gate.
+- `Q-003`: super-admin dashboard scope.
+- Deployment command, rollback procedure, and Litestream restore are not accepted until `OPS-7A.1` / `OPS-7A.2`.
+- `ProvisioningJobsController#secrets` can read cache, but provisioning steps do not write the one-time secret cache yet.
+- Full Keycloak/Langfuse config rollback is diagnostics-only until `OPS-7A.5`.
 
 ## Current Validation
 
 - Acceptance gates: `docs/06_ACCEPTANCE_TESTS.md`
 - Test command source: `docs/current/TESTING.md`
-- Current known open gates: `AC-012`
+- Current known open gates: `AC-012`, `AC-014`~`AC-022`
 
 ## Needs Audit
 

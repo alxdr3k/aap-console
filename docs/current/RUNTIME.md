@@ -98,9 +98,15 @@ current `ConfigVersion` model.
 
 | Flow | State |
 |---|---|
-| Hotwire provisioning detail UI | ActionCable server path만 있고 Turbo/Stimulus consumer는 없음. `Q-002` 참고 |
-| SAML/OAuth/PAK UI | Backend/API gate is accepted by `DEC-003`; UI remains a follow-up |
-| Playground | Phase 4로 deferred |
+| Organization/member completion | Initial admin selection, Keycloak pre-assignment, project permission CRUD API/UI, Langfuse org update, and final org delete cleanup are tracked by `CORE-5A.*` / `AC-018` |
+| Hotwire provisioning detail UI | ActionCable server path만 있고 Turbo/Stimulus consumer는 없음. `Q-002` is resolved by `DEC-004`; follow-up is `UI-5B.*` / `AC-015` |
+| Secret reveal cache write path | `ProvisioningJobsController#secrets` reads cache, but provisioning steps do not write Keycloak/PAK secrets to the TTL cache yet. Tracked by `SEC-5B.1` |
+| Config/product UI | Auth config, LiteLLM config, and config-version APIs exist, but server-rendered product UI is `UI-5C.*` |
+| Full external config rollback | Current rollback restores Config Server and reports Keycloak/Langfuse as non-snapshotted diagnostics. Full Keycloak/Langfuse snapshot restore is `OPS-7A.5` / `AC-022` |
+| SAML/OAuth/PAK UI | Backend/API gate is accepted by `DEC-003`; product UI remains `AUTH-6A.*` |
+| Deployment/restore/archive operations | Deploy command, rollback procedure, Litestream restore, audit archive, and ConfigVersion storage policy are `OPS-7A.*` |
+| Playground | PRD P2; tracked by `PLAY-8A.*` / `AC-012` |
+| Super-admin dashboard | Scope is open in `Q-003`; tracked by `ADMIN-8A.*` |
 
 ## Failure Modes
 

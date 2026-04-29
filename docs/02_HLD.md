@@ -450,10 +450,12 @@ app/
 │   ├── litellm_configs_controller.rb     # FR-6
 │   ├── provisioning_jobs_controller.rb   # FR-7.3 (show, retry, secrets)
 │   ├── config_versions_controller.rb     # FR-8
+│   ├── project_api_keys_controller.rb    # FR-4: PAK issue/list/revoke
 │   ├── playgrounds_controller.rb         # FR-10 planned/deferred: LiteLLM 프록시 + SSE
 │   └── api/
 │       └── v1/
-│           └── apps_controller.rb        # Config Server용 App Registry API
+│           ├── apps_controller.rb        # Config Server용 App Registry API
+│           └── project_api_keys_controller.rb # Config Server용 PAK verify API
 │
 ├── models/
 │   ├── organization.rb                   # FR-1
@@ -495,7 +497,7 @@ app/
 │   │       └── health_check.rb           # FR-9: 프로비저닝 파이프라인 내 인라인 실행
 │   │
 │   └── config_versions/
-│       └── rollback_service.rb           # FR-8 planned: 버전 롤백 오케스트레이션
+│       └── rollback_service.rb           # FR-8: Config Server rollback + diagnostics
 │
 ├── clients/                              # 외부 API HTTP 클라이언트 (비즈니스 로직 없는 순수 HTTP 통신 계층이므로 services/와 분리)
 │   ├── keycloak_client.rb                # FR-2, FR-4
@@ -504,17 +506,19 @@ app/
 │
 ├── jobs/
 │   ├── provisioning_execute_job.rb       # FR-7: SolidQueue Job
-│   └── app_registry_webhook_job.rb       # standalone webhook retry helper; current step plan calls webhook inline
+│   ├── provisioning_jobs_cleanup_job.rb  # OPS retention cleanup
+│   ├── app_registry_webhook_job.rb       # standalone webhook retry helper; current step plan calls webhook inline
+│   └── audit_logs_archive_job.rb         # planned: audit log archive target
 │
 ├── channels/
 │   └── provisioning_channel.rb           # FR-7.3: WebSocket 스트리밍
 │
 └── views/
     ├── layouts/
-    ├── organizations/                    # FR-1
-    ├── projects/                         # FR-3
-    ├── provisioning_jobs/                # FR-7.3: 현황 화면
-    ├── config_versions/                  # FR-8
+    ├── organizations/                    # FR-1 planned product ERB
+    ├── projects/                         # FR-3 planned product ERB
+    ├── provisioning_jobs/                # FR-7.3 planned 현황 화면
+    ├── config_versions/                  # FR-8 planned product ERB
     └── playgrounds/                      # FR-10 planned/deferred: AI Chat UI
 ```
 
