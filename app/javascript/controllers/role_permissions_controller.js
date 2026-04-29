@@ -23,7 +23,7 @@ export default class extends Controller {
     if (field.type === "checkbox" || field.type === "radio") {
       field.checked = false
     } else if (field.tagName === "SELECT") {
-      field.selectedIndex = 0
+      field.value = field.querySelector("option[value='read']") ? "read" : field.options[0]?.value
     } else {
       field.value = ""
     }
