@@ -23,6 +23,22 @@ RSpec.describe Project, type: :model do
       other = build(:project, organization: create(:organization), slug: slug, name: "Chatbot")
       expect(other).to be_valid
     end
+
+    it "rejects route-reserved slugs" do
+      project = build(:project, slug: "new", name: "New")
+
+      expect(project).not_to be_valid
+      expect(project.errors[:slug]).to include("is reserved")
+    end
+
+    it "allows preexisting route-reserved slugs to remain operable on update" do
+      project = create(:project, :active)
+      project.update_column(:slug, "new")
+
+      expect {
+        project.update!(status: :deleting)
+      }.to change { project.reload.status }.from("active").to("deleting")
+    end
   end
 
   describe "app_id generation resilience" do
@@ -71,6 +87,16 @@ RSpec.describe Project, type: :model do
       project = Project.new(name: "My Chatbot", organization: org)
       project.valid?
       expect(project.slug).to eq("my-chatbot")
+    end
+
+    it "skips route-reserved generated slugs" do
+      org = create(:organization)
+      project = Project.new(name: "New", organization: org)
+
+      project.valid?
+
+      expect(project.slug).to eq("new-2")
+      expect(project).to be_valid
     end
   end
 

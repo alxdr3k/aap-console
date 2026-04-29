@@ -3,6 +3,8 @@ require "rails_helper"
 RSpec.describe "Projects", type: :request do
   let(:user_sub) { "user-sub-123" }
   let!(:org) { create(:organization) }
+  let(:wildcard_headers) { { "ACCEPT" => "*/*" } }
+  let(:html_headers) { { "ACCEPT" => "text/html" } }
 
   before { login_as(user_sub) }
 
@@ -16,10 +18,45 @@ RSpec.describe "Projects", type: :request do
       expect(response).to have_http_status(:ok)
     end
 
+    it "preserves the JSON default for API-like project list requests" do
+      membership = org.org_memberships.find_by!(user_sub: user_sub)
+      create(:project_permission, org_membership: membership, project: project, role: "read")
+
+      get "/organizations/#{org.slug}/projects", headers: wildcard_headers
+
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body.first["name"]).to eq(project.name)
+    end
+
+    it "renders the browser project list" do
+      membership = org.org_memberships.find_by!(user_sub: user_sub)
+      create(:project_permission, org_membership: membership, project: project, role: "read")
+
+      get "/organizations/#{org.slug}/projects", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include(project.name)
+      expect(response.body).to include(project.app_id)
+    end
+
     it "returns 403 for non-member" do
       other_org = create(:organization)
       get "/organizations/#{other_org.slug}/projects"
       expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  describe "GET /organizations/:org_slug/projects/new" do
+    before { create(:org_membership, organization: org, user_sub: user_sub, role: "admin") }
+
+    it "renders the project creation form for admins" do
+      get "/organizations/#{org.slug}/projects/new", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("새 Project 생성")
+      expect(response.body).to include("azure-gpt4")
+      expect(response.body).to include("SAML")
+      expect(response.body).to include("준비 중")
     end
   end
 
@@ -28,16 +65,71 @@ RSpec.describe "Projects", type: :request do
 
     it "creates a project and redirects to provisioning job" do
       post "/organizations/#{org.slug}/projects",
-           params: { project: { name: "My Project", description: "desc", auth_type: "oidc" } }
+           params: { project: { name: "My Project", description: "desc", auth_type: "oidc" } },
+           headers: wildcard_headers
       expect(response).to have_http_status(:see_other)
       project = Project.last
       expect(response).to redirect_to(provisioning_job_path(project.provisioning_jobs.last))
+    end
+
+    it "creates a project from the browser form and redirects to provisioning" do
+      expect {
+        post "/organizations/#{org.slug}/projects",
+             params: {
+               project: {
+                 name: "UI Project",
+                 description: "browser create",
+                 auth_type: "oidc",
+                 models: [ "azure-gpt4" ],
+                 guardrails: [ "content-filter" ],
+                 s3_retention_days: 90
+               }
+             },
+             headers: html_headers
+      }.to change(Project, :count).by(1)
+
+      project = Project.last
+      job = project.provisioning_jobs.last
+      expect(response).to redirect_to(provisioning_job_path(job))
+      expect(job.input_snapshot["models"]).to eq([ "azure-gpt4" ])
+      expect(job.input_snapshot["guardrails"]).to eq([ "content-filter" ])
+    end
+
+    it "keeps projects named New reachable by skipping the reserved slug" do
+      post "/organizations/#{org.slug}/projects",
+           params: {
+             project: {
+               name: "New",
+               auth_type: "oidc",
+               models: [ "azure-gpt4" ],
+               s3_retention_days: 90
+             }
+           },
+           headers: html_headers
+
+      project = Project.last
+      expect(project.slug).to eq("new-2")
+
+      get "/organizations/#{org.slug}/projects/#{project.slug}", headers: html_headers
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("New")
     end
 
     it "returns 422 on validation failure" do
       post "/organizations/#{org.slug}/projects",
            params: { project: { name: "A", auth_type: "oidc" } }
       expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "renders browser validation errors without creating a project" do
+      expect {
+        post "/organizations/#{org.slug}/projects",
+             params: { project: { name: "UI Project", auth_type: "oidc" } },
+             headers: html_headers
+      }.not_to change(Project, :count)
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("모델을 하나 이상 선택하세요.")
     end
 
     it "returns 403 for non-admin" do
@@ -56,8 +148,33 @@ RSpec.describe "Projects", type: :request do
       before { create(:org_membership, organization: org, user_sub: user_sub, role: "admin") }
 
       it "returns 200" do
-        get "/organizations/#{org.slug}/projects/#{project.slug}"
+        get "/organizations/#{org.slug}/projects/#{project.slug}", headers: wildcard_headers
         expect(response).to have_http_status(:ok)
+      end
+
+      it "preserves the JSON default for API-like project detail requests" do
+        get "/organizations/#{org.slug}/projects/#{project.slug}", headers: wildcard_headers
+
+        expect(response.media_type).to eq("application/json")
+        expect(response.parsed_body["slug"]).to eq(project.slug)
+      end
+
+      it "renders the browser project detail page" do
+        create(:project_auth_config, project: project, auth_type: "oidc", keycloak_client_id: "aap-acme-project-oidc")
+        create(:provisioning_job, :completed_with_warnings, project: project, operation: "create")
+        create(:config_version,
+               project: project,
+               change_summary: "Initial config",
+               snapshot: { "models" => [ "azure-gpt4" ], "guardrails" => [ "content-filter" ], "s3_retention_days" => 90 })
+
+        get "/organizations/#{org.slug}/projects/#{project.slug}", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include(project.name)
+        expect(response.body).to include(project.app_id)
+        expect(response.body).to include("aap-acme-project-oidc")
+        expect(response.body).to include("azure-gpt4")
+        expect(response.body).to include("completed_with_warnings")
       end
     end
 
@@ -90,9 +207,29 @@ RSpec.describe "Projects", type: :request do
 
     it "updates the project and returns 200" do
       patch "/organizations/#{org.slug}/projects/#{project.slug}",
-            params: { project: { name: "Updated Name" } }
+            params: { project: { name: "Updated Name" } },
+            headers: wildcard_headers
       expect(response).to have_http_status(:ok)
       expect(project.reload.name).to eq("Updated Name")
+    end
+
+    it "updates browser metadata and redirects to the project detail" do
+      patch "/organizations/#{org.slug}/projects/#{project.slug}",
+            params: { project: { name: "Browser Updated", description: "Edited" } },
+            headers: html_headers
+
+      expect(response).to redirect_to(organization_project_path(org.slug, project.slug))
+      expect(project.reload.name).to eq("Browser Updated")
+      expect(project.description).to eq("Edited")
+    end
+
+    it "renders browser validation errors" do
+      patch "/organizations/#{org.slug}/projects/#{project.slug}",
+            params: { project: { name: "A" } },
+            headers: html_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("Validation failed")
     end
 
     it "returns 403 for read-only member" do
@@ -115,6 +252,14 @@ RSpec.describe "Projects", type: :request do
       delete "/organizations/#{org.slug}/projects/#{project.slug}"
       expect(response).to have_http_status(:see_other)
       expect(project.reload.status).to eq("deleting")
+    end
+
+    it "starts delete provisioning from the browser and redirects to the job" do
+      delete "/organizations/#{org.slug}/projects/#{project.slug}", headers: html_headers
+
+      job = project.reload.provisioning_jobs.where(operation: "delete").last
+      expect(response).to redirect_to(provisioning_job_path(job))
+      expect(project.status).to eq("deleting")
     end
 
     it "returns 403 for non-admin" do

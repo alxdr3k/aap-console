@@ -1,0 +1,54 @@
+<% content_for :title, "#{@organization.name} Projects | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; <%= link_to @organization.name, organization_path(@organization.slug) %> &gt; Projects</div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">Projects</h1>
+      <p class="page-description">접근 가능한 Project와 프로비저닝 상태를 확인합니다.</p>
+    </div>
+
+    <div class="page-actions">
+      <% if current_authorization.can?(:manage_org, @organization) %>
+        <%= link_to "새 Project", new_organization_project_path(@organization.slug), class: "button" %>
+      <% end %>
+      <%= link_to "Organization", organization_path(@organization.slug), class: "button button--secondary" %>
+    </div>
+  </header>
+
+  <% if @projects.any? %>
+    <div class="resource-list">
+      <% @projects.each do |project| %>
+        <% latest_job = project.provisioning_jobs.max_by(&:created_at) %>
+        <%= link_to organization_project_path(@organization.slug, project.slug), class: "resource-row resource-row--project" do %>
+          <div>
+            <h2 class="resource-row__title"><%= project.name %></h2>
+            <% if project.description.present? %>
+              <p class="resource-row__description"><%= project.description %></p>
+            <% end %>
+          </div>
+
+          <div class="resource-row__meta resource-row__meta--stacked">
+            <span class="code-token"><%= project.app_id %></span>
+            <span class="<%= project_status_badge_class(project) %>"><%= project.status %></span>
+            <% if latest_job %>
+              <span class="<%= provisioning_status_badge_class(latest_job) %>">
+                <%= latest_job.operation %> <%= latest_job.status %>
+              </span>
+            <% end %>
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  <% elsif current_authorization.can?(:manage_org, @organization) %>
+    <%= render "shared/empty_state",
+               title: "Project가 없습니다.",
+               body: "새 Project를 생성하면 프로비저닝 현황으로 이동합니다.",
+               action: link_to("새 Project 생성", new_organization_project_path(@organization.slug), class: "button") %>
+  <% else %>
+    <%= render "shared/empty_state",
+               title: "접근 가능한 Project가 없습니다.",
+               body: "관리자에게 Project 권한을 요청하세요." %>
+  <% end %>
+</section>

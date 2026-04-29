@@ -190,6 +190,13 @@ textarea {
   color: #334155;
 }
 
+.button--disabled {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .resource-list {
   display: grid;
   gap: 10px;
@@ -228,6 +235,11 @@ textarea {
   font-size: 13px;
 }
 
+.resource-row__meta--stacked {
+  align-items: flex-end;
+  flex-direction: column;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -243,6 +255,23 @@ textarea {
 .badge--muted {
   background: #f1f5f9;
   color: #475569;
+}
+
+.badge--warning {
+  background: #fff6db;
+  color: #7a4f00;
+}
+
+.badge--danger {
+  background: #feeceb;
+  color: #982b24;
+}
+
+.code-token {
+  overflow-wrap: anywhere;
+  color: #334155;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
 }
 
 .empty-state {
@@ -325,10 +354,18 @@ textarea {
   text-transform: uppercase;
 }
 
+.table-list__row--link:hover {
+  background: #f8fafc;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.summary-grid--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .summary-item {
@@ -348,6 +385,12 @@ textarea {
 
 .summary-item__value {
   font-size: 22px;
+}
+
+.summary-item__value--code {
+  overflow-wrap: anywhere;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 16px;
 }
 
 .flash-stack {
@@ -408,6 +451,26 @@ textarea {
   gap: 12px;
 }
 
+.form-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form--inline-panel {
+  max-width: none;
+  padding: 0;
+  border: 0;
+}
+
+.form-section {
+  display: grid;
+  gap: 10px;
+}
+
+.form-section__title {
+  margin: 0;
+  font-size: 15px;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -419,7 +482,7 @@ textarea {
   font-weight: 700;
 }
 
-.field input,
+.field input:not([type="checkbox"]):not([type="radio"]),
 .field textarea {
   width: 100%;
   min-height: 40px;
@@ -438,6 +501,97 @@ textarea {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.radio-grid,
+.option-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.radio-card,
+.checkbox-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid #d9e0ec;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.radio-card small {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.radio-card--disabled,
+.panel--disabled {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.details-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.details-list div {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid #edf1f7;
+}
+
+.details-list div:first-child {
+  border-top: 0;
+}
+
+.details-list dt {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.details-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 160px 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #edf1f7;
+  border-radius: 6px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.history-row--with-action {
+  grid-template-columns: 160px 100px auto minmax(0, 1fr) auto;
+}
+
+.status-banner {
+  padding: 12px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.status-banner--warning {
+  background: #fff6db;
+  color: #7a4f00;
 }
 
 .autocomplete-results {
@@ -621,6 +775,10 @@ textarea {
   .table-list__row,
   .summary-grid,
   .form-grid,
+  .radio-grid,
+  .option-grid,
+  .details-list div,
+  .history-row,
   .member-row,
   .permission-row,
   .checkbox-row {

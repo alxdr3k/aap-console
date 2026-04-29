@@ -9,6 +9,7 @@ RSpec.describe Projects::CreateService do
       description: "Our AI chatbot",
       auth_type: "oidc",
       models: [ "azure-gpt4" ],
+      guardrails: [ "content-filter" ],
       s3_retention_days: 90
     }
   end
@@ -32,6 +33,21 @@ RSpec.describe Projects::CreateService do
       expect {
         described_class.new(organization: organization, params: params, current_user_sub: user_sub).call
       }.to have_enqueued_job(ProvisioningExecuteJob)
+    end
+
+    it "forwards create config inputs to the provisioning execution job" do
+      expect {
+        described_class.new(organization: organization, params: params, current_user_sub: user_sub).call
+      }.to have_enqueued_job(ProvisioningExecuteJob).with(
+        kind_of(Integer),
+        hash_including(
+          auth_type: "oidc",
+          models: [ "azure-gpt4" ],
+          guardrails: [ "content-filter" ],
+          s3_retention_days: 90,
+          current_user_sub: user_sub
+        )
+      )
     end
 
     it "creates a ProvisioningJob record with create operation" do

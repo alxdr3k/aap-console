@@ -16,7 +16,7 @@
 | Path | Purpose |
 |---|---|
 | `app/controllers/organizations_controller.rb` | Organization CRUD |
-| `app/controllers/projects_controller.rb` | Project CRUD와 service 호출 |
+| `app/controllers/projects_controller.rb` | Project CRUD, HTML pages, and service/provisioning redirects |
 | `app/controllers/members_controller.rb` | Org membership, Keycloak user lookup/pre-assignment, and create-time project permission management |
 | `app/controllers/member_project_permissions_controller.rb` | Project permission grant/update/revoke API for write/read org members |
 | `app/controllers/auth_configs_controller.rb` | Project auth config update와 provisioning trigger |
@@ -64,6 +64,7 @@
 | `app/views/organizations/new.html.erb` / `edit.html.erb` / `_form.html.erb` | Organization create/edit forms and shared validation display |
 | `app/views/organizations/not_found.html.erb` | HTML 404 shell for missing Organization routes |
 | `app/views/members/index.html.erb` | Member management page with pending badges, role forms, and project permission controls |
+| `app/views/projects/` | Project index/new/show pages, OIDC-only create form, metadata edit, delete provisioning redirect, and recent config/provisioning summaries |
 | `app/views/sessions/login.html.erb` | SSO auto-submit login page |
 | `app/views/pwa/` | Generated PWA placeholder views |
 | `app/assets/stylesheets/application.css` | Application shell, navigation, forms, flash, and empty-state styling |
@@ -110,5 +111,5 @@ consumer/controllers remain planned in `UI-5B.*`.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Project pages, Hotwire provisioning timeline/retry UX, secret reveal, config UI, Playground, and dashboard leaves remain planned in `UI-5A.4+`, `UI-5B.*`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | Hotwire provisioning timeline/retry UX, secret reveal, config UI, Playground, and dashboard leaves remain planned in `UI-5B.*`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

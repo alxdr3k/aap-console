@@ -1,0 +1,22 @@
+<% content_for :title, "New Project | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; <%= link_to @organization.name, organization_path(@organization.slug) %> &gt; 새 Project</div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">새 Project 생성</h1>
+      <p class="page-description">생성 요청 후 프로비저닝 현황으로 이동합니다.</p>
+    </div>
+  </header>
+
+  <% if @errors.present? %>
+    <ul class="error-list">
+      <% @errors.each do |error| %>
+        <li><%= error %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <%= render "form" %>
+</section>
