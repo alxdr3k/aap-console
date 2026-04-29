@@ -21,7 +21,7 @@ Code, migrations, schemas, generated references가 authoritative source다. 이 
 | `OrgMembership` | Keycloak `user_sub` 기준 organization role | `app/models/org_membership.rb`, `org_memberships` table |
 | `ProjectPermission` | Membership별 project-specific read/write permission | `app/models/project_permission.rb`, `project_permissions` table |
 | `ProjectAuthConfig` | Project별 main auth mode와 Keycloak client identifier | `app/models/project_auth_config.rb`, `project_auth_configs` table |
-| `ProjectApiKey` | PAK metadata/digest storage. Plaintext token은 저장하지 않음 | `app/models/project_api_key.rb`, `project_api_keys` table |
+| `ProjectApiKey` | PAK metadata/digest storage. Plaintext token은 발급 응답에만 포함하고 저장하지 않음 | `app/models/project_api_key.rb`, `project_api_keys` table |
 | `ProvisioningJob` | Async create/update/delete saga instance | `app/models/provisioning_job.rb`, `provisioning_jobs` table |
 | `ProvisioningStep` | Individual provisioning step과 retry/rollback state | `app/models/provisioning_step.rb`, `provisioning_steps` table |
 | `ConfigVersion` | Config version history와 rollback anchor | `app/models/config_version.rb`, `config_versions` table |
@@ -47,11 +47,11 @@ Code, migrations, schemas, generated references가 authoritative source다. 이 
 | `ProvisioningStep.status` | `pending`, `in_progress`, `completed`, `failed`, `retrying`, `skipped`, `rolled_back`, `rollback_failed` | Step name은 `Provisioning::StepSeeder`가 seed |
 | `OrgMembership.role` | `admin`, `write`, `read` | Org role의 source of truth는 Console DB |
 | `ProjectPermission.role` | `write`, `read` | Org admin은 implicit project access를 가진다 |
-| `ProjectAuthConfig.auth_type` | `oidc`, `saml`, `oauth`, `pak` | OIDC path만 구현됨. 다른 mode는 `Q-001` 결정 필요 |
+| `ProjectAuthConfig.auth_type` | `oidc`, `saml`, `oauth`, `pak` | OIDC와 PAK API path는 구현됨. SAML/OAuth UI/metadata 범위는 `Q-001` 결정 필요 |
 
 ## Current Gaps
 
 | Area | Gap |
 |---|---|
-| PAK | `project_api_keys`는 있으나 route/controller/service가 구현되지 않음 |
+| Auth UI | PAK UI와 SAML/OAuth UI/metadata 입력 범위는 아직 구현되지 않음 |
 | Generated docs | `docs/generated/`는 있으나 active generator는 아직 없음 |

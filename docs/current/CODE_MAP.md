@@ -21,8 +21,10 @@
 | `app/controllers/auth_configs_controller.rb` | Project auth config update와 provisioning trigger |
 | `app/controllers/litellm_configs_controller.rb` | LiteLLM config update와 provisioning trigger |
 | `app/controllers/config_versions_controller.rb` | Config version index/show/rollback entry point |
+| `app/controllers/project_api_keys_controller.rb` | Project-scoped PAK issue/list/revoke API |
 | `app/controllers/provisioning_jobs_controller.rb` | Provisioning job show/retry/secrets endpoint |
 | `app/channels/provisioning_channel.rb` | Provisioning job status용 ActionCable stream |
+| `app/controllers/api/v1/project_api_keys_controller.rb` | Inbound PAK verification API |
 | `app/jobs/provisioning_execute_job.rb` | Provisioning orchestration을 실행하는 SolidQueue job |
 | `app/jobs/provisioning_jobs_cleanup_job.rb` | Retention window가 지난 성공 계열 terminal provisioning job/step cleanup |
 | `app/jobs/app_registry_webhook_job.rb` | Standalone app registry webhook retry job. Current provisioning steps call the webhook inline |
@@ -34,6 +36,7 @@
 | `app/services/projects/create_service.rb` | Project create transaction과 provisioning job setup |
 | `app/services/projects/update_service.rb` | Project update와 provisioning trigger |
 | `app/services/projects/destroy_service.rb` | Project deletion flow |
+| `app/services/project_api_keys/` | PAK issue/revoke/verify services. Plaintext token is returned only from issue response |
 | `app/services/organizations/create_service.rb` | Organization create flow |
 | `app/services/organizations/destroy_service.rb` | Organization deletion flow |
 | `app/services/provisioning/step_seeder.rb` | Operation별 provisioning step plan |
@@ -67,7 +70,7 @@ There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 | `app/models/org_membership.rb` | Org-level role |
 | `app/models/project_permission.rb` | Project-specific permission |
 | `app/models/project_auth_config.rb` | Main auth configuration |
-| `app/models/project_api_key.rb` | PAK schema/model. Controller는 아직 없음 |
+| `app/models/project_api_key.rb` | PAK digest/prefix metadata and active/revoked state |
 | `app/models/provisioning_job.rb` | Provisioning job state |
 | `app/models/provisioning_step.rb` | Provisioning step state |
 | `app/models/config_version.rb` | Config version history |
@@ -94,5 +97,4 @@ There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 
 | Path | Reason |
 |---|---|
-| `app/models/project_api_key.rb` | Model은 있으나 route/controller/service가 없다. `Q-001` 참고 |
 | `app/views/` / `app/javascript/` | Hotwire provisioning timeline/retry UX는 ADR target이지만 current repo에는 아직 없다. `Q-002` 참고 |

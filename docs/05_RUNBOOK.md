@@ -48,7 +48,7 @@ Equivalent worker command: `bundle exec solid_queue:start`.
 | `LANGFUSE_SERVICE_PASSWORD` | Langfuse service account password |
 | `CONFIG_SERVER_URL` | aap-config-server URL |
 | `CONFIG_SERVER_API_KEY` | Console to Config Server Admin API key |
-| `CONSOLE_INBOUND_API_KEY` | Config Server to Console `GET /api/v1/apps` key |
+| `CONSOLE_INBOUND_API_KEY` | Config Server to Console inbound API key for app registry and PAK verification |
 
 Secret은 commit하지 않는다. `.env.local` 같은 local environment injection은
 project-approved loader와 함께 사용한다.

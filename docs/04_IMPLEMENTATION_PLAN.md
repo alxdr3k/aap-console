@@ -58,7 +58,7 @@ Gate status:
 | `P0-M1` | Organization / Project CRUD와 Console DB RBAC가 동작한다 | 2026-04-25 | `accepted` | `AC-001` / `AC-002` / `AC-003` | `spec/requests/organizations_spec.rb`, `spec/requests/projects_spec.rb`, `spec/requests/members_spec.rb` | MVP foundation |
 | `P0-M2` | OIDC, Langfuse, LiteLLM, Config Server 기본 프로비저닝 경로가 동작한다 | 2026-04-25 | `accepted` | `AC-004` / `AC-005` / `AC-006` | `app/services/provisioning/`, `spec/services/provisioning/` | 기본 프로비저닝 경로 accepted |
 | `P0-M3` | 운영 안정성 release gate를 닫는다 | 2026-04-29 | `accepted` | `AC-007` / `AC-008` / `AC-009` / `AC-010` / `AC-013` | `docs/03_RISK_SPIKES.md`, `app/jobs/provisioning_jobs_cleanup_job.rb` | 운영 안정성 gate closed |
-| `P0-M4` | SAML/OAuth/PAK 범위를 확정하고 구현한다 |  | `planned` | `AC-011` | `docs/07_QUESTIONS_REGISTER.md#q-001` | MVP 범위 결정 필요 |
+| `P0-M4` | SAML/OAuth/PAK 범위를 확정하고 구현한다 |  | `in_progress` | `AC-011` | `docs/07_QUESTIONS_REGISTER.md#q-001`, `app/controllers/project_api_keys_controller.rb` | PAK API landed; SAML/OAuth scope remains |
 | `P0-M5` | Playground를 제품 화면에 노출한다 |  | `deferred` | `AC-012` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | Phase 4 |
 | `DOC-M1` | Boilerplate 문서 체계가 repo에 적용된다 | 2026-04-29 | `accepted` | `AC-DOC-001` | `AGENTS.md`, `docs/context/current-state.md`, `docs/current/`, `.github/pull_request_template.md`, PR #24 | Merged on 2026-04-29 |
 
@@ -71,7 +71,7 @@ Gate status:
 | `PROV` | Provisioning pipeline, step orchestration, rollback | `PROV-2A` | `accepted` | 기본 경로 accepted. P0-M3 운영 보강은 `OPS-3A`에서 추적 |
 | `INTEG` | Keycloak, Langfuse, Config Server client integration | `INTEG-2A` | `accepted` | 테스트는 WebMock 기반 |
 | `UI` | Realtime status path와 server-rendered UI | `UI-2B` | `landed` | ActionCable path landed. Hotwire/ERB timeline UX는 남음 |
-| `AUTH` | 인증 방식 확장과 PAK | `AUTH-4A` | `planned` | OIDC 외 범위 결정 필요 |
+| `AUTH` | 인증 방식 확장과 PAK | `AUTH-4A` | `in_progress` | PAK API landed; SAML/OAuth scope remains |
 | `OPS` | Runbook, deployment, health check, rollback operation | `OPS-3A` | `accepted` | P0-M3 release gate closed |
 | `PLAY` | Playground AI chat | `PLAY-4A` | `deferred` | P0-M5 이후 |
 
@@ -96,7 +96,7 @@ Gate status:
 | `OPS-3A.3` | `P0-M3` | `OPS` | `OPS-3A` | Config rollback의 external restore/diagnostics 경로 완결 | `INTEG-2A.2` | `AC-010` / `TEST-010` | `passing` | `accepted` | `app/controllers/config_versions_controller.rb`, `app/services/config_versions/rollback_service.rb`, `spec/requests/config_versions_spec.rb` | 유지보수 |
 | `OPS-3A.4` | `P0-M3` | `OPS` | `OPS-3A` | Provisioning job retention cleanup 구현 | `PROV-2A.2` | `AC-013` / `TEST-013` | `passing` | `accepted` | `app/jobs/provisioning_jobs_cleanup_job.rb`, `config/recurring.yml`, `spec/jobs/provisioning_jobs_cleanup_job_spec.rb` | 유지보수 |
 | `AUTH-4A.1` | `P0-M4` | `AUTH` | `AUTH-4A` | SAML/OAuth 지원 범위 결정 및 구현 | `Q-001` | `AC-011` | `defined` | `planned` | `docs/07_QUESTIONS_REGISTER.md#q-001` | MVP 범위 결정 |
-| `AUTH-4A.2` | `P0-M4` | `AUTH` | `AUTH-4A` | PAK 발급/폐기/검증 API와 UI | `Q-001` | `AC-011` | `defined` | `planned` | `app/models/project_api_key.rb`, `spec/factories/project_api_keys.rb` | Controller/service 추가 여부 결정 |
+| `AUTH-4A.2` | `P0-M4` | `AUTH` | `AUTH-4A` | PAK 발급/폐기/검증 API | `Q-001` | `AC-011` PAK subset / `TEST-011A` | `passing` | `accepted` | `app/controllers/project_api_keys_controller.rb`, `app/controllers/api/v1/project_api_keys_controller.rb`, `app/services/project_api_keys/`, `spec/requests/project_api_keys_spec.rb`, `spec/requests/api/v1/project_api_keys_spec.rb` | UI와 SAML/OAuth scope 후속 |
 | `PLAY-4A.1` | `P0-M5` | `PLAY` | `PLAY-4A` | Playground SSE chat 화면 | `P0-M4` | `AC-012` | `defined` | `deferred` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | P0-M4 이후 착수 |
 
 ## Gates / Acceptance

@@ -60,6 +60,14 @@ synchronously. It reverts Config Server LiteLLM config to the target
 Keycloak/Langfuse state is reported in diagnostics as not snapshotted by the
 current `ConfigVersion` model.
 
+### Project API Keys
+
+- Project users with `write` permission can issue and revoke PAKs through `ProjectApiKeysController`.
+- The issue response includes the plaintext `token` once. Console stores only `token_digest` and `token_prefix`.
+- `DELETE /project_api_keys/:id` soft-revokes by setting `revoked_at`; it does not delete the row.
+- `POST /api/v1/project_api_keys/verify` is protected by `CONSOLE_INBOUND_API_KEY`, matches active PAK digests for `active` / `update_pending` projects, and updates `last_used_at`.
+- Audit events: `project_api_key.create`, `project_api_key.revoke`.
+
 ### Retry / Rollback
 
 - `StepRunner`는 짧은 wait는 inline retry하고, 긴 wait는 `ProvisioningExecuteJob` re-enqueue로 defer한다.
@@ -91,7 +99,7 @@ current `ConfigVersion` model.
 | Flow | State |
 |---|---|
 | Hotwire provisioning detail UI | ActionCable server path만 있고 Turbo/Stimulus consumer는 없음. `Q-002` 참고 |
-| SAML/OAuth/PAK provisioning | Model/schema 일부 외에는 미구현. `Q-001` 참고 |
+| SAML/OAuth provisioning and PAK UI | PAK API is implemented; SAML/OAuth UI/metadata and PAK UI remain under `Q-001` |
 | Playground | Phase 4로 deferred |
 
 ## Failure Modes
