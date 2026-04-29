@@ -1,7 +1,7 @@
 module Organizations
   class CreateService
     def initialize(params:, current_user_sub:, langfuse_client: LangfuseClient.new)
-      @params = params
+      @params = params.to_h.symbolize_keys
       @current_user_sub = current_user_sub
       @langfuse_client = langfuse_client
     end
@@ -23,7 +23,7 @@ module Organizations
         ActiveRecord::Base.transaction do
           organization.save!
           organization.org_memberships.create!(
-            user_sub: @current_user_sub,
+            user_sub: initial_admin_user_sub,
             role: "admin",
             invited_at: Time.current,
             joined_at: Time.current
@@ -34,7 +34,7 @@ module Organizations
             action: "org.create",
             resource_type: "Organization",
             resource_id: organization.id.to_s,
-            details: { name: organization.name }
+            details: { name: organization.name, initial_admin_user_sub: initial_admin_user_sub }
           )
         end
       rescue ActiveRecord::RecordInvalid => e
@@ -52,6 +52,10 @@ module Organizations
     end
 
     private
+
+    def initial_admin_user_sub
+      @initial_admin_user_sub ||= @params[:initial_admin_user_sub].presence || @current_user_sub
+    end
 
     def compensate_langfuse(langfuse_org_id)
       return unless langfuse_org_id

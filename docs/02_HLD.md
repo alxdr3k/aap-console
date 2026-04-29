@@ -474,6 +474,7 @@ app/
 ├── services/
 │   ├── organizations/
 │   │   ├── create_service.rb             # FR-1: Org 생성 + Langfuse Org + 초기 멤버십
+│   │   ├── update_service.rb             # FR-1: Org 수정 + Langfuse Org name sync
 │   │   └── destroy_service.rb            # FR-1: 하위 Project 전체 삭제 + 멤버십 정리 후 Org 삭제
 │   │
 │   ├── projects/

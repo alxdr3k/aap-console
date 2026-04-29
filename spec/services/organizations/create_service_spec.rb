@@ -28,6 +28,17 @@ RSpec.describe Organizations::CreateService do
       expect(membership.role).to eq("admin")
     end
 
+    it "creates an admin membership for the designated initial admin" do
+      result = described_class.new(
+        params: params.merge(initial_admin_user_sub: "selected-admin-sub"),
+        current_user_sub: user_sub
+      ).call
+      org = result.data
+
+      expect(org.org_memberships.find_by(user_sub: "selected-admin-sub")&.role).to eq("admin")
+      expect(org.org_memberships.find_by(user_sub: user_sub)).to be_nil
+    end
+
     it "stores the langfuse_org_id" do
       result = described_class.new(params: params, current_user_sub: user_sub).call
       expect(result.data.langfuse_org_id).to eq("langfuse-org-1")

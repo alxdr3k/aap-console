@@ -32,18 +32,16 @@ class OrganizationsController < ApplicationController
   end
 
   def update
-    if @organization.update(organization_params)
-      AuditLog.create!(
-        organization: @organization,
-        user_sub: Current.user_sub,
-        action: "org.update",
-        resource_type: "Organization",
-        resource_id: @organization.id.to_s,
-        details: { name: @organization.name }
-      )
+    result = Organizations::UpdateService.new(
+      organization: @organization,
+      params: organization_params,
+      current_user_sub: Current.user_sub
+    ).call
+
+    if result.success?
       redirect_to organization_path(@organization.slug), status: :see_other
     else
-      render json: { errors: @organization.errors.full_messages }, status: :unprocessable_entity
+      render json: { errors: [ result.error ] }, status: :unprocessable_entity
     end
   end
 
@@ -69,6 +67,6 @@ class OrganizationsController < ApplicationController
   end
 
   def organization_params
-    params.require(:organization).permit(:name, :description)
+    params.require(:organization).permit(:name, :description, :initial_admin_user_sub)
   end
 end
