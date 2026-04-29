@@ -40,6 +40,7 @@
 | `app/services/provisioning/step_runner.rb` | Individual step retry/defer execution |
 | `app/services/provisioning/rollback_runner.rb` | Completed-step rollback execution |
 | `app/services/provisioning/steps/*.rb` | Keycloak, Langfuse, Config Server, app registry, DB cleanup, health check step |
+| `app/services/config_versions/rollback_service.rb` | Config Server rollback restore + diagnostics |
 | `app/clients/keycloak_client.rb` | Keycloak Admin API client |
 | `app/clients/langfuse_client.rb` | Langfuse tRPC client |
 | `app/clients/config_server_client.rb` | Config Server Admin/read API client |
@@ -92,6 +93,5 @@ There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 
 | Path | Reason |
 |---|---|
-| `app/controllers/config_versions_controller.rb` | External rollback completeness 확인 필요. `SPIKE-002` 참고 |
 | `app/models/project_api_key.rb` | Model은 있으나 route/controller/service가 없다. `Q-001` 참고 |
 | `app/views/` / `app/javascript/` | Hotwire provisioning timeline/retry UX는 ADR target이지만 current repo에는 아직 없다. `Q-002` 참고 |

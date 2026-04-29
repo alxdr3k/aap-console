@@ -54,5 +54,4 @@ Code, migrations, schemas, generated references가 authoritative source다. 이 
 | Area | Gap |
 |---|---|
 | PAK | `project_api_keys`는 있으나 route/controller/service가 구현되지 않음 |
-| Config rollback | Snapshot restore path의 external Keycloak/Langfuse completeness audit 필요 |
 | Generated docs | `docs/generated/`는 있으나 active generator는 아직 없음 |

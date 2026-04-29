@@ -660,7 +660,7 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 |--------|------|------|------|
 | GET | `/organizations/:org_slug/projects/:slug/config_versions` | 변경 이력 목록 | Project `read`+ |
 | GET | `/config_versions/:id` | 변경 상세 + diff | Project `read`+ |
-| POST | `/config_versions/:id/rollback` | 해당 버전으로 롤백. 현재 구현은 501 Not Implemented와 audit log 기록까지만 제공 | Project `write`+ |
+| POST | `/config_versions/:id/rollback` | 해당 버전으로 Config Server LiteLLM 설정을 롤백하고 Console rollback `ConfigVersion`과 audit log를 기록. Keycloak/Langfuse는 현재 `ConfigVersion` snapshot 대상이 아니므로 diagnostics로 명시 | Project `write`+ |
 
 #### Playground — FR-10
 
@@ -1437,6 +1437,6 @@ Health Check 실패는 프로비저닝 전체를 롤백하지 않고 **경고(wa
 | **FR-7.1** | 상태 머신 | `provisioning_jobs` | — | `Provisioning::Orchestrator` | — | `ProvisioningJob` |
 | **FR-7.2** | 실행/재시도/롤백 | `provisioning_steps` | — | `StepRunner`, `RollbackRunner` | — | `ProvisioningJob` |
 | **FR-7.3** | 현황 화면 | — (jobs+steps 참조) | `ProvisioningJobsController` | — | — | `ProvisioningChannel` |
-| **FR-8** | 이력/롤백 | `config_versions`, `audit_logs` | `ConfigVersionsController` | planned `ConfigVersions::RollbackService`; current rollback endpoint returns 501 | `ConfigServerClient` (history/revert) | — |
+| **FR-8** | 이력/롤백 | `config_versions`, `audit_logs` | `ConfigVersionsController` | `ConfigVersions::RollbackService` | `ConfigServerClient` (history/revert) | — |
 | **FR-9** | Health Check | — (steps에 기록) | — | `Steps::HealthCheck` (프로비저닝 파이프라인 내 인라인 실행) | 각 Client (상태 확인) | — |
 | **FR-10** | Playground | — (서버 미저장) | planned/deferred `PlaygroundsController` | — | LiteLLM API (프록시) | — |

@@ -30,7 +30,7 @@ gate / acceptance 상태만 관리한다.
 | `AC-007` | FR-7.3 | Given an authorized subscriber, when a provisioning job changes state, then ActionCable streams only the authorized job status | automated `TEST-008`; ERB timeline/retry UX remains tracked outside this gate | `passing` |
 | `AC-008` | Release gate | Given the current dev branch, when full smoke validation is run, then RSpec/lint/security checks pass and docs status remains consistent | manual + automated command set in `docs/current/TESTING.md`; last run 2026-04-29 | `passing` |
 | `AC-009` | FR-9 | Given configured external services, when health check runs, then it verifies service-specific post-provisioning consistency rather than only placeholder reachability | automated `TEST-009` | `passing` |
-| `AC-010` | FR-8 | Given a config version rollback request, when rollback completes, then Config Server, Keycloak, Langfuse, and Console snapshot state are restored or diagnosed | future automated request/service specs | `defined` |
+| `AC-010` | FR-8 | Given a config version rollback request, when rollback completes, then Config Server, Keycloak, Langfuse, and Console snapshot state are restored or diagnosed | automated `TEST-010` | `passing` |
 | `AC-011` | FR-4 | Given SAML/OAuth/PAK scope decision, when enabled, then auth selection, provisioning, PAK issuance, revocation, and verification paths are covered | future automated request/service/model specs | `defined` |
 | `AC-012` | FR-10 | Given an authorized project user, when Playground is enabled, then chat streaming, request inspection, and trace links work without exposing secrets | future system/request specs | `defined` |
 | `AC-013` | OPS retention | Given completed provisioning jobs older than the retention window, when retention cleanup runs, then terminal job/step records are archived or deleted while failed/manual-intervention records remain available | future job/service specs | `defined` |
@@ -49,6 +49,7 @@ gate / acceptance 상태만 관리한다.
 | `TEST-007` | Retry/rollback specs | `spec/services/provisioning/step_runner_spec.rb`, `spec/services/provisioning/rollback_runner_spec.rb`, step specs under `spec/services/provisioning/steps/` | `AC-006` |
 | `TEST-008` | Realtime provisioning specs | `spec/channels/provisioning_channel_spec.rb`, `spec/channels/application_cable/connection_spec.rb`, `spec/requests/provisioning_jobs_spec.rb` | `AC-007` |
 | `TEST-009` | Health check consistency specs | `spec/services/provisioning/steps/health_check_spec.rb` | `AC-009` |
+| `TEST-010` | Config version rollback specs | `spec/requests/config_versions_spec.rb` | `AC-010` |
 | `TEST-013` | Provisioning retention cleanup specs | planned `spec/jobs/provisioning_jobs_cleanup_job_spec.rb` 또는 service spec | `AC-013` |
 
 ## Definition of Done
