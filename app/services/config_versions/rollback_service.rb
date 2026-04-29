@@ -7,6 +7,7 @@ module ConfigVersions
       @project = config_version.project
       @organization = @project.organization
       @current_user_sub = current_user_sub
+      @attempt_id = SecureRandom.uuid
     end
 
     def call
@@ -27,17 +28,19 @@ module ConfigVersions
 
     private
 
-    attr_reader :config_version, :project, :organization, :current_user_sub
+    attr_reader :config_version, :project, :organization, :current_user_sub, :attempt_id
 
     def active_job_exists?
       project.provisioning_jobs.where(status: ProvisioningJob::ACTIVE_STATUSES).exists?
     end
 
     def conflict
+      diagnostics = { config_server: "not_started" }
+      audit!("config.rollback.blocked", diagnostics: diagnostics, error: "Another provisioning job is in progress")
       Result.failure(
         status: :conflict,
         message: "Another provisioning job is in progress",
-        diagnostics: { config_server: "not_started" }
+        diagnostics: diagnostics
       )
     end
 
@@ -47,7 +50,7 @@ module ConfigVersions
         project: project.slug,
         service: "litellm",
         target_version: config_version.version_id,
-        idempotency_key: "config-version-rollback-#{config_version.id}"
+        idempotency_key: "config-version-rollback-#{config_version.id}-#{attempt_id}"
       )
     end
 
@@ -92,7 +95,8 @@ module ConfigVersions
         resource_type: "ConfigVersion",
         resource_id: config_version.id.to_s,
         details: {
-          target_version_id: config_version.version_id
+          target_version_id: config_version.version_id,
+          rollback_attempt_id: attempt_id
         }.merge(details)
       )
     end

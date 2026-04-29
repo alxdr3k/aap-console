@@ -96,10 +96,30 @@ RSpec.describe "ConfigVersions", type: :request do
       }.to change { AuditLog.where(action: "config.rollback.completed").count }.by(1)
     end
 
+    it "uses a unique idempotency key for each rollback attempt" do
+      idempotency_keys = []
+      stub_request(:post, "#{ConfigServerMock::ADMIN_BASE}/changes/revert")
+        .to_return do |request|
+          idempotency_keys << request.headers["X-Idempotency-Key"]
+          {
+            status: 200,
+            body: { version: "v-rollback-#{idempotency_keys.size}" }.to_json,
+            headers: { "Content-Type" => "application/json" }
+          }
+        end
+
+      2.times { post "/config_versions/#{config_version.id}/rollback" }
+
+      expect(idempotency_keys.size).to eq(2)
+      expect(idempotency_keys.uniq.size).to eq(2)
+    end
+
     it "returns 409 when another provisioning job is active" do
       create(:provisioning_job, :in_progress, project: project)
 
-      post "/config_versions/#{config_version.id}/rollback"
+      expect {
+        post "/config_versions/#{config_version.id}/rollback"
+      }.to change { AuditLog.where(action: "config.rollback.blocked").count }.by(1)
 
       expect(response).to have_http_status(:conflict)
       expect(a_request(:post, "#{ConfigServerMock::ADMIN_BASE}/changes/revert")).not_to have_been_made
