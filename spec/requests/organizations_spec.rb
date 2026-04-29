@@ -137,15 +137,25 @@ RSpec.describe "Organizations", type: :request do
     let!(:org) { create(:organization) }
     before { create(:org_membership, organization: org, user_sub: user_sub, role: "read") }
 
-    it "returns 200" do
-      get "/organizations/#{org.slug}"
+    it "keeps JSON as the wildcard Accept default" do
+      get "/organizations/#{org.slug}", headers: { "ACCEPT" => "*/*" }
+
       expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body.fetch("slug")).to eq(org.slug)
+    end
+
+    it "keeps JSON response compatibility" do
+      get "/organizations/#{org.slug}", headers: { "ACCEPT" => "application/json" }
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body.fetch("slug")).to eq(org.slug)
     end
 
     it "renders the organization detail shell for HTML" do
       create(:project, :active, organization: org, name: "Chatbot")
 
-      get "/organizations/#{org.slug}"
+      get "/organizations/#{org.slug}", headers: { "ACCEPT" => "text/html" }
 
       expect(response.media_type).to eq("text/html")
       expect(response.body).to include(org.name)
