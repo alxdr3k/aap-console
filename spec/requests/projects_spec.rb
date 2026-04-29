@@ -95,6 +95,26 @@ RSpec.describe "Projects", type: :request do
       expect(job.input_snapshot["guardrails"]).to eq([ "content-filter" ])
     end
 
+    it "keeps projects named New reachable by skipping the reserved slug" do
+      post "/organizations/#{org.slug}/projects",
+           params: {
+             project: {
+               name: "New",
+               auth_type: "oidc",
+               models: [ "azure-gpt4" ],
+               s3_retention_days: 90
+             }
+           },
+           headers: html_headers
+
+      project = Project.last
+      expect(project.slug).to eq("new-2")
+
+      get "/organizations/#{org.slug}/projects/#{project.slug}", headers: html_headers
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("New")
+    end
+
     it "returns 422 on validation failure" do
       post "/organizations/#{org.slug}/projects",
            params: { project: { name: "A", auth_type: "oidc" } }
