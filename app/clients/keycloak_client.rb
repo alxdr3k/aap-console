@@ -26,6 +26,9 @@ class KeycloakClient < BaseClient
   end
 
   def get_users_by_ids(user_subs:)
+    user_subs = Array(user_subs).compact.uniq
+    return {} if user_subs.blank?
+
     pool = Concurrent::FixedThreadPool.new([ user_subs.size, 5 ].min)
     results = Concurrent::Hash.new
 
@@ -40,14 +43,31 @@ class KeycloakClient < BaseClient
       end
     end
 
-    futures.each(&:value)
-    pool.shutdown
+    futures.each do |future|
+      future.value
+      raise future.reason if future.rejected?
+    end
+
     results
+  ensure
+    pool&.shutdown
   end
 
   def create_user(email:)
     response = post(users_path, body: { email: email, enabled: true }, headers: auth_headers)
-    response.body
+    body = response.body
+
+    return body if body.is_a?(Hash) && body["id"].present?
+
+    location = response.headers["location"] || response.headers["Location"]
+    user_sub = location.to_s.split("/").last
+    raise ApiError.new("Keycloak create user response missing location", status: response.status, body: body) if user_sub.blank?
+
+    { "id" => user_sub, "email" => email }
+  end
+
+  def delete_user(user_sub:)
+    delete("#{users_path}/#{user_sub}", headers: auth_headers)
   end
 
   # Client management (only `aap-` prefixed clients)

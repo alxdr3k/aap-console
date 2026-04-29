@@ -26,10 +26,37 @@ RSpec.describe KeycloakClient do
     end
   end
 
+  describe "#get_users_by_ids" do
+    it "skips deleted users" do
+      stub_keycloak_get_user(user_sub: "user-1", user: { "id" => "user-1", "email" => "user@example.com" })
+      stub_keycloak_get_user(user_sub: "deleted-user", status: 404)
+
+      result = client.get_users_by_ids(user_subs: [ "user-1", "deleted-user" ])
+
+      expect(result.keys).to contain_exactly("user-1")
+    end
+
+    it "propagates non-404 lookup errors" do
+      stub_keycloak_get_user(user_sub: "user-1", status: 500)
+
+      expect { client.get_users_by_ids(user_subs: [ "user-1" ]) }
+        .to raise_error(BaseClient::ServerError)
+    end
+  end
+
   describe "#create_user" do
     it "creates a user by email" do
-      stub_keycloak_create_user(email: "new@example.com")
-      expect { client.create_user(email: "new@example.com") }.not_to raise_error
+      stub_keycloak_create_user(email: "new@example.com", user_sub: "created-user-sub")
+      result = client.create_user(email: "new@example.com")
+      expect(result["id"]).to eq("created-user-sub")
+      expect(result["email"]).to eq("new@example.com")
+    end
+  end
+
+  describe "#delete_user" do
+    it "deletes a user by sub" do
+      stub_keycloak_delete_user(user_sub: "created-user-sub")
+      expect { client.delete_user(user_sub: "created-user-sub") }.not_to raise_error
     end
   end
 

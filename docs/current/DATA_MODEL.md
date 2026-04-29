@@ -53,7 +53,7 @@ Code, migrations, schemas, generated references가 authoritative source다. 이 
 
 | Area | Gap |
 |---|---|
-| Organization/member completion | Keycloak user pre-assignment, project permission CRUD API/UI, and final org delete cleanup are tracked by `CORE-5A.2` / `CORE-5A.3` / `AC-018` |
+| Organization/member completion | Keycloak user pre-assignment and project permission CRUD API are landed in `CORE-5A.2`; member management UI and final org delete cleanup remain tracked by `UI-5A.3` / `CORE-5A.3` / `AC-018` |
 | Auth UI | PAK UI와 SAML/OAuth UI/metadata 입력 범위는 아직 구현되지 않음 |
 | Secret reveal | `ProvisioningJobsController#secrets` can read a TTL cache entry, but provisioning steps do not write generated Keycloak/PAK secrets into that cache yet |
 | Config rollback snapshots | Current `ConfigVersion` snapshot does not carry Keycloak/Langfuse mutable config required for full FR-8 restore; tracked by `OPS-7A.5` / `AC-022` |
