@@ -1,8 +1,18 @@
 require "rails_helper"
 
 RSpec.describe Organizations::DestroyService do
+  include ActiveJob::TestHelper
+
   let(:organization) { create(:organization, langfuse_org_id: "langfuse-org-123") }
   let(:user_sub) { "user-sub-123" }
+
+  before do
+    clear_enqueued_jobs
+  end
+
+  after do
+    clear_enqueued_jobs
+  end
 
   describe "#call" do
     context "with no projects" do
@@ -62,6 +72,14 @@ RSpec.describe Organizations::DestroyService do
         expect(result.data[:pending_projects].first[:slug]).to eq(project.slug)
         expect(organization.reload).to be_present
         expect(WebMock).not_to have_requested(:post, %r{organizations\.delete})
+      end
+
+      it "does not enqueue duplicate finalizers for the same organization" do
+        OrganizationDestroyFinalizeJob.enqueue_once(organization.id, current_user_sub: user_sub)
+
+        expect {
+          described_class.new(organization: organization, current_user_sub: user_sub).call
+        }.not_to have_enqueued_job(OrganizationDestroyFinalizeJob)
       end
 
       it "does not fail when project deletion is already in progress" do

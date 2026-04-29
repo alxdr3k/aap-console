@@ -52,9 +52,7 @@ module Organizations
     private
 
     def enqueue_finalizer
-      OrganizationDestroyFinalizeJob
-        .set(wait: OrganizationDestroyFinalizeJob::RETRY_DELAY)
-        .perform_later(@organization.id, current_user_sub: @current_user_sub)
+      OrganizationDestroyFinalizeJob.enqueue_once(@organization.id, current_user_sub: @current_user_sub)
     end
 
     def blocking_project_with_active_job(projects)
