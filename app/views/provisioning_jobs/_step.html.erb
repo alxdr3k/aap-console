@@ -1,4 +1,7 @@
-<li id="<%= dom_id(step) %>" class="timeline-step timeline-step--<%= step.status %>" data-step-id="<%= step.id %>">
+<li id="<%= dom_id(step) %>"
+    class="timeline-step timeline-step--<%= step.status %>"
+    data-step-id="<%= step.id %>"
+    data-step-snapshot="<%= [step.status, step.error_message.to_s, step.retry_count || 0].to_json %>">
   <div class="timeline-step__marker"><%= step.step_order %></div>
   <div class="timeline-step__body">
     <div class="timeline-step__header">

@@ -15,6 +15,7 @@ export default class extends Controller {
   connect() {
     this.disconnecting = false
     this.polling = false
+    this.stepSnapshots = this.readStepSnapshots()
     this.startSubscription()
   }
 
@@ -72,7 +73,8 @@ export default class extends Controller {
 
       const payload = await response.json()
       this.updateJobStatus(payload.status)
-      await Promise.all((payload.steps || []).map((step) => this.refreshStep(step.id)))
+      const changedSteps = (payload.steps || []).filter((step) => this.stepChanged(step))
+      await Promise.all(changedSteps.map((step) => this.refreshStep(step.id)))
 
       if (TERMINAL_STATUSES.includes(payload.status)) this.stopPolling()
     } finally {
@@ -89,6 +91,7 @@ export default class extends Controller {
     if (!response.ok) return
 
     current.outerHTML = await response.text()
+    this.updateStepSnapshotFromElement(stepId)
   }
 
   updateJobStatus(status) {
@@ -114,6 +117,30 @@ export default class extends Controller {
 
     this.updateConnection("polling")
     this.startPolling()
+  }
+
+  readStepSnapshots() {
+    const snapshots = new Map()
+    this.element.querySelectorAll("[data-step-id]").forEach((stepElement) => {
+      snapshots.set(stepElement.dataset.stepId, stepElement.dataset.stepSnapshot || "")
+    })
+
+    return snapshots
+  }
+
+  stepChanged(step) {
+    return this.stepSnapshots.get(String(step.id)) !== this.stepSnapshot(step)
+  }
+
+  stepSnapshot(step) {
+    return JSON.stringify([step.status, step.error_message || "", step.retry_count || 0])
+  }
+
+  updateStepSnapshotFromElement(stepId) {
+    const stepElement = this.element.querySelector(`[data-step-id="${stepId}"]`)
+    if (!stepElement) return
+
+    this.stepSnapshots.set(String(stepId), stepElement.dataset.stepSnapshot || "")
   }
 
   jobStatusClass(status) {
