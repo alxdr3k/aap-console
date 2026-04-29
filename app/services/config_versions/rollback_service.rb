@@ -23,7 +23,12 @@ module ConfigVersions
     rescue BaseClient::ApiError => e
       diagnostics = failure_diagnostics(e)
       audit!("config.rollback.failed", diagnostics: diagnostics, error: e.message)
-      Result.failure(status: :bad_gateway, message: "Config Server rollback failed", diagnostics: diagnostics)
+      Result.failure(
+        status: :bad_gateway,
+        response_status: "failed",
+        message: "Config Server rollback failed",
+        diagnostics: diagnostics
+      )
     end
 
     private
@@ -39,6 +44,7 @@ module ConfigVersions
       audit!("config.rollback.blocked", diagnostics: diagnostics, error: "Another provisioning job is in progress")
       Result.failure(
         status: :conflict,
+        response_status: "blocked",
         message: "Another provisioning job is in progress",
         diagnostics: diagnostics
       )

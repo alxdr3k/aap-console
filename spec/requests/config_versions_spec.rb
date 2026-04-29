@@ -130,6 +130,7 @@ RSpec.describe "ConfigVersions", type: :request do
       }.to change { AuditLog.where(action: "config.rollback.blocked").count }.by(1)
 
       expect(response).to have_http_status(:conflict)
+      expect(JSON.parse(response.body)["status"]).to eq("blocked")
       expect(a_request(:post, "#{ConfigServerMock::ADMIN_BASE}/changes/revert")).not_to have_been_made
     end
 

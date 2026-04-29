@@ -60,7 +60,7 @@ class ConfigVersionsController < ApplicationController
 
   def rollback_error_payload(error)
     {
-      status: "failed",
+      status: error.fetch(:response_status),
       error: error.fetch(:message),
       target_version_id: @config_version.version_id,
       diagnostics: error.fetch(:diagnostics)
