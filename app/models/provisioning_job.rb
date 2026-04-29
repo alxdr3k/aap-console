@@ -1,7 +1,7 @@
 class ProvisioningJob < ApplicationRecord
   belongs_to :project
   has_many :provisioning_steps, dependent: :destroy
-  has_one :config_version
+  has_many :config_versions, dependent: :nullify
 
   OPERATIONS = %w[create update delete].freeze
 

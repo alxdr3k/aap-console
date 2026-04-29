@@ -78,6 +78,14 @@ current `ConfigVersion` model.
 - Client는 `GET /provisioning_jobs/:id`로 polling할 수도 있다.
 - Turbo Stream/Stimulus consumer와 provisioning ERB timeline은 아직 구현되지 않았다.
 
+### Retention Cleanup
+
+- `ProvisioningJobsCleanupJob`은 180일이 지난 `completed`, `completed_with_warnings`, `rolled_back` provisioning job을 삭제한다.
+- 삭제된 job의 `provisioning_steps`는 함께 삭제된다.
+- 연결된 모든 `ConfigVersion`은 보존되며 `provisioning_job_id`만 null 처리된다.
+- `failed` / `rollback_failed` job은 manual inspection을 위해 보존된다.
+- Production schedule은 `config/recurring.yml`의 `provisioning_jobs_cleanup`에 둔다.
+
 ## Planned / Partial Flow
 
 | Flow | State |

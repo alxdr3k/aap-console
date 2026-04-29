@@ -33,7 +33,7 @@ gate / acceptance 상태만 관리한다.
 | `AC-010` | FR-8 | Given a config version rollback request, when rollback completes, then Config Server, Keycloak, Langfuse, and Console snapshot state are restored or diagnosed | automated `TEST-010` | `passing` |
 | `AC-011` | FR-4 | Given SAML/OAuth/PAK scope decision, when enabled, then auth selection, provisioning, PAK issuance, revocation, and verification paths are covered | future automated request/service/model specs | `defined` |
 | `AC-012` | FR-10 | Given an authorized project user, when Playground is enabled, then chat streaming, request inspection, and trace links work without exposing secrets | future system/request specs | `defined` |
-| `AC-013` | OPS retention | Given completed provisioning jobs older than the retention window, when retention cleanup runs, then terminal job/step records are archived or deleted while failed/manual-intervention records remain available | future job/service specs | `defined` |
+| `AC-013` | OPS retention | Given completed provisioning jobs older than the retention window, when retention cleanup runs, then terminal job/step records are archived or deleted while failed/manual-intervention records remain available | automated `TEST-013` | `passing` |
 | `AC-DOC-001` | DOC-M1 | Given a new session or PR, when an agent follows repo guidance, then it reaches `current-state`, `04_IMPLEMENTATION_PLAN`, `current/*`, canonical PRD/HLD paths, and the PR template/doc-freshness guidance without stale doc-only guidance | link check + doc review | `passing` |
 
 ## Tests
@@ -50,7 +50,7 @@ gate / acceptance 상태만 관리한다.
 | `TEST-008` | Realtime provisioning specs | `spec/channels/provisioning_channel_spec.rb`, `spec/channels/application_cable/connection_spec.rb`, `spec/requests/provisioning_jobs_spec.rb` | `AC-007` |
 | `TEST-009` | Health check consistency specs | `spec/services/provisioning/steps/health_check_spec.rb` | `AC-009` |
 | `TEST-010` | Config version rollback specs | `spec/requests/config_versions_spec.rb` | `AC-010` |
-| `TEST-013` | Provisioning retention cleanup specs | planned `spec/jobs/provisioning_jobs_cleanup_job_spec.rb` 또는 service spec | `AC-013` |
+| `TEST-013` | Provisioning retention cleanup specs | `spec/jobs/provisioning_jobs_cleanup_job_spec.rb`, `spec/models/provisioning_job_spec.rb` | `AC-013` |
 
 ## Definition of Done
 

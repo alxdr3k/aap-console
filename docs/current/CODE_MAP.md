@@ -24,6 +24,7 @@
 | `app/controllers/provisioning_jobs_controller.rb` | Provisioning job show/retry/secrets endpoint |
 | `app/channels/provisioning_channel.rb` | Provisioning job status용 ActionCable stream |
 | `app/jobs/provisioning_execute_job.rb` | Provisioning orchestration을 실행하는 SolidQueue job |
+| `app/jobs/provisioning_jobs_cleanup_job.rb` | Retention window가 지난 성공 계열 terminal provisioning job/step cleanup |
 | `app/jobs/app_registry_webhook_job.rb` | Standalone app registry webhook retry job. Current provisioning steps call the webhook inline |
 
 ## Domain / Services

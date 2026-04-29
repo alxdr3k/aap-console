@@ -43,7 +43,7 @@ Code, migrations, schemas, generated references가 authoritative source다. 이 
 | Entity | States | Notes |
 |---|---|---|
 | `Project.status` | `provisioning`, `active`, `update_pending`, `deleting`, `deleted`, `provision_failed` | `deleted`는 보존되는 soft-delete style state |
-| `ProvisioningJob.status` | `pending`, `in_progress`, `completed`, `completed_with_warnings`, `failed`, `retrying`, `rolling_back`, `rolled_back`, `rollback_failed` | Active job unique index는 `pending`, `in_progress`, `retrying`, `rolling_back`을 포함 |
+| `ProvisioningJob.status` | `pending`, `in_progress`, `completed`, `completed_with_warnings`, `failed`, `retrying`, `rolling_back`, `rolled_back`, `rollback_failed` | Active job unique index는 `pending`, `in_progress`, `retrying`, `rolling_back`을 포함. Retention cleanup은 180일이 지난 `completed`, `completed_with_warnings`, `rolled_back`만 삭제하고 `failed`, `rollback_failed`는 보존 |
 | `ProvisioningStep.status` | `pending`, `in_progress`, `completed`, `failed`, `retrying`, `skipped`, `rolled_back`, `rollback_failed` | Step name은 `Provisioning::StepSeeder`가 seed |
 | `OrgMembership.role` | `admin`, `write`, `read` | Org role의 source of truth는 Console DB |
 | `ProjectPermission.role` | `write`, `read` | Org admin은 implicit project access를 가진다 |
