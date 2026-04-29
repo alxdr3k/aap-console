@@ -122,8 +122,7 @@ class MembersController < ApplicationController
   def destroy
     @organization.with_lock do
       if removing_last_admin?(@membership)
-        return render json: { error: "Cannot remove the last admin of this organization" },
-                      status: :unprocessable_entity
+        return render_member_error("Cannot remove the last admin of this organization", :unprocessable_entity)
       end
 
       @membership.destroy!

@@ -260,6 +260,18 @@ RSpec.describe "Members", type: :request do
       expect(JSON.parse(response.body)["error"]).to match(/last admin/i)
     end
 
+    it "renders the members page error when HTML removes the last admin" do
+      sole_admin_org = create(:organization)
+      create(:org_membership, organization: sole_admin_org, user_sub: user_sub, role: "admin")
+
+      delete "/organizations/#{sole_admin_org.slug}/members/#{user_sub}", headers: html_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.media_type).to eq("text/html")
+      expect(response.body).to include("Cannot remove the last admin")
+      expect(response.body).to include("멤버 관리")
+    end
+
     it "allows self-removal when another admin exists" do
       create(:org_membership, organization: org, user_sub: "backup-admin", role: "admin")
       expect {

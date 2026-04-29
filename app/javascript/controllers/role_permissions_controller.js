@@ -10,6 +10,22 @@ export default class extends Controller {
   toggle() {
     if (!this.hasPermissionsTarget) return
 
-    this.permissionsTarget.hidden = this.roleTarget.value === "admin"
+    const admin = this.roleTarget.value === "admin"
+    this.permissionsTarget.hidden = admin
+
+    this.permissionsTarget.querySelectorAll("input, select, textarea").forEach((field) => {
+      if (admin) this.clearField(field)
+      field.disabled = admin
+    })
+  }
+
+  clearField(field) {
+    if (field.type === "checkbox" || field.type === "radio") {
+      field.checked = false
+    } else if (field.tagName === "SELECT") {
+      field.selectedIndex = 0
+    } else {
+      field.value = ""
+    }
   }
 }
