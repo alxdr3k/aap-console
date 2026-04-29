@@ -450,7 +450,7 @@ app/
 │   ├── litellm_configs_controller.rb     # FR-6
 │   ├── provisioning_jobs_controller.rb   # FR-7.3 (show, retry, secrets)
 │   ├── config_versions_controller.rb     # FR-8
-│   ├── playgrounds_controller.rb         # FR-10: LiteLLM 프록시 + SSE
+│   ├── playgrounds_controller.rb         # FR-10 planned/deferred: LiteLLM 프록시 + SSE
 │   └── api/
 │       └── v1/
 │           └── apps_controller.rb        # Config Server용 App Registry API
@@ -495,7 +495,7 @@ app/
 │   │       └── health_check.rb           # FR-9: 프로비저닝 파이프라인 내 인라인 실행
 │   │
 │   └── config_versions/
-│       └── rollback_service.rb           # FR-8: 버전 롤백 오케스트레이션
+│       └── rollback_service.rb           # FR-8 planned: 버전 롤백 오케스트레이션
 │
 ├── clients/                              # 외부 API HTTP 클라이언트 (비즈니스 로직 없는 순수 HTTP 통신 계층이므로 services/와 분리)
 │   ├── keycloak_client.rb                # FR-2, FR-4
@@ -515,7 +515,7 @@ app/
     ├── projects/                         # FR-3
     ├── provisioning_jobs/                # FR-7.3: 현황 화면
     ├── config_versions/                  # FR-8
-    └── playgrounds/                      # FR-10: AI Chat UI
+    └── playgrounds/                      # FR-10 planned/deferred: AI Chat UI
 ```
 
 > **Zeitwerk 오토로딩**: 디렉토리명·파일명과 상수명은 Rails 8 기본 Zeitwerk 규약을 따른다. 파일명이 상수명을 결정하므로 `app/models/current.rb` → `Current` (파일명 `current_user.rb`로 두면 `CurrentUser`가 되어 `ActiveSupport::CurrentAttributes` 관례와 어긋난다). `app/clients/keycloak_client.rb` → `KeycloakClient` (최상위), `app/services/provisioning/orchestrator.rb` → `Provisioning::Orchestrator`, `app/services/provisioning/steps/*.rb` → `Provisioning::Steps::*`. `app/clients`는 Rails 기본 autoload_paths에 포함되지 않으므로 `config/application.rb`에서 `config.autoload_paths << Rails.root.join("app/clients")`를 명시한다.
@@ -652,7 +652,7 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 |--------|------|------|------|
 | GET | `/provisioning_jobs/:id` | 현황 화면 (실시간 상태) | Project `read`+ |
 | POST | `/provisioning_jobs/:id/retry` | 수동 재시도 | Project `write`+ |
-| GET | `/provisioning_jobs/:id/secrets` | 일회성 시크릿 조회 (TTL 10분, §6.5) | Project `write`+ |
+| GET | `/provisioning_jobs/:id/secrets` | 일회성 시크릿 조회 endpoint. 현재 구현은 cache read placeholder이며 TTL cache write path는 §6.5 target flow | Project `write`+ |
 
 #### 설정 이력 / 롤백 — FR-8
 
@@ -660,14 +660,14 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 |--------|------|------|------|
 | GET | `/organizations/:org_slug/projects/:slug/config_versions` | 변경 이력 목록 | Project `read`+ |
 | GET | `/config_versions/:id` | 변경 상세 + diff | Project `read`+ |
-| POST | `/config_versions/:id/rollback` | 해당 버전으로 롤백 | Project `write`+ |
+| POST | `/config_versions/:id/rollback` | 해당 버전으로 롤백. 현재 구현은 501 Not Implemented와 audit log 기록까지만 제공 | Project `write`+ |
 
 #### Playground — FR-10
 
 | Method | Path | 설명 | 권한 |
 |--------|------|------|------|
-| GET | `/organizations/:org_slug/projects/:slug/playground` | Playground 화면 | Project `read`+ |
-| POST | `/organizations/:org_slug/projects/:slug/playground/chat` | LiteLLM 프록시 (SSE 스트리밍) | Project `read`+ |
+| GET | `/organizations/:org_slug/projects/:slug/playground` | Planned/deferred Playground 화면 | Project `read`+ |
+| POST | `/organizations/:org_slug/projects/:slug/playground/chat` | Planned/deferred LiteLLM 프록시 (SSE 스트리밍) | Project `read`+ |
 
 > **스트리밍 구현 방식**:
 > - 서버 측: `ActionController::Live` 로 **chunked Transfer-Encoding** 응답을 흘려보낸다. Rack Hijacking이 아니며, Rails standard thread-per-request 모델 위에서 동작한다. 컨트롤러는 `response.stream.write(chunk); response.stream.close` 패턴으로 LiteLLM의 SSE 청크를 그대로 relay한다.
@@ -714,8 +714,11 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 ```ruby
 # config/routes.rb
 Rails.application.routes.draw do
+  get "up" => "rails/health#show", as: :rails_health_check
+
   # 인증 콜백
   get  "auth/keycloak/callback", to: "sessions#create"
+  get  "auth/failure",           to: "sessions#failure"
   delete "auth/logout", to: "sessions#destroy"
 
   # 사용자 검색
@@ -729,9 +732,6 @@ Rails.application.routes.draw do
       resource :auth_config, only: [:show, :update]
       resource :litellm_config, only: [:show, :update]
       resources :config_versions, only: [:index]
-      resource :playground, only: [:show] do
-        post :chat, on: :member
-      end
     end
   end
 
@@ -754,6 +754,8 @@ Rails.application.routes.draw do
       resources :apps, only: [:index]
     end
   end
+
+  root to: redirect("/organizations")
 end
 ```
 
@@ -1010,7 +1012,12 @@ ActionCable의 pub/sub adapter로 `SolidCable`(SQLite 기반)을 사용한다. S
 
 프로비저닝 완료 후 일회성 시크릿(Keycloak Client Secret, PAK)을 브라우저에 전달하는 경로는 **ActionCable을 경유하지 않는다**. ActionCable 브로드캐스트는 다중 구독자가 동일 메시지를 수신하므로 동일 Project에 대한 다른 세션(예: 다른 관리자의 탭)에도 시크릿이 유출될 수 있다.
 
-대신 다음 경로를 사용한다:
+현재 구현 상태: `ProvisioningJobsController#secrets`는 권한 검증 후
+`Rails.cache.read("provisioning_job_secrets_#{job.id}")`를 반환하지만, provisioning
+step이 이 cache key에 시크릿을 쓰는 경로는 아직 없다. 따라서 아래는 target
+flow이며, current code에서는 캐시가 없으면 빈 JSON을 반환한다.
+
+Target flow는 다음 경로를 사용한다:
 
 1. **시크릿을 생성하는 단계**는 `KeycloakClientCreate`(OIDC/SAML/OAuth Client Secret) 와 PAK 발급 단계(사용자가 명시적으로 PAK를 선택·추가한 경우)뿐이다. `ConfigServerApply` 는 이전 단계에서 받은 시크릿 평문을 Config Server로 전달하는 **소비자** 이며 새 시크릿을 생성하지 않는다. `LangfuseProjectCreate` 가 반환하는 SDK Key(PK/SK) 는 사용자에게 표시하지 않고 Config Server로 직접 전달되므로 이 채널을 사용하지 않는다 (PRD FR-5).
 2. 시크릿 생성 단계가 성공하면 값은 Rails **단기 캐시**(`Rails.cache` with `expires_in: 10.minutes`, 저장소는 아래 §6.5 끝 단락 참조)에 `provisioning_job_id` 키로 저장된다. 저장 시점에 Project에 대한 권한 메타(org/project ID) 를 함께 기록하여 fetch 시 인가 검증에 사용한다.
@@ -1417,6 +1424,6 @@ Health Check 실패는 프로비저닝 전체를 롤백하지 않고 **경고(wa
 | **FR-7.1** | 상태 머신 | `provisioning_jobs` | — | `Provisioning::Orchestrator` | — | `ProvisioningJob` |
 | **FR-7.2** | 실행/재시도/롤백 | `provisioning_steps` | — | `StepRunner`, `RollbackRunner` | — | `ProvisioningJob` |
 | **FR-7.3** | 현황 화면 | — (jobs+steps 참조) | `ProvisioningJobsController` | — | — | `ProvisioningChannel` |
-| **FR-8** | 이력/롤백 | `config_versions`, `audit_logs` | `ConfigVersionsController` | `ConfigVersions::RollbackService` | `ConfigServerClient` (revert) | — |
+| **FR-8** | 이력/롤백 | `config_versions`, `audit_logs` | `ConfigVersionsController` | planned `ConfigVersions::RollbackService`; current rollback endpoint returns 501 | `ConfigServerClient` (history/revert) | — |
 | **FR-9** | Health Check | — (steps에 기록) | — | `Steps::HealthCheck` (프로비저닝 파이프라인 내 인라인 실행) | 각 Client (상태 확인) | — |
-| **FR-10** | Playground | — (서버 미저장) | `PlaygroundsController` | — | LiteLLM API (프록시) | — |
+| **FR-10** | Playground | — (서버 미저장) | planned/deferred `PlaygroundsController` | — | LiteLLM API (프록시) | — |
