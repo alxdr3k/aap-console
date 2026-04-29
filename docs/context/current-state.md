@@ -17,10 +17,10 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
 - active tracks: `OPS`
 - active phase: `OPS-3A`
-- active slice: `OPS-3A.1` / `OPS-3A.2` / `OPS-3A.3`
-- last accepted gate: `AC-006` provisioning saga core, `AC-007` ActionCable authorization/broadcast path
+- active slice: `OPS-3A.2` / `OPS-3A.3`
+- last accepted gate: `AC-008` release smoke validation
 - last passing doc gate: `AC-DOC-001`
-- next gate: `AC-008`, `AC-009`, `AC-010`
+- next gate: `AC-009`, `AC-010`
 - canonical ledger: `docs/04_IMPLEMENTATION_PLAN.md`
 
 ## Implemented
@@ -32,10 +32,10 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - Config version listing과 rollback entry point. `POST /config_versions/:id/rollback`는 현재 501 Not Implemented를 반환하고 audit log만 남긴다.
 - Authorization check와 JSON `step_update` / `job_completed` payload를 포함한 ActionCable `ProvisioningChannel`.
 - Core request, model, service, job, client, channel path에 대한 RSpec/WebMock coverage.
+- `OPS-3A.1` release smoke validation accepted on 2026-04-29.
 
 ## Planned
 
-- `OPS-3A.1`: release gate용 full smoke validation.
 - `OPS-3A.2`: health check service-specific assertion.
 - `OPS-3A.3`: config rollback external restore path.
 - `UI-2B`: Hotwire/ERB provisioning timeline and retry UX.
@@ -51,9 +51,8 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Priorities
 
-1. `docs/current/TESTING.md`의 release smoke check 실행.
-2. `FR-9` health check와 `FR-8` rollback gap을 닫거나 명시적으로 defer.
-3. `Q-001`로 SAML/OAuth/PAK MVP 범위를 결정.
+1. `FR-9` health check와 `FR-8` rollback gap을 닫거나 명시적으로 defer.
+2. `Q-001`로 SAML/OAuth/PAK MVP 범위를 결정.
 
 ## Current Risks / Unknowns
 
@@ -66,7 +65,7 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 - Acceptance gates: `docs/06_ACCEPTANCE_TESTS.md`
 - Test command source: `docs/current/TESTING.md`
-- Current known open gates: `AC-008`, `AC-009`, `AC-010`, `AC-011`, `AC-012`
+- Current known open gates: `AC-009`, `AC-010`, `AC-011`, `AC-012`
 
 ## Needs Audit
 

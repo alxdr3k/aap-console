@@ -318,7 +318,7 @@ provisioning ── create 성공 ──▶ active
 
 **동시성 제어**: 동일 `project_id`에 대해 `pending` / `in_progress` / `retrying` / `rolling_back` 상태의 job이 있으면 새 job 생성을 거부한다 (앱 레벨 검증 + `(project_id)` 부분 인덱스로 활성 Job 유일성 보장). 상세는 §5.5 참조.
 
-**retention target**: 180일 보관 후 일일 배치 Job(`ProvisioningJobsCleanupJob`)이 `completed` / `rolled_back` / `completed_with_warnings` 레코드를 아카이빙(S3)하고 삭제. `failed` / `rollback_failed`는 관리자 확인 전까지 보존. Current repo에는 아직 `ProvisioningJobsCleanupJob`이 없으며, retention cleanup은 `AC-008` 운영 gate에서 닫아야 한다.
+**retention target**: 180일 보관 후 일일 배치 Job(`ProvisioningJobsCleanupJob`)이 `completed` / `rolled_back` / `completed_with_warnings` 레코드를 아카이빙(S3)하고 삭제. `failed` / `rollback_failed`는 관리자 확인 전까지 보존. Current repo에는 아직 `ProvisioningJobsCleanupJob`이 없으며, retention cleanup은 별도 OPS hardening slice로 닫아야 한다.
 
 #### provisioning_steps — FR-7.2
 

@@ -25,5 +25,5 @@ Question, decision, requirement, acceptance gate, test, slice를 연결한다.
 
 ## Gaps
 
-- `AC-008`, `AC-009`, `AC-010`, `AC-011`, `AC-012`는 아직 passing gate가 아니다.
+- `AC-009`, `AC-010`, `AC-011`, `AC-012`는 아직 passing gate가 아니다.
 - `Q-001`, `Q-002`는 decision으로 승격되지 않았다.

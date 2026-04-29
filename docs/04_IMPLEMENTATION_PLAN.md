@@ -57,7 +57,7 @@ Gate status:
 |---|---|---|---|---|---|---|
 | `P0-M1` | Organization / Project CRUD와 Console DB RBAC가 동작한다 | 2026-04-25 | `accepted` | `AC-001` / `AC-002` / `AC-003` | `spec/requests/organizations_spec.rb`, `spec/requests/projects_spec.rb`, `spec/requests/members_spec.rb` | MVP foundation |
 | `P0-M2` | OIDC, Langfuse, LiteLLM, Config Server 기본 프로비저닝 경로가 동작한다 | 2026-04-25 | `accepted` | `AC-004` / `AC-005` / `AC-006` | `app/services/provisioning/`, `spec/services/provisioning/` | Health check 상세 검증은 `P0-M3` |
-| `P0-M3` | 운영 안정성 release gate를 닫는다 |  | `in_progress` | `AC-007` / `AC-008` / `AC-009` / `AC-010` | `docs/03_RISK_SPIKES.md` | Health check, config rollback, 통합 smoke 남음 |
+| `P0-M3` | 운영 안정성 release gate를 닫는다 |  | `in_progress` | `AC-007` / `AC-008` / `AC-009` / `AC-010` | `docs/03_RISK_SPIKES.md` | Health check와 config rollback 남음 |
 | `P0-M4` | SAML/OAuth/PAK 범위를 확정하고 구현한다 |  | `planned` | `AC-011` | `docs/07_QUESTIONS_REGISTER.md#q-001` | MVP 범위 결정 필요 |
 | `P0-M5` | Playground를 제품 화면에 노출한다 |  | `deferred` | `AC-012` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | Phase 4 |
 | `DOC-M1` | Boilerplate 문서 체계가 repo에 적용된다 | 2026-04-29 | `accepted` | `AC-DOC-001` | `AGENTS.md`, `docs/context/current-state.md`, `docs/current/`, `.github/pull_request_template.md`, PR #24 | Merged on 2026-04-29 |
@@ -91,7 +91,7 @@ Gate status:
 | `INTEG-2A.1` | `P0-M2` | `INTEG` | `INTEG-2A` | OIDC Keycloak client provisioning | `PROV-2A.1` | `AC-004` / `TEST-004` | `passing` | `accepted` | `app/services/provisioning/steps/keycloak_client_create.rb`, `spec/services/provisioning/steps/keycloak_client_create_spec.rb` | SAML/OAuth는 `AUTH-4A` |
 | `INTEG-2A.2` | `P0-M2` | `INTEG` | `INTEG-2A` | Langfuse project와 Config Server apply | `PROV-2A.1` | `AC-005` / `TEST-005` | `passing` | `accepted` | `app/clients/langfuse_client.rb`, `app/clients/config_server_client.rb`, related specs | 유지보수 |
 | `UI-2B.1` | `P0-M3` | `UI` | `UI-2B` | ActionCable provisioning stream | `PROV-2A.2` | `AC-007` / `TEST-008` | `passing` | `landed` | `app/channels/provisioning_channel.rb`, `spec/channels/provisioning_channel_spec.rb` | ERB timeline/retry UX 보강 |
-| `OPS-3A.1` | `P0-M3` | `OPS` | `OPS-3A` | 외부 리뷰어 피드백 통합 smoke 재검증 | `P0-M2` | `AC-008` | `not_run` | `ready` | `docs/06_ACCEPTANCE_TESTS.md` | Smoke 절차 실행 |
+| `OPS-3A.1` | `P0-M3` | `OPS` | `OPS-3A` | 외부 리뷰어 피드백 통합 smoke 재검증 | `P0-M2` | `AC-008` | `passing` | `accepted` | `docs/current/TESTING.md`, 2026-04-29 local smoke run: `bin/rspec`, `RUBOCOP_CACHE_ROOT=tmp/rubocop bin/rubocop`, `bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error`, `bin/bundler-audit`, `bin/rails db:migrate:status` | 유지보수 |
 | `OPS-3A.2` | `P0-M3` | `OPS` | `OPS-3A` | Health check 상세 assertion 구현 | `PROV-2A.2` | `AC-009` | `defined` | `planned` | `app/services/provisioning/steps/health_check.rb` | `SPIKE-001` 결과 반영 |
 | `OPS-3A.3` | `P0-M3` | `OPS` | `OPS-3A` | Config rollback의 Keycloak/Langfuse 복구 경로 완결 | `INTEG-2A.2` | `AC-010` | `defined` | `planned` | `app/controllers/config_versions_controller.rb`, `spec/requests/config_versions_spec.rb` | `SPIKE-002` 결과 반영 |
 | `AUTH-4A.1` | `P0-M4` | `AUTH` | `AUTH-4A` | SAML/OAuth 지원 범위 결정 및 구현 | `Q-001` | `AC-011` | `defined` | `planned` | `docs/07_QUESTIONS_REGISTER.md#q-001` | MVP 범위 결정 |
@@ -128,4 +128,4 @@ Gate status:
 
 - 인원: Platform TG / AI-assisted implementation
 - 주당 가용 시간: anchor missing
-- 예상 완료: `P0-M3` gate closure after smoke, health check, rollback slices
+- 예상 완료: `P0-M3` gate closure after health check and rollback slices
