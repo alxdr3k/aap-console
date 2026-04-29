@@ -4,7 +4,8 @@
 # deciding that soft doc-drift comments should run in GitHub Actions.
 #
 # This workflow is intentionally a soft warning. It surfaces implementation-doc,
-# roadmap/status, and gate drift fast so the author can fix or ack in the same PR.
+# roadmap/status, gate, and CI/CD-doc drift fast so the author can fix or ack
+# in the same PR.
 #
 # Untrusted GitHub event input flows only through env: blocks. Do not inline
 # `${{ ... }}` expressions into shell `run:` commands.
@@ -62,6 +63,10 @@ jobs:
           touched_acceptance_doc=$(printf '%s\n' "$CHANGED" | grep -E '^docs/06_ACCEPTANCE_TESTS\.md$' || true)
           touched_generated=$(printf '%s\n' "$CHANGED" | grep -E '^docs/generated/' || true)
           touched_adr=$(printf '%s\n' "$CHANGED" | grep -E '^docs/adr/' || true)
+          touched_workflows=$(printf '%s\n' "$CHANGED" | grep -E '^\.github/workflows/.*\.ya?ml(\.example)?$' || true)
+          touched_ci_cd_doc=$(printf '%s\n' "$CHANGED" | grep -E '^docs/11_CI_CD\.md$' || true)
+          touched_testing_doc=$(printf '%s\n' "$CHANGED" | grep -E '^docs/current/TESTING\.md$' || true)
+          touched_operations_doc=$(printf '%s\n' "$CHANGED" | grep -E '^docs/current/OPERATIONS\.md$|^docs/05_RUNBOOK\.md$' || true)
 
           if [ -n "$touched_src" ] &&
              [ -z "$touched_any_thin_doc" ] &&
@@ -74,6 +79,15 @@ jobs:
 
           if [ -n "$touched_migrations" ] && [ -z "$touched_data_doc" ] && [ -z "$touched_generated" ] && [ -z "$touched_adr" ]; then
             missing+=("Migrations changed -> update \`docs/current/DATA_MODEL.md\` and regenerate/commit any relevant \`docs/generated/\` output if a generator exists.")
+          fi
+
+          if [ -n "$touched_workflows" ] &&
+             [ -z "$touched_ci_cd_doc" ] &&
+             [ -z "$touched_testing_doc" ] &&
+             [ -z "$touched_operations_doc" ] &&
+             [ -z "$touched_acceptance_doc" ] &&
+             [ -z "$touched_adr" ]; then
+            missing+=("Workflow files changed -> update \`docs/11_CI_CD.md\`, \`docs/current/TESTING.md\`, \`docs/current/OPERATIONS.md\`, \`docs/05_RUNBOOK.md\`, \`docs/06_ACCEPTANCE_TESTS.md\`, or add an ADR if CI/CD behavior, required checks, release gates, or deployment behavior changed.")
           fi
 
           if [ ${#missing[@]} -eq 0 ]; then
@@ -101,7 +115,7 @@ jobs:
               marker,
               '### Doc freshness check',
               '',
-              'Code changes were detected that may require roadmap/status, gate, thin-doc, generated-doc, or ADR updates.',
+              'Changes were detected that may require roadmap/status, gate, thin-doc, generated-doc, CI/CD-doc, or ADR updates.',
               '',
               missing,
               '',

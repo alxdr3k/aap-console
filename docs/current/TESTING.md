@@ -69,6 +69,21 @@ GitHub Actions는 현재 다음을 실행한다.
 - `bin/rails db:test:prepare`
 - `bin/rspec --format progress`
 
+## CI / Required Checks
+
+| Check | Local command | CI workflow / job | Required? | Notes |
+|---|---|---|---|---|
+| security scan | `bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error` / `bin/bundler-audit` | `.github/workflows/ci.yml` | yes | CI command flags differ slightly; keep both in sync when policy changes. |
+| lint | `RUBOCOP_CACHE_ROOT=tmp/rubocop bin/rubocop` | `.github/workflows/ci.yml` | yes | CI uses GitHub formatter. |
+| test DB prepare | `bin/rails db:test:prepare` | `.github/workflows/ci.yml` | yes | Required before request/service specs. |
+| specs | `bin/rspec` | `.github/workflows/ci.yml` | yes | Main automated behavior gate. |
+| docs freshness | n/a | `.github/workflows/doc-freshness.yml.example` | no | Example only; not active. |
+
+The active CI workflow runs on pull requests and direct pushes to `main` or
+`dev`.
+
+CI/CD design guidance lives in `docs/11_CI_CD.md`.
+
 ## Evals
 
 Eval command는 현재 없다.

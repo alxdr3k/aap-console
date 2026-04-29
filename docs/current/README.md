@@ -13,5 +13,7 @@ slice, gate, evidence, next-work tracking은
 | `CODE_MAP.md` | 코드 위치와 책임 |
 | `DATA_MODEL.md` | 현재 schema/model map |
 | `RUNTIME.md` | 실제 request/job/event flow |
-| `TESTING.md` | 검증 명령 |
-| `OPERATIONS.md` | local run/env/debug/deploy note |
+| `TESTING.md` | 검증 명령과 CI check mapping |
+| `OPERATIONS.md` | local run/env/debug/deploy/CD note |
+
+CI/CD design guidance lives in [`../11_CI_CD.md`](../11_CI_CD.md).

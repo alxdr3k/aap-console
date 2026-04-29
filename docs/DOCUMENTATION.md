@@ -10,7 +10,7 @@ current state를 분리한다.
 1. 구현이 존재하는 영역은 code, tests, migrations, generated schema가 authoritative source다.
 2. Roadmap / status ledger는 `docs/04_IMPLEMENTATION_PLAN.md`가 소유한다.
 3. 압축된 현재 상태는 `docs/context/`와 `docs/current/`의 thin docs가 제공한다.
-4. Product/spec/runbook/acceptance 문서는 `01`-`10` numbered docs에 둔다.
+4. Product/spec/runbook/acceptance/CI/CD 문서는 numbered docs에 둔다.
 5. ADR과 Decision Register는 결정 history를 보존한다.
 6. Discovery와 archive 문서는 authority가 아니다.
 
@@ -20,6 +20,9 @@ current state를 분리한다.
 - `docs/04_IMPLEMENTATION_PLAN.md`는 milestone, track, phase, slice, gate, status, evidence, next work의 canonical 위치다.
 - `docs/context/current-state.md`는 active roadmap position만 요약한다.
 - `docs/current/`는 구현된 상태의 navigation layer이며 future roadmap inventory를 소유하지 않는다.
+- `docs/11_CI_CD.md`는 stack-neutral CI/CD guidance를 소유한다. 실제 command는
+  `docs/current/TESTING.md`, 운영/배포 상태는 `docs/current/OPERATIONS.md`와
+  `docs/05_RUNBOOK.md`에 둔다.
 - Accepted ADR은 새 behavior에 맞춰 수정하지 않는다. 필요한 경우 superseding ADR을 만든다.
 - Discovery note와 archived design note는 current implementation authority가 아니다.
 - 긴 historical note를 구현 변경마다 갱신하지 않는다.
@@ -41,6 +44,7 @@ current state를 분리한다.
 | DB/schema/data model changes | `docs/current/DATA_MODEL.md` 갱신 |
 | Test/lint/typecheck/eval command changes | `docs/current/TESTING.md` 갱신 |
 | Operational/env/deployment changes | `docs/current/OPERATIONS.md` 또는 `docs/05_RUNBOOK.md` 갱신 |
+| CI/CD workflow, required check, release, branch protection changes | `docs/current/TESTING.md`, `docs/current/OPERATIONS.md`, `docs/05_RUNBOOK.md`, `docs/06_ACCEPTANCE_TESTS.md`, `docs/11_CI_CD.md` 중 영향 범위 갱신 |
 | New open question | `docs/07_QUESTIONS_REGISTER.md`에 Q 추가 |
 | Lightweight accepted decision | `docs/08_DECISION_REGISTER.md`에 DEC 추가 |
 | Major accepted decision | `docs/adr/` 아래 ADR 추가 |
@@ -65,6 +69,20 @@ current state를 분리한다.
 6. 모호한 `done` / `pending` 상태를 implementation status와 gate status로 분리한다.
 7. Canonical inventory를 `04_IMPLEMENTATION_PLAN.md`로 옮긴 뒤 current-state, runtime, architecture, agent instruction의 중복 inventory를 줄인다.
 8. Source anchor(path, commit, PR, ADR, DEC, Q, AC, TEST, issue ID)를 보존한다. 모르면 `anchor missing`이라고 쓴다.
+
+## CI/CD Migration
+
+기존 CI/CD knowledge를 이관할 때는 실제 behavior를 옮기고 추측으로 빈칸을 채우지 않는다.
+
+1. Workflow files, external CI/CD systems, release scripts, deploy platform,
+   package registry, manual steps를 inventory한다.
+2. 실제 validation command는 `docs/current/TESTING.md`에 기록한다. 모르면
+   `Needs audit`로 표시한다.
+3. Deployment ownership, environments, secrets ownership, release trigger,
+   rollback boundary는 `docs/current/OPERATIONS.md`에 기록한다.
+4. Step-by-step deploy/rollback/monitor/incident 절차는 `docs/05_RUNBOOK.md`에 둔다.
+5. `docs/11_CI_CD.md`는 guidance로, `docs/templates/CI_CD_TEMPLATE.md`는 migration
+   worksheet로 사용한다.
 
 ## Enforcement Mechanisms
 
