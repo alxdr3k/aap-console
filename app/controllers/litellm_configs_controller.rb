@@ -11,8 +11,8 @@ class LitellmConfigsController < ApplicationController
 
   # LiteLLM config mutations are routed through Projects::UpdateService and
   # propagate via a provisioning job. The response mirrors AuthConfigsController#update:
-  # 202 Accepted + provisioning_job_id when a job is enqueued, 200 OK when nothing
-  # external needed to change. See docs/HLD.md §5.6.
+  # 202 Accepted + provisioning_job_id when a job is enqueued, 200 OK when no
+  # external state needs to change. See docs/02_HLD.md §5.6.
   def update
     result = Projects::UpdateService.new(
       project: @project,

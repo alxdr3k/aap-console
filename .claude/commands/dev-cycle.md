@@ -9,7 +9,7 @@ description: "전체 개발 사이클: sync → discover → implement → verif
 
 - `--loop`: cycle 완료 후 Step 1부터 반복한다. Step 3에서 **ALL CLEAR**이면 종료한다.
 - `--loop N`: 정확히 N회 반복한다.
-- `--phase <id>`: 탐색과 구현 범위를 해당 roadmap/task/phase id로 제한한다. 값을 파싱하거나 변환하지 않는다.
+- `--phase <id>`: 탐색과 구현 범위를 해당 milestone / track / phase / slice id로 제한한다. 값을 파싱하거나 변환하지 않는다.
 
 ## Invariants
 
@@ -74,15 +74,15 @@ echo "Review base: $REVIEW_BASE"
 Prompt:
 
 ```text
-Choose one task for the next cycle based on this repo's guidance, README, roadmap, thin docs, source, and tests.
+Choose one commit-sized slice for the next cycle based on this repo's guidance, README, docs/context/current-state.md, docs/04_IMPLEMENTATION_PLAN.md, thin current docs, source, and tests.
 Read long design/archive/generated documents only when needed.
 Prefer implementation candidates. Choose docs-only only when there is no code work to do and only docs are wrong.
 If both docs and code are needed, return it as an implementation task and include docs update in the acceptance criteria.
-If --phase is present, inspect only that id's scope.
+If --phase is present, inspect only that milestone / track / phase / slice id's scope.
 
 Return one of:
 ## NEXT TASK
-<one task including files/areas, acceptance criteria, docs update, and validation>
+<one slice including milestone / track / phase / slice, files/areas, gate/acceptance criteria, docs update, and validation>
 
 ## DOC FIX NEEDED
 <docs-only fix list>
@@ -101,7 +101,7 @@ Return one of:
 
 - Direct-push repo: `main`에서 직접 작업한다.
 - Standard repo: default branch에서 시작했다면 `<type>/<short-description>` 브랜치를 만들고, 이미 작업 브랜치면 유지한다.
-- Step 2의 task를 구현한다. docs update가 acceptance criteria면 같은 cycle에서 처리한다.
+- Step 2의 slice/task를 구현한다. docs update가 acceptance criteria면 같은 cycle에서 처리한다.
 - `--phase <id>` 범위를 벗어난 작업은 하지 않는다.
 
 ## Step 5 - Verify
