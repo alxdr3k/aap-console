@@ -36,7 +36,9 @@ RSpec.describe "Organizations", type: :request do
              params: { organization: { name: "Acme Corp", initial_admin_user_sub: "selected-admin-sub" } }
 
         org = Organization.last
-        expect(org.org_memberships.find_by(user_sub: "selected-admin-sub")&.role).to eq("admin")
+        membership = org.org_memberships.find_by(user_sub: "selected-admin-sub")
+        expect(membership.role).to eq("admin")
+        expect(membership.joined_at).to be_nil
       end
 
       it "renders form on validation failure" do

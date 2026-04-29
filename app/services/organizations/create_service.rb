@@ -26,7 +26,7 @@ module Organizations
             user_sub: initial_admin_user_sub,
             role: "admin",
             invited_at: Time.current,
-            joined_at: Time.current
+            joined_at: initial_admin_joined_at
           )
           AuditLog.create!(
             organization: organization,
@@ -55,6 +55,10 @@ module Organizations
 
     def initial_admin_user_sub
       @initial_admin_user_sub ||= @params[:initial_admin_user_sub].presence || @current_user_sub
+    end
+
+    def initial_admin_joined_at
+      Time.current if initial_admin_user_sub == @current_user_sub
     end
 
     def compensate_langfuse(langfuse_org_id)

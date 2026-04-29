@@ -26,16 +26,19 @@ RSpec.describe Organizations::CreateService do
       membership = org.org_memberships.find_by(user_sub: user_sub)
       expect(membership).to be_present
       expect(membership.role).to eq("admin")
+      expect(membership.joined_at).to be_present
     end
 
-    it "creates an admin membership for the designated initial admin" do
+    it "creates a pending admin membership for a designated initial admin who is not the creator" do
       result = described_class.new(
         params: params.merge(initial_admin_user_sub: "selected-admin-sub"),
         current_user_sub: user_sub
       ).call
       org = result.data
+      membership = org.org_memberships.find_by(user_sub: "selected-admin-sub")
 
-      expect(org.org_memberships.find_by(user_sub: "selected-admin-sub")&.role).to eq("admin")
+      expect(membership.role).to eq("admin")
+      expect(membership.joined_at).to be_nil
       expect(org.org_memberships.find_by(user_sub: user_sub)).to be_nil
     end
 
