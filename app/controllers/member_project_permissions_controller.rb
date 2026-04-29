@@ -1,4 +1,5 @@
 class MemberProjectPermissionsController < ApplicationController
+  before_action :prefer_json_for_default_requests
   before_action :set_organization
   before_action -> { authorize_org!(@organization, minimum_role: :admin) }
   before_action :set_membership
@@ -17,11 +18,17 @@ class MemberProjectPermissionsController < ApplicationController
       audit_permission!(created ? "member.project_permission.grant" : "member.project_permission.update", permission)
     end
 
-    render json: serialize_permission(permission), status: created ? :created : :ok
+    respond_to do |format|
+      format.json { render json: serialize_permission(permission), status: created ? :created : :ok }
+      format.html do
+        flash[:success] = "Project 권한이 저장되었습니다."
+        redirect_to organization_members_path(@organization.slug), status: :see_other
+      end
+    end
   rescue ActiveRecord::RecordInvalid => e
-    render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+    render_permission_errors(e.record.errors.full_messages)
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Project not found" }, status: :not_found
+    render_permission_error("Project not found", :not_found)
   end
 
   def update
@@ -32,9 +39,15 @@ class MemberProjectPermissionsController < ApplicationController
       audit_permission!("member.project_permission.update", @permission)
     end
 
-    render json: serialize_permission(@permission)
+    respond_to do |format|
+      format.json { render json: serialize_permission(@permission) }
+      format.html do
+        flash[:success] = "Project 권한이 변경되었습니다."
+        redirect_to organization_members_path(@organization.slug), status: :see_other
+      end
+    end
   rescue ActiveRecord::RecordInvalid => e
-    render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+    render_permission_errors(e.record.errors.full_messages)
   end
 
   def destroy
@@ -43,10 +56,20 @@ class MemberProjectPermissionsController < ApplicationController
       audit_permission!("member.project_permission.revoke", @permission)
     end
 
-    render json: { message: "Project permission revoked" }
+    respond_to do |format|
+      format.json { render json: { message: "Project permission revoked" } }
+      format.html do
+        flash[:success] = "Project 권한이 제거되었습니다."
+        redirect_to organization_members_path(@organization.slug), status: :see_other
+      end
+    end
   end
 
   private
+
+  def prefer_json_for_default_requests
+    request.format = :json if default_json_request?
+  end
 
   def permission_params
     @permission_params ||= begin
@@ -70,31 +93,34 @@ class MemberProjectPermissionsController < ApplicationController
   def set_organization
     @organization = Organization.find_by!(slug: params[:organization_slug])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    respond_to do |format|
+      format.json { render json: { error: "Not found" }, status: :not_found }
+      format.html { render "organizations/not_found", status: :not_found }
+    end
   end
 
   def set_membership
     @membership = @organization.org_memberships.find_by!(user_sub: params[:user_sub])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Member not found" }, status: :not_found
+    render_permission_error("Member not found", :not_found)
   end
 
   def set_project
     @project = @organization.projects.where.not(status: :deleted).find_by!(slug: params[:project_slug])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Project not found" }, status: :not_found
+    render_permission_error("Project not found", :not_found)
   end
 
   def set_permission
     @permission = @membership.project_permissions.find_by!(project: @project)
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Project permission not found" }, status: :not_found
+    render_permission_error("Project permission not found", :not_found)
   end
 
   def ensure_project_permissions_supported!
     return unless @membership.admin?
 
-    render json: { error: "Admin members have implicit access to every project" }, status: :unprocessable_entity
+    render_permission_error("Admin members have implicit access to every project", :unprocessable_entity)
   end
 
   def audit_permission!(action, permission)
@@ -121,5 +147,24 @@ class MemberProjectPermissionsController < ApplicationController
       project_name: permission.project.name,
       role: permission.role
     }
+  end
+
+  def render_permission_errors(errors)
+    respond_to do |format|
+      format.json { render json: { errors: Array(errors) }, status: :unprocessable_entity }
+      format.html { redirect_with_permission_error(Array(errors).to_sentence, :unprocessable_entity) }
+    end
+  end
+
+  def render_permission_error(error, status)
+    respond_to do |format|
+      format.json { render json: { error: error }, status: status }
+      format.html { redirect_with_permission_error(error, status) }
+    end
+  end
+
+  def redirect_with_permission_error(error, _status)
+    flash[:error] = error
+    redirect_to organization_members_path(@organization.slug), status: :see_other
   end
 end

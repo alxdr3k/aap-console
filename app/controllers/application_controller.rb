@@ -65,6 +65,13 @@ class ApplicationController < ActionController::Base
     end
   end
 
+  def default_json_request?
+    return false if params[:format].present?
+
+    accept_header = request.get_header("HTTP_ACCEPT").to_s.strip
+    accept_header.blank? || accept_header == "*/*" || request.accepts == [ Mime::ALL ]
+  end
+
   private
 
   ROLE_HIERARCHY = { read: 1, write: 2, admin: 3 }.freeze

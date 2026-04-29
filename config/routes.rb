@@ -11,9 +11,14 @@ Rails.application.routes.draw do
 
   # Organizations and nested resources
   resources :organizations, param: :slug do
-    post "members/:user_sub/project_permissions", to: "member_project_permissions#create"
-    patch "members/:user_sub/project_permissions/:project_slug", to: "member_project_permissions#update"
-    delete "members/:user_sub/project_permissions/:project_slug", to: "member_project_permissions#destroy"
+    post "members/:user_sub/project_permissions",
+         to: "member_project_permissions#create",
+         as: :member_project_permissions
+    patch "members/:user_sub/project_permissions/:project_slug",
+          to: "member_project_permissions#update",
+          as: :member_project_permission
+    delete "members/:user_sub/project_permissions/:project_slug",
+           to: "member_project_permissions#destroy"
 
     resources :members, param: :user_sub, only: [ :index, :create, :update, :destroy ]
 
