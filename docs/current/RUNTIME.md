@@ -85,8 +85,7 @@ current `ConfigVersion` model.
 - `Orchestrator`는 완료 시 `ProvisioningChannel.broadcast_to`로 JSON
   `job_completed` payload를 broadcast한다.
 - Client는 `GET /provisioning_jobs/:id`로 polling할 수도 있고, browser HTML 요청은 persisted job/step state를 ERB timeline으로 렌더한다.
-- Importmap/Turbo/Stimulus baseline은 application shell과 flash controller에 wired.
-  Turbo Stream/Stimulus provisioning consumer와 step partial replacement는 아직 구현되지 않았다.
+- Provisioning show page의 Stimulus controller는 `ProvisioningChannel`에 subscribe하고, `step_update`를 받으면 해당 step partial endpoint를 fetch해 DOM을 교체한다. Cable 연결이 없거나 끊기면 JSON polling fallback이 같은 partial replacement path를 사용한다.
 
 ### Retention Cleanup
 
@@ -101,7 +100,7 @@ current `ConfigVersion` model.
 | Flow | State |
 |---|---|
 | Organization/member/project completion | Designated initial admin and Langfuse org name sync are landed in `CORE-5A.1`; Keycloak pre-assignment and project permission CRUD API are landed in `CORE-5A.2`; org delete finalization is landed in `CORE-5A.3`; Organization list/detail/new/edit UI is landed in `UI-5A.1` / `UI-5A.2`; member management UI is landed in `UI-5A.3`; Project list/detail/new/delete UI is landed in `UI-5A.4` |
-| Hotwire provisioning detail UI | ERB timeline is landed in `UI-5B.1`, but provisioning-specific Turbo/Stimulus consumer, retry UX, and secret reveal are not complete. `Q-002` is resolved by `DEC-004`; follow-up is `UI-5B.2+` / `SEC-5B.1` / `AC-015` |
+| Hotwire provisioning detail UI | ERB timeline and ActionCable/Stimulus step replacement are landed in `UI-5B.1` / `UI-5B.2`, but retry UX and secret reveal are not complete. `Q-002` is resolved by `DEC-004`; follow-up is `UI-5B.3` / `SEC-5B.1` / `AC-015` |
 | Secret reveal cache write path | `ProvisioningJobsController#secrets` reads cache, but provisioning steps do not write Keycloak/PAK secrets to the TTL cache yet. Tracked by `SEC-5B.1` |
 | Config/product UI | Auth config, LiteLLM config, and config-version APIs exist, but server-rendered product UI is `UI-5C.*` |
 | Full external config rollback | Current rollback restores Config Server and reports Keycloak/Langfuse as non-snapshotted diagnostics. Full Keycloak/Langfuse snapshot restore is `OPS-7A.5` / `AC-022` |
