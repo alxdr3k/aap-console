@@ -77,7 +77,14 @@ class OrganizationsController < ApplicationController
       flash[:success] = "Organization 삭제를 시작했습니다."
       redirect_to organizations_path, status: :see_other
     else
-      render json: { errors: [ result.error ] }, status: :unprocessable_entity
+      @projects = current_authorization.accessible_projects(@organization).order(:name)
+      @member_counts = @organization.org_memberships.group(:role).count
+      flash.now[:error] = result.error
+
+      respond_to do |format|
+        format.html { render :show, status: :unprocessable_entity }
+        format.json { render json: { errors: [ result.error ] }, status: :unprocessable_entity }
+      end
     end
   end
 

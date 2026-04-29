@@ -196,6 +196,20 @@ RSpec.describe "Organizations", type: :request do
         }.to change(Organization, :count).by(-1)
         expect(response).to redirect_to(organizations_path)
       end
+
+      it "renders the show shell with an error when deletion fails for HTML" do
+        project = create(:project, :update_pending, organization: org)
+        create(:provisioning_job, :in_progress, project: project, operation: "update")
+
+        expect {
+          delete "/organizations/#{org.slug}"
+        }.not_to change(Organization, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.media_type).to eq("text/html")
+        expect(response.body).to include("Another provisioning job is in progress")
+        expect(response.body).to include(org.name)
+      end
     end
 
     context "as regular user" do
