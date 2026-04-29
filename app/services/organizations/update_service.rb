@@ -1,5 +1,6 @@
 module Organizations
   class UpdateService
+    PERSISTENCE_FAILURE_MESSAGE = "Organization update could not be persisted".freeze
     UPDATABLE_FIELDS = %i[name description].freeze
 
     def initialize(organization:, params:, current_user_sub:, langfuse_client: LangfuseClient.new)
@@ -32,8 +33,9 @@ module Organizations
           )
         end
       rescue ActiveRecord::ActiveRecordError => e
+        log_persistence_failure(e)
         compensate_langfuse_name(old_name)
-        return Result.failure(e.message)
+        return Result.failure(PERSISTENCE_FAILURE_MESSAGE)
       end
 
       Result.success(@organization)
@@ -66,6 +68,13 @@ module Organizations
       Rails.logger.error(
         "[Organizations::UpdateService] Failed to compensate Langfuse org " \
         "#{@organization.langfuse_org_id} after DB save failure: #{e.class}: #{e.message}"
+      )
+    end
+
+    def log_persistence_failure(error)
+      Rails.logger.error(
+        "[Organizations::UpdateService] Failed to persist organization " \
+        "#{@organization.id} update: #{error.class}: #{error.message}"
       )
     end
   end

@@ -79,6 +79,8 @@ RSpec.describe Organizations::UpdateService do
       stub_langfuse_update_org(org_id: "lf-org-1", name: "New Name")
       stub_langfuse_update_org(org_id: "lf-org-1", name: "Acme Corp")
       allow(AuditLog).to receive(:create!).and_raise(ActiveRecord::StatementInvalid.new("statement failed"))
+      expect(Rails.logger).to receive(:error)
+        .with(a_string_including("ActiveRecord::StatementInvalid", "statement failed"))
 
       result = described_class.new(
         organization: organization,
@@ -87,6 +89,7 @@ RSpec.describe Organizations::UpdateService do
       ).call
 
       expect(result).to be_failure
+      expect(result.error).to eq("Organization update could not be persisted")
       expect(organization.reload.name).to eq("Acme Corp")
       expect(WebMock).to have_requested(:post, "#{LangfuseMock::TRPC_BASE}/organizations.update")
         .with { |request| JSON.parse(request.body).dig("json", "name") == "New Name" }
