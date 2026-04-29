@@ -164,6 +164,15 @@ RSpec.describe "Organizations", type: :request do
       expect(response.body).to include("접근 가능한 Project가 없습니다.")
     end
 
+    it "renders the edit affordance for org admins" do
+      org.org_memberships.find_by!(user_sub: user_sub).update!(role: "admin")
+
+      get "/organizations/#{org.slug}", headers: { "ACCEPT" => "text/html" }
+
+      expect(response.body).to include("편집")
+      expect(response.body).to include(edit_organization_path(org.slug))
+    end
+
     it "returns 403 for non-member" do
       other_org = create(:organization)
       get "/organizations/#{other_org.slug}"
@@ -188,6 +197,30 @@ RSpec.describe "Organizations", type: :request do
     end
   end
 
+  describe "GET /organizations/:slug/edit" do
+    let!(:org) { create(:organization, name: "Acme Corp", description: "AI services") }
+
+    it "renders the edit form for org admins" do
+      create(:org_membership, organization: org, user_sub: user_sub, role: "admin")
+
+      get "/organizations/#{org.slug}/edit", headers: { "ACCEPT" => "text/html" }
+
+      expect(response).to have_http_status(:ok)
+      expect(response.media_type).to eq("text/html")
+      expect(response.body).to include("Organization 편집")
+      expect(response.body).to include("Acme Corp")
+      expect(response.body).not_to include("초기 관리자 user_sub")
+    end
+
+    it "returns 403 for read-only members" do
+      create(:org_membership, organization: org, user_sub: user_sub, role: "read")
+
+      get "/organizations/#{org.slug}/edit", headers: { "ACCEPT" => "text/html" }
+
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
   describe "PATCH /organizations/:slug" do
     let!(:org) { create(:organization, langfuse_org_id: "lf-123") }
     before { create(:org_membership, organization: org, user_sub: user_sub, role: "admin") }
@@ -198,6 +231,26 @@ RSpec.describe "Organizations", type: :request do
       patch "/organizations/#{org.slug}", params: { organization: { name: "New Name" } }
       expect(org.reload.name).to eq("New Name")
       expect(response).to redirect_to(organization_path(org.slug))
+    end
+
+    it "renders the edit form on validation failure for HTML" do
+      patch "/organizations/#{org.slug}",
+            params: { organization: { name: "A" } },
+            headers: { "ACCEPT" => "text/html" }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.media_type).to eq("text/html")
+      expect(response.body).to include("Organization 편집")
+      expect(response.body).to include("Name is too short")
+    end
+
+    it "keeps JSON response compatibility on validation failure" do
+      patch "/organizations/#{org.slug}",
+            params: { organization: { name: "A" } },
+            headers: { "ACCEPT" => "application/json" }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.parsed_body.fetch("errors").first).to include("Name is too short")
     end
 
     it "returns 403 for non-admin" do

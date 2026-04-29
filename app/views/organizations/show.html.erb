@@ -11,13 +11,19 @@
       <% end %>
     </div>
 
-    <% if current_authorization.super_admin? %>
-      <%= button_to "Organization 삭제",
-                    organization_path(@organization.slug),
-                    method: :delete,
-                    class: "button button--secondary",
-                    data: { turbo_confirm: "Organization 삭제를 시작할까요?" } %>
-    <% end %>
+    <div class="page-actions">
+      <% if current_authorization.can?(:manage_org, @organization) %>
+        <%= link_to "편집", edit_organization_path(@organization.slug), class: "button button--secondary" %>
+      <% end %>
+
+      <% if current_authorization.super_admin? %>
+        <%= button_to "Organization 삭제",
+                      organization_path(@organization.slug),
+                      method: :delete,
+                      class: "button button--secondary",
+                      data: { turbo_confirm: "Organization 삭제를 시작할까요?" } %>
+      <% end %>
+    </div>
   </header>
 
   <section class="panel">

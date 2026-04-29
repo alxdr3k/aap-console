@@ -1,7 +1,7 @@
 class OrganizationsController < ApplicationController
-  before_action :set_organization, only: [ :show, :update, :destroy ]
+  before_action :set_organization, only: [ :show, :edit, :update, :destroy ]
   before_action -> { authorize_org!(@organization) }, only: [ :show ]
-  before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [ :update ]
+  before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [ :edit, :update ]
   before_action :require_super_admin!, only: [ :new, :create, :destroy ]
 
   def index
@@ -31,6 +31,13 @@ class OrganizationsController < ApplicationController
     respond_to do |format|
       format.html
       format.json { render json: {} }
+    end
+  end
+
+  def edit
+    respond_to do |format|
+      format.html
+      format.json { render json: @organization }
     end
   end
 
@@ -65,7 +72,12 @@ class OrganizationsController < ApplicationController
       flash[:success] = "변경 사항이 저장되었습니다."
       redirect_to organization_path(@organization.slug), status: :see_other
     else
-      render json: { errors: [ result.error ] }, status: :unprocessable_entity
+      @errors = [ result.error ]
+
+      respond_to do |format|
+        format.html { render :edit, status: :unprocessable_entity }
+        format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+      end
     end
   end
 
