@@ -12,7 +12,7 @@ AI Assistant Platform (AAP) 셀프서비스 관리 콘솔. Organization / Projec
 | 영역 | 기술 |
 |------|------|
 | Backend | Ruby on Rails 8 |
-| Frontend | Rails server-rendered ERB. Hotwire/Turbo/Stimulus는 ADR-006의 target architecture이며 현재 repo에는 아직 wired asset/controller가 없다 |
+| Frontend | Rails server-rendered ERB + importmap-backed Turbo/Stimulus baseline. Core product pages are being added under `UI-5A.*` |
 | Background Job | SolidQueue |
 | Realtime | ActionCable + SolidCable |
 | Database | SQLite (WAL). Litestream 백업은 ADR/배포 target이며 현재 repo 배포 설정에는 아직 wired sidecar가 없다 |

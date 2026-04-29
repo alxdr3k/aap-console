@@ -84,7 +84,8 @@ current `ConfigVersion` model.
 - `Orchestrator`는 완료 시 `ProvisioningChannel.broadcast_to`로 JSON
   `job_completed` payload를 broadcast한다.
 - Client는 `GET /provisioning_jobs/:id`로 polling할 수도 있다.
-- Turbo Stream/Stimulus consumer와 provisioning ERB timeline은 아직 구현되지 않았다.
+- Importmap/Turbo/Stimulus baseline은 application shell과 flash controller에 wired.
+  Turbo Stream/Stimulus provisioning consumer와 provisioning ERB timeline은 아직 구현되지 않았다.
 
 ### Retention Cleanup
 
@@ -99,7 +100,7 @@ current `ConfigVersion` model.
 | Flow | State |
 |---|---|
 | Organization/member completion | Designated initial admin and Langfuse org name sync are landed in `CORE-5A.1`; Keycloak pre-assignment and project permission CRUD API are landed in `CORE-5A.2`; org delete finalization is landed in `CORE-5A.3`; member/org UI remains in `UI-5A.*` |
-| Hotwire provisioning detail UI | ActionCable server path만 있고 Turbo/Stimulus consumer는 없음. `Q-002` is resolved by `DEC-004`; follow-up is `UI-5B.*` / `AC-015` |
+| Hotwire provisioning detail UI | Turbo/Stimulus baseline은 있으나 provisioning-specific consumer는 없음. `Q-002` is resolved by `DEC-004`; follow-up is `UI-5B.*` / `AC-015` |
 | Secret reveal cache write path | `ProvisioningJobsController#secrets` reads cache, but provisioning steps do not write Keycloak/PAK secrets to the TTL cache yet. Tracked by `SEC-5B.1` |
 | Config/product UI | Auth config, LiteLLM config, and config-version APIs exist, but server-rendered product UI is `UI-5C.*` |
 | Full external config rollback | Current rollback restores Config Server and reports Keycloak/Langfuse as non-snapshotted diagnostics. Full Keycloak/Langfuse snapshot restore is `OPS-7A.5` / `AC-022` |
