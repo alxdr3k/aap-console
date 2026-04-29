@@ -17,7 +17,8 @@
 |---|---|
 | `app/controllers/organizations_controller.rb` | Organization CRUD |
 | `app/controllers/projects_controller.rb` | Project CRUD와 service 호출 |
-| `app/controllers/members_controller.rb` | Org membership과 project permission 관리 |
+| `app/controllers/members_controller.rb` | Org membership, Keycloak user lookup/pre-assignment, and create-time project permission management |
+| `app/controllers/member_project_permissions_controller.rb` | Project permission grant/update/revoke API for write/read org members |
 | `app/controllers/auth_configs_controller.rb` | Project auth config update와 provisioning trigger |
 | `app/controllers/litellm_configs_controller.rb` | LiteLLM config update와 provisioning trigger |
 | `app/controllers/config_versions_controller.rb` | Config version index/show/rollback entry point |
@@ -99,6 +100,5 @@ There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 | Path | Reason |
 |---|---|
 | `app/views/` / `app/javascript/` | Core product UI, Hotwire provisioning timeline/retry UX, secret reveal, config UI, Playground, and dashboard leaves are planned in `UI-5A.*`, `UI-5B.*`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
-| `app/controllers/members_controller.rb` and related services | Current member API manages org membership roles only; Keycloak pre-assignment and project permission CRUD are `CORE-5A.2` |
 | `app/services/organizations/destroy_service.rb` | Current org delete starts child project delete jobs and returns; final org cleanup after async project deletion is `CORE-5A.3` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

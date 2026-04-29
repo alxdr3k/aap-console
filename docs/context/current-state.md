@@ -17,7 +17,7 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
 - active tracks: `CORE`, `UI`, `SEC`
 - active phases: `CORE-5A`, `UI-5A`, `UI-5B`, `UI-5C`, `SEC-5B`
-- active slices: `CORE-5A.1` landed in current work; next candidates are `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`
+- active slices: `CORE-5A.1` and `CORE-5A.2` landed; next candidates are `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
 - next gates: `AC-014`, `AC-015`, `AC-016`, `AC-018`
@@ -41,6 +41,7 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - `Q-001` resolved by `DEC-003`: auth expansion gate is backend/API; UI follow-up is non-gating.
 - `Q-002` resolved by `DEC-004`: provisioning detail UI is `P0-M5` product UI work, not a reopened `P0-M3` gate.
 - `CORE-5A.1` landed: organization creation supports a designated initial admin, organization update uses a service object, and Langfuse org name sync is covered.
+- `CORE-5A.2` landed: member create validates/pre-assigns users through Keycloak, member list can hydrate Keycloak user details, project permission grant/update/revoke API is present, and member/project-permission audit logs are covered.
 
 ## Planned
 
@@ -59,7 +60,7 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Priorities
 
-1. `CORE-5A.2` / `CORE-5A.3`로 remaining FR-1/2 completion gap을 닫는다.
+1. `CORE-5A.3`로 remaining FR-1 completion gap을 닫는다.
 2. `UI-5A.*` / `UI-5B.*` / `SEC-5B.1`로 server-rendered UI와 provisioning detail/secret reveal을 구현한다.
 3. `UI-5C.*`로 auth/LiteLLM/config-version UI를 제품화한다.
 

@@ -445,6 +445,7 @@ app/
 │   ├── users_controller.rb               # FR-2: Keycloak 사용자 검색 프록시
 │   ├── organizations_controller.rb       # FR-1
 │   ├── members_controller.rb             # FR-2
+│   ├── member_project_permissions_controller.rb # FR-2: Project permission grant/update/revoke
 │   ├── projects_controller.rb            # FR-3
 │   ├── auth_configs_controller.rb        # FR-4
 │   ├── litellm_configs_controller.rb     # FR-6
@@ -625,6 +626,9 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 | POST | `/organizations/:org_slug/members` | 멤버 추가 | Org `admin` |
 | PATCH | `/organizations/:org_slug/members/:user_sub` | 권한 변경 | Org `admin` |
 | DELETE | `/organizations/:org_slug/members/:user_sub` | 멤버 제거 | Org `admin` |
+| POST | `/organizations/:org_slug/members/:user_sub/project_permissions` | Project 권한 부여 | Org `admin` |
+| PATCH | `/organizations/:org_slug/members/:user_sub/project_permissions/:project_slug` | Project 권한 변경 | Org `admin` |
+| DELETE | `/organizations/:org_slug/members/:user_sub/project_permissions/:project_slug` | Project 권한 회수 | Org `admin` |
 | GET | `/users/search?q=` | 사용자 검색 (Keycloak 프록시) | Any Org `admin` 또는 `super_admin` |
 
 #### Project — FR-3
@@ -740,6 +744,10 @@ Rails.application.routes.draw do
 
   # Organization & 하위 리소스
   resources :organizations, param: :slug do
+    post "members/:user_sub/project_permissions", to: "member_project_permissions#create"
+    patch "members/:user_sub/project_permissions/:project_slug", to: "member_project_permissions#update"
+    delete "members/:user_sub/project_permissions/:project_slug", to: "member_project_permissions#destroy"
+
     resources :members, param: :user_sub, only: [:index, :create, :update, :destroy]
 
     resources :projects, param: :slug do
@@ -1089,6 +1097,7 @@ Target flow는 다음 경로를 사용한다:
 | `get_user(user_sub:)` | 사용자 상세 조회 (이름/이메일) | FR-2 |
 | `get_users_by_ids(user_subs:)` | 멤버 목록용 배치 조회. 내부적으로 **병렬 per-ID GET** 으로 구현 (§8.4 참조) | FR-2 |
 | `create_user(email:)` | 미등록 사용자 사전 생성 | FR-2 |
+| `delete_user(user_sub:)` | 사전 생성 후 Console DB 반영 실패 시 보상 삭제 | FR-2 |
 | `create_oidc_client(client_id:, redirect_uris:)` | OIDC Client 생성 | FR-4 |
 | `create_saml_client(client_id:, attributes:)` | SAML Client 생성 | FR-4 |
 | `create_oauth_client(client_id:, redirect_uris:)` | OAuth Client 생성 (PKCE) | FR-4 |
@@ -1237,6 +1246,7 @@ Target flow는 다음 경로를 사용한다:
 1. Org admin이 "dev@example.com"을 write 권한으로 추가
    └─ Keycloak에 사용자 없으면 KeycloakClient#create_user로 사전 생성
    └─ org_memberships INSERT (user_sub, role, invited_at = now, joined_at = NULL)
+   └─ write/read 사용자에게 선택된 project_permissions INSERT
 
 2. dev@example.com이 최초로 SSO 로그인
    └─ Keycloak First Broker Login이 이메일 매칭으로 기존 user 레코드에 link

@@ -98,7 +98,7 @@ current `ConfigVersion` model.
 
 | Flow | State |
 |---|---|
-| Organization/member completion | Designated initial admin and Langfuse org name sync are landed in `CORE-5A.1`; Keycloak pre-assignment, project permission CRUD API/UI, and final org delete cleanup remain in `CORE-5A.2` / `CORE-5A.3` / `AC-018` |
+| Organization/member completion | Designated initial admin and Langfuse org name sync are landed in `CORE-5A.1`; Keycloak pre-assignment and project permission CRUD API are landed in `CORE-5A.2`; member UI and final org delete cleanup remain in `UI-5A.3` / `CORE-5A.3` / `AC-018` |
 | Hotwire provisioning detail UI | ActionCable server path만 있고 Turbo/Stimulus consumer는 없음. `Q-002` is resolved by `DEC-004`; follow-up is `UI-5B.*` / `AC-015` |
 | Secret reveal cache write path | `ProvisioningJobsController#secrets` reads cache, but provisioning steps do not write Keycloak/PAK secrets to the TTL cache yet. Tracked by `SEC-5B.1` |
 | Config/product UI | Auth config, LiteLLM config, and config-version APIs exist, but server-rendered product UI is `UI-5C.*` |

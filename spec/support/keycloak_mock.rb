@@ -62,13 +62,13 @@ module KeycloakMock
       )
   end
 
-  def stub_keycloak_get_user(user_sub:, user: nil)
+  def stub_keycloak_get_user(user_sub:, user: nil, status: 200)
     stub_keycloak_token
     user ||= { id: user_sub, email: "user@example.com", firstName: "Test", lastName: "User" }
     stub_request(:get, "#{BASE}/users/#{user_sub}")
       .to_return(
-        status: 200,
-        body: user.to_json,
+        status: status,
+        body: status == 200 ? user.to_json : { error: "Not found" }.to_json,
         headers: { "Content-Type" => "application/json" }
       )
   end
@@ -81,6 +81,12 @@ module KeycloakMock
         headers: { "Location" => "#{BASE}/users/#{user_sub}" }
       )
     user_sub
+  end
+
+  def stub_keycloak_delete_user(user_sub:)
+    stub_keycloak_token
+    stub_request(:delete, "#{BASE}/users/#{user_sub}")
+      .to_return(status: 204)
   end
 
   def stub_keycloak_update_client(uuid:)
