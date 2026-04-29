@@ -30,6 +30,12 @@ export default class extends Controller {
     this.resultsTarget.replaceChildren()
   }
 
+  clearSelection() {
+    this.userSubTarget.value = ""
+    this.queryTarget.value = ""
+    this.resultsTarget.replaceChildren()
+  }
+
   fetchUsers(query) {
     const url = new URL(this.urlValue, window.location.origin)
     url.searchParams.set("q", query)
