@@ -210,6 +210,8 @@ RSpec.describe "ProvisioningJobs", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.parsed_body.dig("secrets", "client_secret", "value")).to eq("cached-client-secret")
       expect(response.parsed_body["expires_at"]).to be_present
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.headers["Pragma"]).to eq("no-cache")
     end
 
     it "does not return cached secrets before the job is complete" do
