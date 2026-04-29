@@ -61,6 +61,26 @@ RSpec.describe "ProvisioningJobs", type: :request do
         expect(response).to have_http_status(:not_found)
         expect(response.body).to include("프로비저닝 Job을 찾을 수 없습니다.")
       end
+
+      it "renders an individual step partial for browser replacement" do
+        step = create(:provisioning_step, :app_registry_register, :completed, provisioning_job: provisioning_job)
+
+        get "/provisioning_jobs/#{provisioning_job.id}/steps/#{step.id}", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include(%(data-step-id="#{step.id}"))
+        expect(response.body).to include("App Registry Register")
+        expect(response.body).not_to include("<html")
+      end
+
+      it "returns individual step JSON for API-like replacement requests" do
+        step = create(:provisioning_step, :app_registry_register, :completed, provisioning_job: provisioning_job)
+
+        get "/provisioning_jobs/#{provisioning_job.id}/steps/#{step.id}", headers: wildcard_headers
+
+        expect(response.media_type).to eq("application/json")
+        expect(response.parsed_body["name"]).to eq("app_registry_register")
+      end
     end
 
     context "as member with project permission" do
@@ -78,6 +98,23 @@ RSpec.describe "ProvisioningJobs", type: :request do
     it "returns 403 for member without project permission" do
       create(:org_membership, organization: org, user_sub: user_sub, role: "read")
       get "/provisioning_jobs/#{provisioning_job.id}", headers: html_headers
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it "returns 403 for step partials without project permission" do
+      step = create(:provisioning_step, :app_registry_register, :completed, provisioning_job: provisioning_job)
+      create(:org_membership, organization: org, user_sub: user_sub, role: "read")
+
+      get "/provisioning_jobs/#{provisioning_job.id}/steps/#{step.id}", headers: html_headers
+
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it "does not expose step existence before project permission" do
+      create(:org_membership, organization: org, user_sub: user_sub, role: "read")
+
+      get "/provisioning_jobs/#{provisioning_job.id}/steps/999999", headers: html_headers
+
       expect(response).to have_http_status(:forbidden)
     end
   end

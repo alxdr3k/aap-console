@@ -1,6 +1,7 @@
 class ProvisioningJobsController < ApplicationController
   before_action :set_job
   before_action :authorize_job_access!
+  before_action :set_step, only: [ :step ]
   before_action :authorize_job_write!, only: [ :retry, :secrets ]
 
   def show
@@ -31,6 +32,15 @@ class ProvisioningJobsController < ApplicationController
     render json: cached || {}
   end
 
+  def step
+    return render json: provisioning_step_payload(@step) if default_json_request?
+
+    respond_to do |format|
+      format.html { render partial: "step", locals: { step: @step } }
+      format.json { render json: provisioning_step_payload(@step) }
+    end
+  end
+
   private
 
   def provisioning_job_payload
@@ -43,17 +53,21 @@ class ProvisioningJobsController < ApplicationController
       error_message: @job.error_message,
       warnings: @job.warnings,
       steps: @job.provisioning_steps.order(:step_order, :id).map do |step|
-        {
-          id: step.id,
-          name: step.name,
-          step_order: step.step_order,
-          status: step.status,
-          started_at: step.started_at,
-          completed_at: step.completed_at,
-          error_message: step.error_message,
-          retry_count: step.retry_count
-        }
+        provisioning_step_payload(step)
       end
+    }
+  end
+
+  def provisioning_step_payload(step)
+    {
+      id: step.id,
+      name: step.name,
+      step_order: step.step_order,
+      status: step.status,
+      started_at: step.started_at,
+      completed_at: step.completed_at,
+      error_message: step.error_message,
+      retry_count: step.retry_count
     }
   end
 
@@ -64,6 +78,17 @@ class ProvisioningJobsController < ApplicationController
 
     respond_to do |format|
       format.html { render :not_found, status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
+  end
+
+  def set_step
+    @step = @job.provisioning_steps.find(params[:step_id])
+  rescue ActiveRecord::RecordNotFound
+    return render json: { error: "Not found" }, status: :not_found if default_json_request?
+
+    respond_to do |format|
+      format.html { render plain: "Not found", status: :not_found }
       format.json { render json: { error: "Not found" }, status: :not_found }
     end
   end

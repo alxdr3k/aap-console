@@ -1017,12 +1017,12 @@ Current implementation:
 - `Orchestrator` broadcasts `{ type: "job_completed", status: }`.
 - `GET /provisioning_jobs/:id` returns the full job/step JSON for polling.
 
-Target Hotwire UI:
+Implemented Hotwire UI:
 
 | 뷰 | 역할 |
 |----|------|
-| `provisioning_jobs/show.html.erb` | persisted step 목록 렌더링. `turbo_stream_from` step replacement는 `UI-5B.2` follow-up |
-| planned `provisioning_steps/_step.html.erb` | `turbo_frame_tag dom_id(step)`으로 개별 step 렌더링. 상태 아이콘/이름/상태/에러 표시 |
+| `provisioning_jobs/show.html.erb` | persisted step 목록 렌더링. Stimulus가 `ProvisioningChannel` 이벤트와 JSON polling fallback으로 step partial을 교체 |
+| `provisioning_jobs/_step.html.erb` | `dom_id(step)`와 `data-step-id`가 있는 개별 step partial 렌더링. 상태/이름/시각/재시도/에러 표시 |
 
 ### 6.3 Job 완료 시 알림
 

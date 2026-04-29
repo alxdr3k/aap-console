@@ -17,7 +17,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
 - active tracks: `UI`, `SEC`
 - active phases: `UI-5A`, `UI-5B`, `UI-5C`, `SEC-5B`
-- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, and `UI-5B.1` landed; next candidates are `UI-5B.2`, `UI-5B.3`, `SEC-5B.1`
+- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, and `UI-5B.2` landed; next candidates are `UI-5B.3`, `SEC-5B.1`, `UI-5C.1`
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
 - next gates: `AC-014`, `AC-015`, `AC-016`
@@ -48,6 +48,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - `UI-5A.3` landed: member management ERB renders Keycloak-hydrated member rows, pending badges, member add/update/remove forms, and project permission grant/update/revoke controls while keeping JSON API compatibility.
 - `UI-5A.4` landed: Project list/detail/new ERB pages render role-aware actions, OIDC-only create form controls, recent config/provisioning summaries, metadata update, delete provisioning redirects, and JSON compatibility.
 - `UI-5B.1` landed: provisioning job show ERB renders persisted create/update/delete timeline state, warnings/errors, Project/Organization navigation, and JSON compatibility.
+- `UI-5B.2` landed: provisioning show page subscribes to `ProvisioningChannel`, replaces individual step partials, and keeps JSON polling fallback for reconnect/refresh.
 
 ## Planned
 
@@ -66,7 +67,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 ## Current Priorities
 
-1. `UI-5B.2` / `UI-5B.3` / `SEC-5B.1`로 provisioning realtime/retry/secret reveal을 구현한다.
+1. `UI-5B.3` / `SEC-5B.1`로 provisioning retry/manual-intervention과 secret reveal을 구현한다.
 2. `UI-5C.*`로 auth/LiteLLM/config-version UI를 제품화한다.
 3. `OPS-7A.*`와 `PLAY-8A.*`의 ready 조건을 계속 추적한다.
 

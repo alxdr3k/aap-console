@@ -71,10 +71,11 @@
 | `app/assets/stylesheets/application.css` | Application shell, navigation, forms, flash, and empty-state styling |
 | `app/javascript/application.js` | Importmap entrypoint for Turbo and Stimulus |
 | `app/javascript/controllers/flash_controller.js` | Flash dismissal/autoclose Stimulus controller |
+| `app/javascript/controllers/provisioning_controller.js` | Provisioning show ActionCable subscription, step partial replacement, and polling fallback |
 | `app/javascript/controllers/user_search_controller.js` / `role_permissions_controller.js` | Member management autocomplete and role-aware Project permission visibility |
 
 Importmap, Turbo, and Stimulus are wired as the UI baseline. Provisioning show
-ERB is present; realtime consumer/controllers remain planned in `UI-5B.2`.
+ERB and ActionCable/Stimulus step replacement are present; retry and secret reveal UI remain planned.
 
 ## Data / Persistence
 

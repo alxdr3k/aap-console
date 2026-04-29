@@ -1,6 +1,10 @@
 <% content_for :title, "#{provisioning_operation_title(@job)} | AAP Console" %>
 
-<section class="page">
+<section class="page"
+         data-controller="provisioning"
+         data-provisioning-job-id-value="<%= @job.id %>"
+         data-provisioning-poll-url-value="<%= provisioning_job_path(@job, format: :json) %>"
+         data-provisioning-step-url-template-value="<%= step_provisioning_job_path(@job, "__STEP_ID__") %>">
   <div class="breadcrumbs">
     Console &gt;
     <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
@@ -42,7 +46,7 @@
     <div class="summary-item">
       <span class="summary-item__label">Status</span>
       <strong class="summary-item__value">
-        <span class="<%= provisioning_status_badge_class(@job) %>"><%= @job.status %></span>
+        <span class="<%= provisioning_status_badge_class(@job) %>" data-provisioning-target="status"><%= @job.status %></span>
       </strong>
     </div>
     <div class="summary-item">
@@ -62,40 +66,13 @@
   <section class="panel">
     <header class="panel__header">
       <h2 class="panel__title">Timeline</h2>
-      <span class="badge badge--muted">DB refresh</span>
+      <span class="badge badge--muted" data-provisioning-target="connection">polling</span>
     </header>
 
     <% if @steps.any? %>
       <ol class="timeline">
         <% @steps.each do |step| %>
-          <li class="timeline-step timeline-step--<%= step.status %>">
-            <div class="timeline-step__marker"><%= step.step_order %></div>
-            <div class="timeline-step__body">
-              <div class="timeline-step__header">
-                <h3><%= provisioning_step_label(step) %></h3>
-                <span class="<%= provisioning_step_status_badge_class(step) %>"><%= step.status %></span>
-              </div>
-
-              <dl class="timeline-step__meta">
-                <div>
-                  <dt>시작</dt>
-                  <dd><%= short_datetime(step.started_at) %></dd>
-                </div>
-                <div>
-                  <dt>완료</dt>
-                  <dd><%= short_datetime(step.completed_at) %></dd>
-                </div>
-                <div>
-                  <dt>재시도</dt>
-                  <dd><%= step.retry_count || 0 %>/<%= step.max_retries || 0 %></dd>
-                </div>
-              </dl>
-
-              <% if step.error_message.present? %>
-                <p class="timeline-step__error"><%= step.error_message %></p>
-              <% end %>
-            </div>
-          </li>
+          <%= render "step", step: step %>
         <% end %>
       </ol>
     <% else %>

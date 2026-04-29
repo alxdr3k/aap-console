@@ -35,6 +35,7 @@ Rails.application.routes.draw do
     member do
       post :retry
       get  :secrets
+      get "steps/:step_id", action: :step, as: :step
     end
   end
 
