@@ -15,7 +15,6 @@ export default class extends Controller {
   connect() {
     this.polling = false
     this.startSubscription()
-    this.startPolling()
   }
 
   disconnect() {
@@ -29,9 +28,9 @@ export default class extends Controller {
     this.subscription = this.consumer.subscriptions.create(
       { channel: "ProvisioningChannel", job_id: this.jobIdValue },
       {
-        connected: () => this.updateConnection("live"),
-        disconnected: () => this.updateConnection("polling"),
-        rejected: () => this.updateConnection("polling"),
+        connected: () => this.useLiveConnection(),
+        disconnected: () => this.usePollingFallback(),
+        rejected: () => this.usePollingFallback(),
         received: (data) => this.receive(data)
       }
     )
@@ -48,6 +47,8 @@ export default class extends Controller {
   }
 
   startPolling() {
+    if (this.pollTimer) return
+
     this.poll()
     this.pollTimer = window.setInterval(() => this.poll(), this.pollIntervalValue)
   }
@@ -99,6 +100,16 @@ export default class extends Controller {
     if (!this.hasConnectionTarget) return
 
     this.connectionTarget.textContent = label
+  }
+
+  useLiveConnection() {
+    this.stopPolling()
+    this.updateConnection("live")
+  }
+
+  usePollingFallback() {
+    this.updateConnection("polling")
+    this.startPolling()
   }
 
   jobStatusClass(status) {
