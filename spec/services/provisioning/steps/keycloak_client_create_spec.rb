@@ -72,6 +72,30 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect { step.execute }.to raise_error(ActiveRecord::RecordInvalid)
       expect(step_record.reload.result_snapshot["keycloak_client_uuid"]).to eq(uuid)
     end
+
+    it "writes the OIDC client secret only to the reveal cache" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+
+      uuid = stub_keycloak_create_client(client_id: auth_config.keycloak_client_id)
+      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
+                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
+
+      step_record = create(:provisioning_step, :keycloak_client_create, provisioning_job: job)
+      step = described_class.new(step_record: step_record, project: project, params: {})
+
+      result = step.execute
+      reveal = Provisioning::SecretCache.read(job)
+
+      expect(result).to include(
+        keycloak_client_uuid: uuid,
+        keycloak_client_id: auth_config.keycloak_client_id
+      )
+      expect(result.to_json).not_to include("oidc-secret")
+      expect(step_record.reload.result_snapshot.to_json).not_to include("oidc-secret")
+      expect(reveal.dig("secrets", "client_secret", "value")).to eq("oidc-secret")
+    end
   end
 
   describe "#execute auth type dispatch" do

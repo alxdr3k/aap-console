@@ -33,8 +33,9 @@ class ProvisioningJobsController < ApplicationController
   end
 
   def secrets
-    cached = Rails.cache.read("provisioning_job_secrets_#{@job.id}")
-    render json: cached || {}
+    return render json: {} unless @job.completed? || @job.completed_with_warnings?
+
+    render json: Provisioning::SecretCache.read(@job)
   end
 
   def step

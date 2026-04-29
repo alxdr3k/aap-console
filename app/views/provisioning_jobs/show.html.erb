@@ -4,6 +4,8 @@
          data-controller="provisioning"
          data-provisioning-job-id-value="<%= @job.id %>"
          data-provisioning-poll-url-value="<%= provisioning_job_path(@job, format: :json) %>"
+         data-provisioning-secrets-url-value="<%= secrets_provisioning_job_path(@job, format: :json) %>"
+         data-provisioning-status-value="<%= @job.status %>"
          data-provisioning-step-url-template-value="<%= step_provisioning_job_path(@job, "__STEP_ID__") %>">
   <div class="breadcrumbs">
     Console &gt;
@@ -23,7 +25,10 @@
     </div>
 
     <div class="page-actions">
-      <%= link_to provisioning_target_label(@job), provisioning_target_path(@job), class: "button" %>
+      <%= link_to provisioning_target_label(@job),
+                  provisioning_target_path(@job),
+                  class: "button",
+                  data: { provisioning_target: "targetLink" } %>
       <%= link_to "Project 목록", organization_projects_path(@organization.slug), class: "button button--secondary" %>
     </div>
   </header>
@@ -59,6 +64,30 @@
       <strong>경고</strong>
       <span><%= Array(@job.warnings).join(", ") %></span>
     </div>
+  <% end %>
+
+  <% unless @job.operation == "delete" %>
+    <section class="panel" data-provisioning-target="secrets" hidden>
+      <header class="panel__header">
+        <h2 class="panel__title">일회성 인증 정보</h2>
+        <span class="badge badge--warning">10분 TTL</span>
+      </header>
+
+      <div class="status-banner status-banner--warning">
+        <strong>이 값은 단기 캐시에만 보관됩니다.</strong>
+        <span>표시하거나 복사한 뒤 안전한 저장소에 보관하세요.</span>
+      </div>
+
+      <dl class="details-list secret-list" data-provisioning-target="secretList"></dl>
+
+      <div class="form-actions">
+        <button type="button"
+                class="button"
+                data-action="provisioning#confirmSecrets">
+          확인 - 안전하게 저장했습니다
+        </button>
+      </div>
+    </section>
   <% end %>
 
   <section class="summary-grid summary-grid--four">

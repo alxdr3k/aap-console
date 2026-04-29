@@ -21,6 +21,7 @@ module Provisioning
         # Phase 2: mirror the UUID onto the auth_config row for read paths.
         # Skipped for PAK because no Keycloak client was created (uuid is nil).
         auth_config.update!(keycloak_client_uuid: client_uuid) if client_uuid
+        cache_client_secret!(keycloak, client_uuid, auth_type) if client_uuid
 
         snapshot
       end
@@ -90,6 +91,17 @@ module Provisioning
           # Extract UUID from Location header (Keycloak 201 response)
           nil
         end
+      end
+
+      def cache_client_secret!(keycloak, client_uuid, auth_type)
+        return unless auth_type == "oidc"
+
+        Provisioning::SecretCache.write(
+          step_record.provisioning_job,
+          key: "client_secret",
+          label: "Client Secret",
+          value: keycloak.get_client_secret(uuid: client_uuid)
+        )
       end
     end
   end

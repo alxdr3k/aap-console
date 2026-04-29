@@ -2,12 +2,15 @@ import { Controller } from "@hotwired/stimulus"
 import { createConsumer } from "@rails/actioncable"
 
 const TERMINAL_STATUSES = ["completed", "completed_with_warnings", "failed", "rolled_back", "rollback_failed"]
+const SECRET_REVEAL_STATUSES = ["completed", "completed_with_warnings"]
 
 export default class extends Controller {
-  static targets = ["status", "connection"]
+  static targets = ["status", "connection", "secrets", "secretList", "targetLink"]
   static values = {
     jobId: Number,
     pollUrl: String,
+    secretsUrl: String,
+    status: String,
     stepUrlTemplate: String,
     pollInterval: { type: Number, default: 5000 }
   }
@@ -15,8 +18,10 @@ export default class extends Controller {
   connect() {
     this.disconnecting = false
     this.polling = false
+    this.loadingSecrets = false
     this.stepSnapshots = this.readStepSnapshots()
     this.startSubscription()
+    this.updateJobStatus(this.statusValue)
   }
 
   disconnect() {
@@ -95,10 +100,15 @@ export default class extends Controller {
   }
 
   updateJobStatus(status) {
-    if (!this.hasStatusTarget || !status) return
+    if (!status) return
 
-    this.statusTarget.textContent = status
-    this.statusTarget.className = this.jobStatusClass(status)
+    this.statusValue = status
+    if (this.hasStatusTarget) {
+      this.statusTarget.textContent = status
+      this.statusTarget.className = this.jobStatusClass(status)
+    }
+
+    if (SECRET_REVEAL_STATUSES.includes(status)) this.loadSecrets()
   }
 
   updateConnection(label) {
@@ -141,6 +151,128 @@ export default class extends Controller {
     if (!stepElement) return
 
     this.stepSnapshots.set(String(stepId), stepElement.dataset.stepSnapshot || "")
+  }
+
+  async loadSecrets() {
+    if (!this.hasSecretsTarget || !this.hasSecretListTarget || !this.hasSecretsUrlValue) return
+    if (this.loadingSecrets || this.secretsConfirmed()) return
+
+    this.loadingSecrets = true
+    try {
+      const response = await fetch(this.secretsUrlValue, { headers: { Accept: "application/json" } })
+      if (!response.ok) return
+
+      const entries = this.secretEntries(await response.json())
+      if (entries.length === 0) return
+
+      this.renderSecrets(entries)
+      this.lockTargetLink()
+      this.secretsTarget.hidden = false
+    } finally {
+      this.loadingSecrets = false
+    }
+  }
+
+  secretEntries(payload) {
+    return Object.entries(payload.secrets || {}).map(([key, secret]) => ({
+      key,
+      label: secret.label || key,
+      value: secret.value || ""
+    })).filter((secret) => secret.value.length > 0)
+  }
+
+  renderSecrets(entries) {
+    this.secretListTarget.replaceChildren(...entries.map((secret) => this.secretRow(secret)))
+  }
+
+  secretRow(secret) {
+    const row = document.createElement("div")
+    const label = document.createElement("dt")
+    const value = document.createElement("dd")
+    const secretValue = document.createElement("code")
+    const showButton = document.createElement("button")
+    const copyButton = document.createElement("button")
+
+    label.textContent = secret.label
+    secretValue.textContent = this.secretMask(secret.value)
+    secretValue.dataset.masked = "true"
+
+    showButton.type = "button"
+    showButton.className = "button button--secondary"
+    showButton.textContent = "표시"
+    showButton.addEventListener("click", () => this.toggleSecret(secretValue, showButton, secret.value))
+
+    copyButton.type = "button"
+    copyButton.className = "button button--secondary"
+    copyButton.textContent = "복사"
+    copyButton.addEventListener("click", () => this.copySecret(secret.value, copyButton))
+
+    value.append(secretValue, showButton, copyButton)
+    row.append(label, value)
+    return row
+  }
+
+  toggleSecret(secretValue, button, value) {
+    const masked = secretValue.dataset.masked === "true"
+    secretValue.textContent = masked ? value : this.secretMask(value)
+    secretValue.dataset.masked = masked ? "false" : "true"
+    button.textContent = masked ? "숨김" : "표시"
+  }
+
+  async copySecret(value, button) {
+    if (!navigator.clipboard) return
+
+    try {
+      await navigator.clipboard.writeText(value)
+      button.textContent = "복사됨"
+    } catch {
+      button.textContent = "복사 실패"
+    }
+  }
+
+  confirmSecrets() {
+    try {
+      window.localStorage.setItem(this.secretConfirmationKey(), "true")
+    } catch {
+      // Local storage can be disabled; confirmation still applies to this page.
+    }
+
+    if (this.hasSecretsTarget) this.secretsTarget.hidden = true
+    this.unlockTargetLink()
+  }
+
+  secretsConfirmed() {
+    try {
+      return window.localStorage.getItem(this.secretConfirmationKey()) === "true"
+    } catch {
+      return false
+    }
+  }
+
+  secretConfirmationKey() {
+    return `provisioning:${this.jobIdValue}:secrets-confirmed`
+  }
+
+  secretMask(value) {
+    return "*".repeat(Math.min(Math.max(value.length, 8), 24))
+  }
+
+  lockTargetLink() {
+    if (!this.hasTargetLinkTarget || this.targetLinkTarget.dataset.originalHref) return
+
+    this.targetLinkTarget.dataset.originalHref = this.targetLinkTarget.getAttribute("href") || ""
+    this.targetLinkTarget.removeAttribute("href")
+    this.targetLinkTarget.classList.add("button--disabled")
+    this.targetLinkTarget.setAttribute("aria-disabled", "true")
+  }
+
+  unlockTargetLink() {
+    if (!this.hasTargetLinkTarget || !this.targetLinkTarget.dataset.originalHref) return
+
+    this.targetLinkTarget.setAttribute("href", this.targetLinkTarget.dataset.originalHref)
+    this.targetLinkTarget.classList.remove("button--disabled")
+    this.targetLinkTarget.removeAttribute("aria-disabled")
+    delete this.targetLinkTarget.dataset.originalHref
   }
 
   jobStatusClass(status) {

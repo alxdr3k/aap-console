@@ -670,7 +670,7 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 |--------|------|------|------|
 | GET | `/provisioning_jobs/:id` | 현황 화면 (실시간 상태) | Project `read`+ |
 | POST | `/provisioning_jobs/:id/retry` | 수동 재시도 | Project `write`+ |
-| GET | `/provisioning_jobs/:id/secrets` | 일회성 시크릿 조회 endpoint. 현재 구현은 cache read placeholder이며 TTL cache write path는 §6.5 target flow | Project `write`+ |
+| GET | `/provisioning_jobs/:id/secrets` | 완료된 Job의 일회성 시크릿 조회 endpoint. OIDC client secret은 10분 TTL cache에서 읽고, cache miss/미완료 Job은 `{}` 반환 | Project `write`+ |
 
 #### 설정 이력 / 롤백 — FR-8
 
@@ -1048,14 +1048,15 @@ ActionCable의 pub/sub adapter로 `SolidCable`(SQLite 기반)을 사용한다. S
 
 프로비저닝 완료 후 일회성 시크릿(Keycloak Client Secret, PAK)을 브라우저에 전달하는 경로는 **ActionCable을 경유하지 않는다**. ActionCable 브로드캐스트는 다중 구독자가 동일 메시지를 수신하므로 동일 Project에 대한 다른 세션(예: 다른 관리자의 탭)에도 시크릿이 유출될 수 있다.
 
-현재 구현 상태: `ProvisioningJobsController#secrets`는 권한 검증 후
-`Rails.cache.read("provisioning_job_secrets_#{job.id}")`를 반환하지만, provisioning
-step이 이 cache key에 시크릿을 쓰는 경로는 아직 없다. 따라서 아래는 target
-flow이며, current code에서는 캐시가 없으면 빈 JSON을 반환한다.
+현재 구현 상태: `KeycloakClientCreate`의 OIDC client secret은
+`Provisioning::SecretCache`를 통해 10분 TTL `Rails.cache`에만 저장된다.
+`ProvisioningJobsController#secrets`는 Job이 `completed` /
+`completed_with_warnings` 상태이고 요청자가 Project `write`+ 권한을 가진 경우에만
+cache payload를 반환한다. PAK one-time reveal은 `AUTH-6A.3` UI 확장 범위다.
 
-Target flow는 다음 경로를 사용한다:
+Flow는 다음 경로를 사용한다:
 
-1. **시크릿을 생성하는 단계**는 `KeycloakClientCreate`(OIDC/SAML/OAuth Client Secret) 와 PAK 발급 단계(사용자가 명시적으로 PAK를 선택·추가한 경우)뿐이다. `ConfigServerApply` 는 이전 단계에서 받은 시크릿 평문을 Config Server로 전달하는 **소비자** 이며 새 시크릿을 생성하지 않는다. `LangfuseProjectCreate` 가 반환하는 SDK Key(PK/SK) 는 사용자에게 표시하지 않고 Config Server로 직접 전달되므로 이 채널을 사용하지 않는다 (PRD FR-5).
+1. **시크릿을 생성하는 단계**는 현재 OIDC `KeycloakClientCreate`와 PAK 발급 단계(사용자가 명시적으로 PAK를 선택·추가한 경우)뿐이다. `ConfigServerApply` 는 이전 단계에서 받은 시크릿 평문을 Config Server로 전달하는 **소비자** 이며 새 시크릿을 생성하지 않는다. `LangfuseProjectCreate` 가 반환하는 SDK Key(PK/SK) 는 사용자에게 표시하지 않고 Config Server로 직접 전달되므로 이 채널을 사용하지 않는다 (PRD FR-5).
 2. 시크릿 생성 단계가 성공하면 값은 Rails **단기 캐시**(`Rails.cache` with `expires_in: 10.minutes`, 저장소는 아래 §6.5 끝 단락 참조)에 `provisioning_job_id` 키로 저장된다. 저장 시점에 Project에 대한 권한 메타(org/project ID) 를 함께 기록하여 fetch 시 인가 검증에 사용한다.
 3. 브라우저는 현황 페이지가 `completed` 상태를 감지하면 `GET /provisioning_jobs/:id/secrets` 를 호출한다. 이 엔드포인트는 **TTL(10분) 내에 반복 호출 가능** 하며, 동일 Project에 대한 서로 다른 세션(여러 관리자, 재방문) 도 권한이 있다면 모두 접근할 수 있다.
 4. 컨트롤러는 매 호출마다 요청 사용자의 해당 Project `write`+ 권한을 다시 검증하고, 캐시가 존재하면 값을 응답한다. 캐시는 TTL 만료 시에만 자동 삭제되며 **응답 즉시 무효화하지 않는다** — "누가 먼저 fetch 했는지" 로 나머지 관리자가 차단되는 구조를 피하기 위함.
