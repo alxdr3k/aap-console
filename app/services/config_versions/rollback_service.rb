@@ -56,9 +56,6 @@ module ConfigVersions
 
     def record_rollback_version!(external_version_id)
       version_id = external_version_id.presence || config_version.version_id
-      existing = project.config_versions.find_by(version_id: version_id)
-      return existing if existing&.change_type == "rollback"
-
       ConfigVersion.create!(
         project: project,
         version_id: version_id,

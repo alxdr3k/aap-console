@@ -114,6 +114,14 @@ RSpec.describe "ConfigVersions", type: :request do
       expect(idempotency_keys.uniq.size).to eq(2)
     end
 
+    it "records a new ConfigVersion for each successful rollback even when Config Server returns the same version" do
+      stub_config_server_revert_changes(version: "v-rollback-same")
+
+      expect {
+        2.times { post "/config_versions/#{config_version.id}/rollback" }
+      }.to change { ConfigVersion.where(project: project, version_id: "v-rollback-same", change_type: "rollback").count }.by(2)
+    end
+
     it "returns 409 when another provisioning job is active" do
       create(:provisioning_job, :in_progress, project: project)
 
