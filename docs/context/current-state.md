@@ -13,14 +13,14 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Roadmap Position
 
-- current milestone: `P0-M4` SAML/OAuth/PAK scope and implementation
+- current milestone: `P0-M5` Playground exposure
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
-- active tracks: `AUTH`
-- active phase: `AUTH-4A`
-- active slice: `AUTH-4A.1`
-- last accepted gate: `AC-013` provisioning job retention cleanup
+- active tracks: `PLAY`
+- active phase: `PLAY-4A`
+- active slice: `PLAY-4A.1`
+- last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
-- next gate: `AC-011`
+- next gate: `AC-012`
 - canonical ledger: `docs/04_IMPLEMENTATION_PLAN.md`
 
 ## Implemented
@@ -37,11 +37,12 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 - `OPS-3A.3` config rollback external restore/diagnostics path.
 - `OPS-3A.4` provisioning job retention cleanup for old successful terminal jobs.
 - `AUTH-4A.2` PAK issue/revoke/verify API and inbound verification endpoint.
+- `AUTH-4A.1` SAML/OAuth backend provisioning coverage for Keycloak client create.
+- `Q-001` resolved by `DEC-003`: auth expansion gate is backend/API; UI follow-up is non-gating.
 
 ## Planned
 
 - `UI-2B`: Hotwire/ERB provisioning timeline and retry UX.
-- `AUTH-4A`: SAML/OAuth scope decision and PAK UI follow-up.
 - `PLAY-4A`: auth/ops maturity 이후 Playground.
 
 ## Explicit Non-goals
@@ -53,19 +54,18 @@ Hotwire는 ADR-006의 UI target architecture지만, 현재 repo에는 Turbo/Stim
 
 ## Current Priorities
 
-1. `Q-001`의 SAML/OAuth MVP 범위를 결정.
-2. `AC-011` 잔여 범위(SAML/OAuth, PAK UI)를 구현하거나 명시적으로 defer.
+1. `AC-012` Playground request/streaming scope를 확정하고 구현하거나 명시적으로 defer.
+2. `Q-002` provisioning detail UI release gate 여부를 결정.
 
 ## Current Risks / Unknowns
 
-- `Q-001`: SAML/OAuth MVP scope.
 - `Q-002`: provisioning detail UI release gate.
 
 ## Current Validation
 
 - Acceptance gates: `docs/06_ACCEPTANCE_TESTS.md`
 - Test command source: `docs/current/TESTING.md`
-- Current known open gates: `AC-011`, `AC-012`
+- Current known open gates: `AC-012`
 
 ## Needs Audit
 

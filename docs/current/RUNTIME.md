@@ -99,7 +99,7 @@ current `ConfigVersion` model.
 | Flow | State |
 |---|---|
 | Hotwire provisioning detail UI | ActionCable server path만 있고 Turbo/Stimulus consumer는 없음. `Q-002` 참고 |
-| SAML/OAuth provisioning and PAK UI | PAK API is implemented; SAML/OAuth UI/metadata and PAK UI remain under `Q-001` |
+| SAML/OAuth/PAK UI | Backend/API gate is accepted by `DEC-003`; UI remains a follow-up |
 | Playground | Phase 4로 deferred |
 
 ## Failure Modes
