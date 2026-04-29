@@ -97,4 +97,7 @@ There is no `app/javascript/` tree and no Turbo/Stimulus controller wiring yet.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Hotwire provisioning timeline/retry UX는 ADR target이지만 current repo에는 아직 없다. `Q-002` 참고 |
+| `app/views/` / `app/javascript/` | Core product UI, Hotwire provisioning timeline/retry UX, secret reveal, config UI, Playground, and dashboard leaves are planned in `UI-5A.*`, `UI-5B.*`, `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/controllers/members_controller.rb` and related services | Current member API manages org membership roles only; Keycloak pre-assignment and project permission CRUD are `CORE-5A.2` |
+| `app/services/organizations/destroy_service.rb` | Current org delete starts child project delete jobs and returns; final org cleanup after async project deletion is `CORE-5A.3` |
+| `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

@@ -59,7 +59,11 @@ Gate status:
 | `P0-M2` | OIDC, Langfuse, LiteLLM, Config Server 기본 프로비저닝 경로가 동작한다 | 2026-04-25 | `accepted` | `AC-004` / `AC-005` / `AC-006` | `app/services/provisioning/`, `spec/services/provisioning/` | 기본 프로비저닝 경로 accepted |
 | `P0-M3` | 운영 안정성 release gate를 닫는다 | 2026-04-29 | `accepted` | `AC-007` / `AC-008` / `AC-009` / `AC-010` / `AC-013` | `docs/03_RISK_SPIKES.md`, `app/jobs/provisioning_jobs_cleanup_job.rb` | 운영 안정성 gate closed |
 | `P0-M4` | SAML/OAuth/PAK 범위를 확정하고 구현한다 | 2026-04-29 | `accepted` | `AC-011` | `DEC-003`, `app/controllers/project_api_keys_controller.rb`, `spec/services/provisioning/steps/keycloak_client_create_spec.rb` | Backend/API gate accepted; UI follow-up deferred |
-| `P0-M5` | Playground를 제품 화면에 노출한다 |  | `planned` | `AC-012` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | Next gate |
+| `P0-M5` | Core server-rendered product UI, provisioning detail, and FR-1/2/3 completion gaps are productized |  | `planned` | `AC-014` / `AC-015` / `AC-016` / `AC-018` | `docs/ui-spec.md`, `docs/02_HLD.md#4-api-설계` | Next gate |
+| `P1-M1` | SAML/OAuth/PAK backend/API work is exposed through safe product UI |  | `planned` | `AC-017` | `DEC-003`, `docs/ui-spec.md#811-인증-설정-편집--fr-4` | Auth UI follow-up |
+| `P1-M2` | Deployment, restore, audit archive, storage-policy, and full external rollback operations are accepted |  | `planned` | `AC-019` / `AC-020` / `AC-022` | `docs/05_RUNBOOK.md`, `docs/02_HLD.md#82-k8s-배포-전략` | Operational hardening |
+| `P2-M1` | Playground works end to end as a project-scoped verification tool |  | `planned` | `AC-012` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | PRD P2 |
+| `P2-M2` | Super-admin operations dashboard is defined and implemented |  | `planned` | `AC-021` | `docs/01_PRD.md#66-관측성`, `docs/ui-spec.md` | Requires `Q-003` decision |
 | `DOC-M1` | Boilerplate 문서 체계가 repo에 적용된다 | 2026-04-29 | `accepted` | `AC-DOC-001` | `AGENTS.md`, `docs/context/current-state.md`, `docs/current/`, `.github/pull_request_template.md`, PR #24 | Merged on 2026-04-29 |
 
 ## Tracks
@@ -67,13 +71,15 @@ Gate status:
 | Track | Purpose | Active phase | Status | Notes |
 |---|---|---|---|---|
 | `DOC` | Boilerplate migration, source-of-truth 정리, agent guidance | `DOC-1A` | `accepted` | 최신 roadmap taxonomy와 maintenance drift workflow 반영 |
-| `CORE` | Organization, Project, member, RBAC core | `CORE-1A` | `accepted` | CRUD와 권한 guard 구현됨 |
+| `CORE` | Organization, Project, member, RBAC core | `CORE-5A` | `planned` | API baseline accepted; initial admin/pre-assignment/project permission/org delete completion gaps tracked below |
 | `PROV` | Provisioning pipeline, step orchestration, rollback | `PROV-2A` | `accepted` | 기본 경로 accepted. P0-M3 운영 보강은 `OPS-3A`에서 추적 |
 | `INTEG` | Keycloak, Langfuse, Config Server client integration | `INTEG-2A` | `accepted` | 테스트는 WebMock 기반 |
-| `UI` | Realtime status path와 server-rendered UI | `UI-2B` | `landed` | ActionCable path landed. Hotwire/ERB timeline UX는 남음 |
-| `AUTH` | 인증 방식 확장과 PAK | `AUTH-4A` | `accepted` | P0-M4 backend/API gate closed |
-| `OPS` | Runbook, deployment, health check, rollback operation | `OPS-3A` | `accepted` | P0-M3 release gate closed |
-| `PLAY` | Playground AI chat | `PLAY-4A` | `planned` | Next gate |
+| `UI` | Realtime status path와 server-rendered UI | `UI-5A` / `UI-5B` / `UI-5C` | `planned` | ActionCable path landed. Product ERB/Hotwire UI tracked as leaf work |
+| `SEC` | Secret reveal and zero-store product path | `SEC-5B` | `planned` | Server cache write path and UI reveal are separate from ActionCable |
+| `AUTH` | 인증 방식 확장과 PAK | `AUTH-6A` | `planned` | P0-M4 backend/API gate accepted; product UI remains |
+| `OPS` | Runbook, deployment, health check, rollback operation | `OPS-7A` | `planned` | P0-M3 stability accepted; production deploy/restore/archive remains |
+| `PLAY` | Playground AI chat | `PLAY-8A` | `planned` | PRD P2 gate |
+| `ADMIN` | Super-admin operations dashboard | `ADMIN-8A` | `planned` | Scope question open |
 
 ## Phases / Slices
 
@@ -90,14 +96,61 @@ Gate status:
 | `PROV-2A.2` | `P0-M2` | `PROV` | `PROV-2A` | Parallel execution, retry, rollback status transitions | `PROV-2A.1` | `AC-006` / `TEST-007` | `passing` | `accepted` | `app/services/provisioning/orchestrator.rb`, `step_runner.rb`, `rollback_runner.rb`, related specs | 유지보수 |
 | `INTEG-2A.1` | `P0-M2` | `INTEG` | `INTEG-2A` | OIDC Keycloak client provisioning | `PROV-2A.1` | `AC-004` / `TEST-004` | `passing` | `accepted` | `app/services/provisioning/steps/keycloak_client_create.rb`, `spec/services/provisioning/steps/keycloak_client_create_spec.rb` | SAML/OAuth는 `AUTH-4A` |
 | `INTEG-2A.2` | `P0-M2` | `INTEG` | `INTEG-2A` | Langfuse project와 Config Server apply | `PROV-2A.1` | `AC-005` / `TEST-005` | `passing` | `accepted` | `app/clients/langfuse_client.rb`, `app/clients/config_server_client.rb`, related specs | 유지보수 |
-| `UI-2B.1` | `P0-M3` | `UI` | `UI-2B` | ActionCable provisioning stream | `PROV-2A.2` | `AC-007` / `TEST-008` | `passing` | `landed` | `app/channels/provisioning_channel.rb`, `spec/channels/provisioning_channel_spec.rb` | ERB timeline/retry UX 보강 |
+| `UI-2B.1` | `P0-M3` | `UI` | `UI-2B` | ActionCable provisioning stream | `PROV-2A.2` | `AC-007` / `TEST-008` | `passing` | `landed` | `app/channels/provisioning_channel.rb`, `spec/channels/provisioning_channel_spec.rb` | Product UI follow-up in `UI-5B.*` |
 | `OPS-3A.1` | `P0-M3` | `OPS` | `OPS-3A` | 외부 리뷰어 피드백 통합 smoke 재검증 | `P0-M2` | `AC-008` | `passing` | `accepted` | `docs/current/TESTING.md`, 2026-04-29 local smoke run: `bin/rspec`, `RUBOCOP_CACHE_ROOT=tmp/rubocop bin/rubocop`, `bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error`, `bin/bundler-audit`, `bin/rails db:test:prepare`, `bin/rails db:migrate:status` | 유지보수 |
 | `OPS-3A.2` | `P0-M3` | `OPS` | `OPS-3A` | Health check 상세 assertion 구현 | `PROV-2A.2` | `AC-009` / `TEST-009` | `passing` | `accepted` | `app/services/provisioning/steps/health_check.rb`, `spec/services/provisioning/steps/health_check_spec.rb` | 유지보수 |
 | `OPS-3A.3` | `P0-M3` | `OPS` | `OPS-3A` | Config rollback의 external restore/diagnostics 경로 완결 | `INTEG-2A.2` | `AC-010` / `TEST-010` | `passing` | `accepted` | `app/controllers/config_versions_controller.rb`, `app/services/config_versions/rollback_service.rb`, `spec/requests/config_versions_spec.rb` | 유지보수 |
 | `OPS-3A.4` | `P0-M3` | `OPS` | `OPS-3A` | Provisioning job retention cleanup 구현 | `PROV-2A.2` | `AC-013` / `TEST-013` | `passing` | `accepted` | `app/jobs/provisioning_jobs_cleanup_job.rb`, `config/recurring.yml`, `spec/jobs/provisioning_jobs_cleanup_job_spec.rb` | 유지보수 |
 | `AUTH-4A.1` | `P0-M4` | `AUTH` | `AUTH-4A` | SAML/OAuth backend provisioning coverage | `Q-001` / `DEC-003` | `AC-011` SAML/OAuth subset / `TEST-011B` | `passing` | `accepted` | `spec/clients/keycloak_client_spec.rb`, `spec/services/provisioning/steps/keycloak_client_create_spec.rb`, `spec/services/projects/create_service_spec.rb` | UI follow-up deferred |
 | `AUTH-4A.2` | `P0-M4` | `AUTH` | `AUTH-4A` | PAK 발급/폐기/검증 API | `Q-001` | `AC-011` PAK subset / `TEST-011A` | `passing` | `accepted` | `app/controllers/project_api_keys_controller.rb`, `app/controllers/api/v1/project_api_keys_controller.rb`, `app/services/project_api_keys/`, `spec/requests/project_api_keys_spec.rb`, `spec/requests/api/v1/project_api_keys_spec.rb` | UI follow-up deferred |
-| `PLAY-4A.1` | `P0-M5` | `PLAY` | `PLAY-4A` | Playground SSE chat 화면 | `P0-M4` | `AC-012` | `defined` | `planned` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | 착수 후보 |
+| `CORE-5A.1` | `P0-M5` | `CORE` | `CORE-5A` | Organization create/update product semantics: initial admin selection, Langfuse org update, audit coverage | `CORE-1A.1` | `AC-018` / `TEST-018` | `defined` | `planned` | `docs/01_PRD.md#fr-1-organization-관리-crud`, `docs/ui-spec.md#81-organization-목록--fr-1` | Current create flow self-assigns requester; PRD/UI allow designated initial admin |
+| `CORE-5A.2` | `P0-M5` | `CORE` | `CORE-5A` | Member management completion: Keycloak search/pre-assignment, project permission grant/update/revoke API, audit logs | `CORE-1A.2` | `AC-018` / `TEST-018` | `defined` | `planned` | `docs/01_PRD.md#fr-2-접근제어-rbac--console-db-자체-관리`, `docs/ui-spec.md#84-멤버-관리--fr-2` | Current member API does not manage project permissions or Keycloak user creation |
+| `CORE-5A.3` | `P0-M5` | `CORE` | `CORE-5A` | Organization delete completion orchestration after child project delete jobs, Langfuse org delete, and progress summary links | `PROV-2A.2` / `CORE-1A.3` | `AC-018` / `TEST-018` | `defined` | `planned` | `app/services/organizations/destroy_service.rb`, `docs/ui-spec.md#87-프로비저닝-현황--fr-73` | Current service starts project deletes then defers final org cleanup |
+| `UI-5A.1` | `P0-M5` | `UI` | `UI-5A` | Application layout, navigation, authenticated empty states, role-aware controls | `CORE-1A` | `AC-014` / `TEST-014` | `defined` | `planned` | `docs/ui-spec.md#7-레이아웃-및-네비게이션` | Establish Hotwire asset baseline |
+| `UI-5A.2` | `P0-M5` | `UI` | `UI-5A` | Organization list/detail/new/edit ERB pages | `CORE-5A.1` | `AC-014` / `TEST-014` | `defined` | `planned` | `docs/ui-spec.md#81-organization-목록--fr-1`, `docs/ui-spec.md#82-organization-상세--fr-1`, `docs/ui-spec.md#83-organization-생성--fr-1` | Includes super_admin-only create/delete affordances |
+| `UI-5A.3` | `P0-M5` | `UI` | `UI-5A` | Member management ERB, user search autocomplete, role/project permission controls | `CORE-5A.2` | `AC-014` / `AC-018` / `TEST-014` / `TEST-018` | `defined` | `planned` | `docs/ui-spec.md#84-멤버-관리--fr-2`, `docs/ui-spec.md#94-멤버-추가-폼` | Server-side validation remains authoritative |
+| `UI-5A.4` | `P0-M5` | `UI` | `UI-5A` | Project list/detail/create/delete ERB pages with provisioning redirects | `CORE-1A.3` / `PROV-2A.1` | `AC-014` / `TEST-014` | `defined` | `planned` | `docs/ui-spec.md#85-project-상세--fr-3`, `docs/ui-spec.md#86-project-생성--fr-3` | Disabled future auth modes until their UI gate passes |
+| `UI-5B.1` | `P0-M5` | `UI` | `UI-5B` | Provisioning show ERB timeline for create/update/delete operations | `UI-2B.1` | `AC-015` / `TEST-015` | `defined` | `planned` | `docs/ui-spec.md#87-프로비저닝-현황--fr-73`, `docs/02_HLD.md#6-실시간-통신-actioncable` | Renders latest DB state on refresh |
+| `UI-5B.2` | `P0-M5` | `UI` | `UI-5B` | Turbo/Stimulus ActionCable consumer, reconnect/polling fallback, step partial replacement | `UI-5B.1` | `AC-015` / `TEST-015` | `defined` | `planned` | `docs/ui-spec.md#10-stimulus-컨트롤러`, `docs/02_HLD.md#62-current-json-payloads--target-turbo-stream-ui` | No secret payload over ActionCable |
+| `UI-5B.3` | `P0-M5` | `UI` | `UI-5B` | Manual retry UX, rollback_failed/manual-intervention state, concurrent job warning banners | `UI-5B.1` | `AC-015` / `TEST-015` | `defined` | `planned` | `docs/ui-spec.md#68-동시-설정-변경-경고`, `docs/ui-spec.md#87-프로비저닝-현황--fr-73` | `Q-002` resolved by `DEC-004` |
+| `SEC-5B.1` | `P0-M5` | `SEC` | `SEC-5B` | One-time secret reveal cache write path, authorized fetch, masking/copy UX, TTL expiry handling | `UI-5B.1` / `AUTH-4A.2` | `AC-015` / `TEST-015` | `defined` | `planned` | `docs/02_HLD.md#65-시크릿-전달-채널`, `docs/ui-spec.md#61-시크릿-일회성-표시` | Current controller can read cache; provisioning steps do not write it yet |
+| `UI-5C.1` | `P0-M5` | `UI` | `UI-5C` | OIDC auth config ERB: redirect URIs, post-logout URIs, client secret regeneration entry point | `INTEG-2A.1` / `SEC-5B.1` | `AC-016` / `TEST-016` | `defined` | `planned` | `docs/ui-spec.md#811-인증-설정-편집--fr-4` | SAML/OAuth/PAK sections hidden or disabled until `AUTH-6A` |
+| `UI-5C.2` | `P0-M5` | `UI` | `UI-5C` | LiteLLM config ERB: models, guardrails, S3 retention, update provisioning redirect | `INTEG-2A.2` / `PROV-2A.1` | `AC-016` / `TEST-016` | `defined` | `planned` | `docs/ui-spec.md#88-litellm-config-편집--fr-6`, `docs/ui-spec.md#93-litellm-config-편집-폼` | Uses Config Server through existing service boundary |
+| `UI-5C.3` | `P0-M5` | `UI` | `UI-5C` | Config version list/show/diff/rollback UI with diagnostics display | `OPS-3A.3` | `AC-016` / `TEST-016` | `defined` | `planned` | `docs/ui-spec.md#89-변경-이력--fr-8`, `app/services/config_versions/rollback_service.rb` | Current rollback is synchronous API; UI must not imply hidden async job unless implemented |
+| `AUTH-6A.1` | `P1-M1` | `AUTH` | `AUTH-6A` | SAML metadata UI, validation, disabled-to-enabled transition, provisioning coverage | `AUTH-4A.1` / `UI-5C.1` | `AC-017` / `TEST-017` | `defined` | `planned` | `DEC-003`, `docs/ui-spec.md#811-인증-설정-편집--fr-4` | Backend/API already accepted |
+| `AUTH-6A.2` | `P1-M1` | `AUTH` | `AUTH-6A` | OAuth/PKCE UI, public-client constraints, redirect URI validation | `AUTH-4A.1` / `UI-5C.1` | `AC-017` / `TEST-017` | `defined` | `planned` | `DEC-003`, `docs/01_PRD.md#fr-4-인증-체계-자동-구성` | Backend/API already accepted |
+| `AUTH-6A.3` | `P1-M1` | `AUTH` | `AUTH-6A` | PAK list/issue/revoke UI with one-time reveal and audit feedback | `AUTH-4A.2` / `SEC-5B.1` | `AC-017` / `TEST-017` | `defined` | `planned` | `app/controllers/project_api_keys_controller.rb`, `docs/ui-spec.md#811-인증-설정-편집--fr-4` | Uses existing PAK API |
+| `OPS-7A.1` | `P1-M2` | `OPS` | `OPS-7A` | Production deploy command, smoke checklist, rollback command documented and dry-run accepted | `OPS-3A.1` | `AC-019` / `TEST-019` | `defined` | `planned` | `docs/05_RUNBOOK.md`, `config/deploy.yml`, `.kamal/` | Current runbook marks deploy operation `not_run` |
+| `OPS-7A.2` | `P1-M2` | `OPS` | `OPS-7A` | Litestream sidecar/init-restore wiring and restore drill evidence | `OPS-7A.1` | `AC-019` / `TEST-019` | `defined` | `planned` | `docs/01_PRD.md#82-k8s-배포-전략`, `docs/adr/adr-005-sqlite-litestream.md` | Confirms RPO/RTO assumptions |
+| `OPS-7A.3` | `P1-M2` | `OPS` | `OPS-7A` | AuditLogsArchiveJob JSONL export to S3 archive prefix and retention deletion | `OPS-3A.1` | `AC-020` / `TEST-020` | `defined` | `planned` | `docs/02_HLD.md#audit-logs`, `docs/current/OPERATIONS.md` | HLD target says audit logs archive after 365 days |
+| `OPS-7A.4` | `P1-M2` | `OPS` | `OPS-7A` | ConfigVersion storage policy review: accept permanent retention with monitoring or implement prune job | `OPS-3A.3` | `AC-019` / `TEST-019` | `defined` | `planned` | `docs/02_HLD.md#configversions`, `docs/current/DATA_MODEL.md` | HLD default is permanent retention; prune only if policy changes |
+| `OPS-7A.5` | `P1-M2` | `OPS` | `OPS-7A` | Full external config rollback: snapshot Keycloak/Langfuse mutable config and restore it instead of diagnostics-only reporting | `OPS-3A.3` / `INTEG-2A.1` / `INTEG-2A.2` | `AC-022` / `TEST-022` | `defined` | `planned` | `docs/01_PRD.md#fr-8-설정-변경-이력-관리-및-버전-롤백`, `docs/03_RISK_SPIKES.md#spike-002-config-rollback의-외부-리소스-복구-경계` | Current accepted behavior diagnoses non-snapshotted state |
+| `PLAY-8A.1` | `P2-M1` | `PLAY` | `PLAY-8A` | Playground routes/controller authorization, model list source, request validation | `UI-5A.4` / `UI-5C.2` | `AC-012` / `TEST-012` | `defined` | `planned` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/02_HLD.md#playground--fr-10` | Project `read`+ only |
+| `PLAY-8A.2` | `P2-M1` | `PLAY` | `PLAY-8A` | LiteLLM streaming proxy with timeout, disconnect cancel, per-project concurrency limit, secret redaction | `PLAY-8A.1` | `AC-012` / `TEST-012` | `defined` | `planned` | `docs/02_HLD.md#playground--fr-10` | Uses `ActionController::Live` or documented equivalent |
+| `PLAY-8A.3` | `P2-M1` | `PLAY` | `PLAY-8A` | Playground chat UI: streaming transcript, params, guardrail responses, session-only history, JSON export | `PLAY-8A.2` | `AC-012` / `TEST-012` | `defined` | `planned` | `docs/ui-spec.md#810-playground--fr-10-phase-4` | No server-side conversation persistence |
+| `PLAY-8A.4` | `P2-M1` | `PLAY` | `PLAY-8A` | Request/response inspector, token/latency/cost display, Langfuse trace links | `PLAY-8A.2` | `AC-012` / `TEST-012` | `defined` | `planned` | `docs/01_PRD.md#fr-10-playground-ai-chat`, `docs/ui-spec.md#810-playground--fr-10-phase-4` | Must not expose secrets in headers/body |
+| `ADMIN-8A.1` | `P2-M2` | `ADMIN` | `ADMIN-8A` | Super-admin dashboard scope decision: metrics, service health, manual intervention queue, release gating | `Q-003` | `AC-021` / `TEST-021` | `defined` | `planned` | `docs/01_PRD.md#66-관측성`, `docs/07_QUESTIONS_REGISTER.md#q-003-super-admin-dashboard의-최소-범위는-무엇인가` | Decision before implementation |
+| `ADMIN-8A.2` | `P2-M2` | `ADMIN` | `ADMIN-8A` | Super-admin dashboard UI/API: all orgs/projects status, external service health, failed job links | `ADMIN-8A.1` / `OPS-7A.1` | `AC-021` / `TEST-021` | `defined` | `planned` | `docs/01_PRD.md#66-관측성`, `docs/ui-spec.md` | Hidden unless `super_admin` |
+| `ADMIN-8A.3` | `P2-M2` | `ADMIN` | `ADMIN-8A` | Manual intervention workflow for `failed`/`rollback_failed` jobs with runbook links and audit trail | `ADMIN-8A.2` / `OPS-7A.3` | `AC-021` / `TEST-021` | `defined` | `planned` | `docs/05_RUNBOOK.md`, `docs/01_PRD.md#fr-73-프로비저닝-현황-화면` | Complements per-job retry UI |
+
+## Leaf Coverage
+
+| Source scope | Leaf slices |
+|---|---|
+| FR-1 Organization CRUD | `CORE-1A.1`, `CORE-5A.1`, `CORE-5A.3`, `UI-5A.2` |
+| FR-2 RBAC / members / user assignment | `CORE-1A.2`, `CORE-5A.2`, `UI-5A.1`, `UI-5A.3` |
+| FR-3 Project CRUD | `CORE-1A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.3` |
+| FR-4 Auth automation / SAML / OAuth / PAK | `INTEG-2A.1`, `AUTH-4A.1`, `AUTH-4A.2`, `UI-5C.1`, `AUTH-6A.1`, `AUTH-6A.2`, `AUTH-6A.3` |
+| FR-5 Langfuse project / keys | `INTEG-2A.2`, `OPS-3A.2`, `CORE-5A.1`, `CORE-5A.3` |
+| FR-6 LiteLLM config | `INTEG-2A.2`, `UI-5C.2`, `OPS-3A.2` |
+| FR-7 Provisioning pipeline/status | `PROV-2A.1`, `PROV-2A.2`, `UI-2B.1`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1` |
+| FR-8 Config history/rollback | `OPS-3A.3`, `UI-5C.3`, `OPS-7A.4`, `OPS-7A.5` |
+| FR-9 Health/check consistency | `OPS-3A.2`, `ADMIN-8A.2` |
+| FR-10 Playground | `PLAY-8A.1`, `PLAY-8A.2`, `PLAY-8A.3`, `PLAY-8A.4` |
+| HLD secret reveal target | `SEC-5B.1` |
+| HLD deployment/Litestream restore target | `OPS-7A.1`, `OPS-7A.2` |
+| HLD audit archive target | `OPS-7A.3` |
+| PRD/admin observability target | `ADMIN-8A.1`, `ADMIN-8A.2`, `ADMIN-8A.3` |
 
 ## Gates / Acceptance
 
@@ -109,6 +162,8 @@ Gate status:
 ## Traceability
 
 - Completed slices should have a row in `docs/09_TRACEABILITY_MATRIX.md`.
+- Planned slices that close PRD / HLD / UI coverage gaps should also have a trace row,
+  so leaf completeness can be reviewed before implementation starts.
 - Link slices to the relevant Q / DEC / ADR, REQ / NFR, AC / TEST, and milestone.
 - Trace row를 backlog처럼 쓰지 않는다. 중요한 연결 경로를 기록하는 용도다.
 
@@ -121,10 +176,13 @@ Gate status:
 
 ## Risks (Open)
 
-- None currently tracked as release-blocking.
+- `Q-003`: super-admin dashboard scope is not decided yet, so `ADMIN-8A.1` must run before dashboard implementation.
+- Deployment command, rollback procedure, and Litestream restore are not accepted until `OPS-7A.1` / `OPS-7A.2` pass.
+- Full Keycloak/Langfuse rollback remains diagnostics-only until `OPS-7A.5` passes.
+- `SEC-5B.1` is required before product UI can safely promise one-time secret reveal.
 
 ## Capacity / Timeline
 
 - 인원: Platform TG / AI-assisted implementation
 - 주당 가용 시간: anchor missing
-- 예상 완료: `P0-M5` Playground slice after P0-M4 backend/API closure
+- 예상 완료: `P0-M5` core product UI and provisioning detail after P0-M4 backend/API closure

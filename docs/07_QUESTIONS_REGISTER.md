@@ -29,10 +29,11 @@
 
 - Opened: 2026-04-29
 - Owner: Platform TG
-- Status: open
+- Status: resolved
 - Proposed Answer: ActionCable authorization and broadcast path는 accepted로 보고, 상세 timeline/retry button UX는 `UI-2B.1` 후속으로 둔다.
 - Blocks: `UI-2B.1`
-- Resolution: pending
+- Decision: `DEC-004`
+- Resolution: P0-M3는 다시 열지 않는다. Provisioning detail ERB/Hotwire timeline, retry UX, secret reveal은 `P0-M5`의 `UI-5B.*` / `SEC-5B.1` leaf로 추적한다.
 
 **Context**
 
@@ -41,3 +42,23 @@
 **Discussion**
 
 - 운영 release gate에서 필요한 것은 실패 진단과 retry path인지, timeline UX 완성도인지 분리해야 한다.
+
+---
+
+### Q-003: Super-admin dashboard의 최소 범위는 무엇인가?
+
+- Opened: 2026-04-29
+- Owner: Platform TG
+- Status: open
+- Proposed Answer: P2 dashboard의 최소 범위는 전체 Organization/Project 상태, 외부 서비스 health summary, `failed`/`rollback_failed` provisioning work queue, runbook 링크로 제한한다. 비용/사용량 분석, 장기 trend, policy editing은 후속으로 둔다.
+- Blocks: `ADMIN-8A.1`, `ADMIN-8A.2`, `ADMIN-8A.3`, `AC-021`
+- Resolution: pending
+
+**Context**
+
+PRD는 "공유 서비스 연동 상태 대시보드"와 "Playground 및 관리자 고도화 기능"을 언급하지만, super-admin dashboard의 필수 metric과 release gate는 아직 leaf 수준으로 결정되지 않았다.
+
+**Discussion**
+
+- `ADMIN-8A.1`에서 dashboard scope를 먼저 결정해야 `ADMIN-8A.2` 구현이 과도하게 커지지 않는다.
+- `ADMIN-8A.3`은 운영 수동 개입 queue와 연결되므로 `OPS-7A` runbook evidence와 함께 맞춰야 한다.

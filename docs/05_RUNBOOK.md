@@ -63,7 +63,7 @@ Deployment config exists in:
 
 The active manual deploy command is not documented in this repo yet. Treat deployment
 operation as `not_run` until the release owner records the exact command and rollback
-procedure.
+procedure. Roadmap tracking: `OPS-7A.1` / `OPS-7A.2` / `AC-019`.
 
 ## Monitoring / Debug Paths
 
@@ -74,6 +74,7 @@ procedure.
 | Provisioning steps | Inspect `provisioning_steps.status`, `error_message`, `result_snapshot` |
 | Background jobs | Local worker from `bin/jobs` or `bundle exec solid_queue:start`; production may run SolidQueue in Puma via `SOLID_QUEUE_IN_PUMA=true` |
 | Provisioning retention cleanup | Production recurring key `provisioning_jobs_cleanup`; job class `ProvisioningJobsCleanupJob` |
+| Audit log archive | Not implemented yet; roadmap tracking `OPS-7A.3` / `AC-020` |
 | External API mocks in test | `spec/support/keycloak_mock.rb`, `spec/support/langfuse_mock.rb`, `spec/support/config_server_mock.rb` |
 
 ## Common Incidents
@@ -111,6 +112,10 @@ procedure.
 | Migration status | `bin/rails db:migrate:status` |
 | Manual provisioning retention cleanup | `bin/rails runner "ProvisioningJobsCleanupJob.perform_now"` |
 | Schema source | `db/schema.rb`, `db/*_schema.rb` |
+
+Full Keycloak/Langfuse config rollback is not implemented yet. Current rollback
+restores Config Server state and reports non-snapshotted external state in
+diagnostics; final-product tracking is `OPS-7A.5` / `AC-022`.
 
 ## Validation Before Release
 

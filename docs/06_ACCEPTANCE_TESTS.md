@@ -32,8 +32,17 @@ gate / acceptance 상태만 관리한다.
 | `AC-009` | FR-9 | Given configured external services, when health check runs, then it verifies service-specific post-provisioning consistency rather than only placeholder reachability | automated `TEST-009` | `passing` |
 | `AC-010` | FR-8 | Given a config version rollback request, when rollback completes, then Config Server, Keycloak, Langfuse, and Console snapshot state are restored or diagnosed | automated `TEST-010` | `passing` |
 | `AC-011` | FR-4 | Given SAML/OAuth/PAK scope decision, when enabled, then auth selection, provisioning, PAK issuance, revocation, and verification paths are covered | automated `TEST-011A`, `TEST-011B`; UI follow-up is non-gating per `DEC-003` | `passing` |
-| `AC-012` | FR-10 | Given an authorized project user, when Playground is enabled, then chat streaming, request inspection, and trace links work without exposing secrets | future system/request specs | `defined` |
+| `AC-012` | FR-10 | Given an authorized project user, when Playground is enabled, then chat streaming, request inspection, session-only transcript, parameter controls, guardrail responses, JSON export, usage metadata, and trace links work without exposing secrets | future `TEST-012` | `defined` |
 | `AC-013` | OPS retention | Given completed provisioning jobs older than the retention window, when retention cleanup runs, then terminal job/step records are archived or deleted while failed/manual-intervention records remain available | automated `TEST-013` | `passing` |
+| `AC-014` | FR-1 / FR-2 / FR-3 UI | Given signed-in users with different roles, when they use the server-rendered organization, member, and project pages, then visible actions, empty states, form errors, and redirects match their permissions | future `TEST-014` | `defined` |
+| `AC-015` | FR-7.3 / secret zero-store | Given a provisioning job changes state, when a user opens the detail page, then the ERB/Hotwire timeline, retry controls, manual-intervention states, and authorized one-time secret reveal work without broadcasting secrets | future `TEST-015` | `defined` |
+| `AC-016` | FR-4 / FR-6 / FR-8 UI | Given a project user with read/write access, when they view or change auth config, LiteLLM config, and config versions, then update provisioning, diff display, rollback diagnostics, and disabled future controls behave as designed | future `TEST-016` | `defined` |
+| `AC-017` | FR-4 auth UI | Given SAML/OAuth/PAK backend/API support, when the auth UI is enabled, then SAML metadata, OAuth/PKCE settings, PAK issue/revoke/reveal, and disabled-to-enabled state transitions are covered | future `TEST-017` | `defined` |
+| `AC-018` | FR-1 / FR-2 completion | Given super_admin and org admins manage organizations and members, when they create/update/delete organizations or assign users, then designated initial admins, Keycloak pre-assignment, project permission CRUD, Langfuse org sync, and org delete completion behave correctly | future `TEST-018` | `defined` |
+| `AC-019` | NFR availability / deploy | Given a release owner, when deployment, rollback, Litestream restore, and ConfigVersion storage-policy procedures are exercised, then exact commands, evidence, and rollback/restore results are recorded in the runbook | future `TEST-019` | `defined` |
+| `AC-020` | Audit retention | Given audit logs older than the retention window, when the archive job runs, then JSONL archive output is written to the configured S3 prefix and archived rows are removed without losing recent audit records | future `TEST-020` | `defined` |
+| `AC-021` | Admin observability | Given a super_admin, when they open the operations dashboard, then organization/project status, external service health, and failed/manual-intervention provisioning work queues are visible without exposing tenant secrets | future `TEST-021` | `defined` |
+| `AC-022` | FR-8 full rollback | Given Keycloak and Langfuse mutable config snapshots exist, when a user rolls back a config version, then Console restores Config Server, Keycloak, Langfuse, Console snapshots, and diagnostics atomically or reports a recoverable failure without silent drift | future `TEST-022` | `defined` |
 | `AC-DOC-001` | DOC-M1 | Given a new session or PR, when an agent follows repo guidance, then it reaches `current-state`, `04_IMPLEMENTATION_PLAN`, `current/*`, canonical PRD/HLD paths, and the PR template/doc-freshness guidance without stale doc-only guidance | link check + doc review | `passing` |
 
 ## Tests
@@ -52,7 +61,17 @@ gate / acceptance 상태만 관리한다.
 | `TEST-010` | Config version rollback specs | `spec/requests/config_versions_spec.rb` | `AC-010` |
 | `TEST-011A` | PAK issue/revoke/verify specs | `spec/requests/project_api_keys_spec.rb`, `spec/requests/api/v1/project_api_keys_spec.rb`, `spec/models/project_api_key_spec.rb` | `AC-011` PAK subset |
 | `TEST-011B` | SAML/OAuth backend provisioning specs | `spec/clients/keycloak_client_spec.rb`, `spec/services/provisioning/steps/keycloak_client_create_spec.rb`, `spec/services/projects/create_service_spec.rb` | `AC-011` SAML/OAuth subset |
+| `TEST-012` | Playground request/system specs | planned `spec/requests/playgrounds_spec.rb`, planned system specs for streaming chat, inspector, trace links, and session-only export | `AC-012` |
 | `TEST-013` | Provisioning retention cleanup specs | `spec/jobs/provisioning_jobs_cleanup_job_spec.rb`, `spec/models/provisioning_job_spec.rb` | `AC-013` |
+| `TEST-014` | Core product UI system/request specs | planned system/request specs for layout, organization pages, project pages, member UI, role-aware controls, empty states, and form errors | `AC-014` |
+| `TEST-015` | Provisioning detail and secret reveal specs | planned system/channel/request specs for timeline rendering, reconnect/polling fallback, retry, concurrent-job banners, authorized secret fetch, and TTL expiry | `AC-015` |
+| `TEST-016` | Config management UI specs | planned system/request specs for auth config, LiteLLM config, config version diff/show/rollback diagnostics, and disabled future controls | `AC-016` |
+| `TEST-017` | Auth expansion UI specs | planned system/request specs for SAML metadata, OAuth/PKCE, PAK issue/revoke/reveal, and audit feedback | `AC-017` |
+| `TEST-018` | Org/member completion specs | planned request/service/system specs for initial admin selection, Keycloak pre-assignment, project permission CRUD, Langfuse org update/delete, and org delete completion | `AC-018` |
+| `TEST-019` | Deployment/restore evidence | planned release-owner checklist, deploy/rollback dry-run evidence, Litestream restore drill, and ConfigVersion storage-policy acceptance notes | `AC-019` |
+| `TEST-020` | Audit archive job specs | planned job/storage specs for archive JSONL content, prefix selection, retention deletion, and failure handling | `AC-020` |
+| `TEST-021` | Super-admin dashboard specs | planned request/system specs for super_admin-only dashboard, service health summaries, and failed/manual-intervention job queue | `AC-021` |
+| `TEST-022` | Full external rollback specs | planned service/request specs for Keycloak/Langfuse snapshot capture, restore ordering, Config Server rollback, diagnostics, and recoverable failure states | `AC-022` |
 
 ## Definition of Done
 
