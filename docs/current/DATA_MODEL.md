@@ -47,7 +47,7 @@ Code, migrations, schemas, generated references가 authoritative source다. 이 
 | `ProvisioningStep.status` | `pending`, `in_progress`, `completed`, `failed`, `retrying`, `skipped`, `rolled_back`, `rollback_failed` | Step name은 `Provisioning::StepSeeder`가 seed |
 | `OrgMembership.role` | `admin`, `write`, `read` | Org role의 source of truth는 Console DB |
 | `ProjectPermission.role` | `write`, `read` | Org admin은 implicit project access를 가진다 |
-| `ProjectAuthConfig.auth_type` | `oidc`, `saml`, `oauth`, `pak` | OIDC와 PAK API path는 구현됨. SAML/OAuth UI/metadata 범위는 `Q-001` 결정 필요 |
+| `ProjectAuthConfig.auth_type` | `oidc`, `saml`, `oauth`, `pak` | OIDC/SAML/OAuth backend path와 PAK API path는 구현됨. Auth UI는 `DEC-003`에 따라 후속 |
 
 ## Current Gaps
 

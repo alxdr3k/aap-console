@@ -48,6 +48,50 @@ RSpec.describe KeycloakClient do
     end
   end
 
+  describe "#create_saml_client" do
+    it "creates a SAML client with attributes" do
+      client_id = "aap-acme-chatbot-saml"
+      stub_keycloak_create_client(client_id: client_id)
+      stub_keycloak_get_clients(client_id: client_id, clients: [ { "clientId" => client_id, "id" => "uuid-saml" } ])
+
+      result = client.create_saml_client(
+        client_id: client_id,
+        attributes: { "saml.force.post.binding" => "true" }
+      )
+
+      expect(result["id"]).to eq("uuid-saml")
+      expect(a_request(:post, "#{KeycloakMock::BASE}/clients").with { |request|
+        body = JSON.parse(request.body)
+        body["clientId"] == client_id &&
+          body["protocol"] == "saml" &&
+          body["attributes"] == { "saml.force.post.binding" => "true" }
+      }).to have_been_made
+    end
+  end
+
+  describe "#create_oauth_client" do
+    it "creates a public OAuth client with PKCE enabled" do
+      client_id = "aap-acme-chatbot-oauth"
+      stub_keycloak_create_client(client_id: client_id)
+      stub_keycloak_get_clients(client_id: client_id, clients: [ { "clientId" => client_id, "id" => "uuid-oauth" } ])
+
+      result = client.create_oauth_client(
+        client_id: client_id,
+        redirect_uris: [ "https://app.example.com/callback" ]
+      )
+
+      expect(result["id"]).to eq("uuid-oauth")
+      expect(a_request(:post, "#{KeycloakMock::BASE}/clients").with { |request|
+        body = JSON.parse(request.body)
+        body["clientId"] == client_id &&
+          body["protocol"] == "openid-connect" &&
+          body["publicClient"] == true &&
+          body["redirectUris"] == [ "https://app.example.com/callback" ] &&
+          body["attributes"] == { "pkce.code.challenge.method" => "S256" }
+      }).to have_been_made
+    end
+  end
+
   describe "#delete_client" do
     it "deletes a client by uuid" do
       stub_keycloak_delete_client(uuid: "uuid-123")

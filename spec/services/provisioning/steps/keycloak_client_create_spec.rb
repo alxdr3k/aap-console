@@ -73,4 +73,56 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(step_record.reload.result_snapshot["keycloak_client_uuid"]).to eq(uuid)
     end
   end
+
+  describe "#execute auth type dispatch" do
+    it "creates a SAML client with supplied SAML attributes" do
+      auth_config = create(:project_auth_config, :saml, project: project,
+                           keycloak_client_id: "aap-#{organization.slug}-#{project.slug}-saml",
+                           keycloak_client_uuid: nil)
+      keycloak = instance_double(KeycloakClient)
+      allow(KeycloakClient).to receive(:new).and_return(keycloak)
+      expect(keycloak).to receive(:create_saml_client).with(
+        client_id: auth_config.keycloak_client_id,
+        attributes: { "saml.force.post.binding" => "true" }
+      ).and_return({ "id" => "uuid-saml" })
+
+      step_record = create(:provisioning_step, :keycloak_client_create, provisioning_job: job)
+      step = described_class.new(
+        step_record: step_record,
+        project: project,
+        params: { saml_attributes: { "saml.force.post.binding" => "true" } }
+      )
+
+      expect(step.execute).to include(
+        keycloak_client_uuid: "uuid-saml",
+        keycloak_client_id: auth_config.keycloak_client_id
+      )
+      expect(auth_config.reload.keycloak_client_uuid).to eq("uuid-saml")
+    end
+
+    it "creates an OAuth client with redirect URIs" do
+      auth_config = create(:project_auth_config, :oauth, project: project,
+                           keycloak_client_id: "aap-#{organization.slug}-#{project.slug}-oauth",
+                           keycloak_client_uuid: nil)
+      keycloak = instance_double(KeycloakClient)
+      allow(KeycloakClient).to receive(:new).and_return(keycloak)
+      expect(keycloak).to receive(:create_oauth_client).with(
+        client_id: auth_config.keycloak_client_id,
+        redirect_uris: [ "https://app.example.com/callback" ]
+      ).and_return({ "id" => "uuid-oauth" })
+
+      step_record = create(:provisioning_step, :keycloak_client_create, provisioning_job: job)
+      step = described_class.new(
+        step_record: step_record,
+        project: project,
+        params: { redirect_uris: [ "https://app.example.com/callback" ] }
+      )
+
+      expect(step.execute).to include(
+        keycloak_client_uuid: "uuid-oauth",
+        keycloak_client_id: auth_config.keycloak_client_id
+      )
+      expect(auth_config.reload.keycloak_client_uuid).to eq("uuid-oauth")
+    end
+  end
 end
