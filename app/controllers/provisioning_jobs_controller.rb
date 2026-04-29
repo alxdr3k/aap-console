@@ -4,7 +4,37 @@ class ProvisioningJobsController < ApplicationController
   before_action :authorize_job_write!, only: [ :retry, :secrets ]
 
   def show
-    render json: {
+    @project = @job.project
+    @organization = @project.organization
+    @steps = @job.provisioning_steps.order(:step_order, :id)
+
+    return render json: provisioning_job_payload if default_json_request?
+
+    respond_to do |format|
+      format.html
+      format.json { render json: provisioning_job_payload }
+    end
+  end
+
+  def retry
+    if @job.failed? || @job.rollback_failed?
+      @job.update!(status: :pending, error_message: nil)
+      ProvisioningExecuteJob.perform_later(@job.id, current_user_sub: Current.user_sub)
+      render json: { message: "Job re-enqueued", id: @job.id }
+    else
+      render json: { error: "Job is not in a retryable state" }, status: :unprocessable_entity
+    end
+  end
+
+  def secrets
+    cached = Rails.cache.read("provisioning_job_secrets_#{@job.id}")
+    render json: cached || {}
+  end
+
+  private
+
+  def provisioning_job_payload
+    {
       id: @job.id,
       operation: @job.operation,
       status: @job.status,
@@ -27,27 +57,15 @@ class ProvisioningJobsController < ApplicationController
     }
   end
 
-  def retry
-    if @job.failed? || @job.rollback_failed?
-      @job.update!(status: :pending, error_message: nil)
-      ProvisioningExecuteJob.perform_later(@job.id, current_user_sub: Current.user_sub)
-      render json: { message: "Job re-enqueued", id: @job.id }
-    else
-      render json: { error: "Job is not in a retryable state" }, status: :unprocessable_entity
-    end
-  end
-
-  def secrets
-    cached = Rails.cache.read("provisioning_job_secrets_#{@job.id}")
-    render json: cached || {}
-  end
-
-  private
-
   def set_job
     @job = ProvisioningJob.find(params[:id])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    return render json: { error: "Not found" }, status: :not_found if default_json_request?
+
+    respond_to do |format|
+      format.html { render :not_found, status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
   end
 
   def authorize_job_access!

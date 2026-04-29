@@ -1,0 +1,10 @@
+<% content_for :title, "Provisioning job not found | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; 프로비저닝</div>
+
+  <%= render "shared/empty_state",
+             title: "프로비저닝 Job을 찾을 수 없습니다.",
+             body: "삭제되었거나 접근 가능한 Job이 아닙니다.",
+             action: link_to("Organizations", organizations_path, class: "button") %>
+</section>

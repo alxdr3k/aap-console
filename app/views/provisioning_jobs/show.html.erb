@@ -1,0 +1,105 @@
+<% content_for :title, "#{provisioning_operation_title(@job)} | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">
+    Console &gt;
+    <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
+    <% if @job.operation == "delete" || @project.deleted? %>
+      <%= @project.name %> &gt;
+    <% else %>
+      <%= link_to @project.name, organization_project_path(@organization.slug, @project.slug) %> &gt;
+    <% end %>
+    프로비저닝
+  </div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title"><%= provisioning_operation_title(@job) %></h1>
+      <p class="page-description"><%= @project.name %>의 프로비저닝 상태입니다.</p>
+    </div>
+
+    <div class="page-actions">
+      <%= link_to provisioning_target_label(@job), provisioning_target_path(@job), class: "button" %>
+      <%= link_to "Project 목록", organization_projects_path(@organization.slug), class: "button button--secondary" %>
+    </div>
+  </header>
+
+  <% if @job.error_message.present? %>
+    <div class="status-banner status-banner--danger">
+      <strong>오류</strong>
+      <span><%= @job.error_message %></span>
+    </div>
+  <% end %>
+
+  <% if @job.warnings.present? %>
+    <div class="status-banner status-banner--warning">
+      <strong>경고</strong>
+      <span><%= Array(@job.warnings).join(", ") %></span>
+    </div>
+  <% end %>
+
+  <section class="summary-grid summary-grid--four">
+    <div class="summary-item">
+      <span class="summary-item__label">Status</span>
+      <strong class="summary-item__value">
+        <span class="<%= provisioning_status_badge_class(@job) %>"><%= @job.status %></span>
+      </strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Operation</span>
+      <strong class="summary-item__value"><%= @job.operation %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Started</span>
+      <strong class="summary-item__value summary-item__value--time"><%= short_datetime(@job.started_at) %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Elapsed</span>
+      <strong class="summary-item__value summary-item__value--time"><%= provisioning_duration(@job) %></strong>
+    </div>
+  </section>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">Timeline</h2>
+      <span class="badge badge--muted">DB refresh</span>
+    </header>
+
+    <% if @steps.any? %>
+      <ol class="timeline">
+        <% @steps.each do |step| %>
+          <li class="timeline-step timeline-step--<%= step.status %>">
+            <div class="timeline-step__marker"><%= step.step_order %></div>
+            <div class="timeline-step__body">
+              <div class="timeline-step__header">
+                <h3><%= provisioning_step_label(step) %></h3>
+                <span class="<%= provisioning_step_status_badge_class(step) %>"><%= step.status %></span>
+              </div>
+
+              <dl class="timeline-step__meta">
+                <div>
+                  <dt>시작</dt>
+                  <dd><%= short_datetime(step.started_at) %></dd>
+                </div>
+                <div>
+                  <dt>완료</dt>
+                  <dd><%= short_datetime(step.completed_at) %></dd>
+                </div>
+                <div>
+                  <dt>재시도</dt>
+                  <dd><%= step.retry_count || 0 %>/<%= step.max_retries || 0 %></dd>
+                </div>
+              </dl>
+
+              <% if step.error_message.present? %>
+                <p class="timeline-step__error"><%= step.error_message %></p>
+              <% end %>
+            </div>
+          </li>
+        <% end %>
+      </ol>
+    <% else %>
+      <p class="muted-text">아직 생성된 step이 없습니다.</p>
+    <% end %>
+  </section>
+</section>

@@ -393,6 +393,10 @@ textarea {
   font-size: 16px;
 }
 
+.summary-item__value--time {
+  font-size: 16px;
+}
+
 .flash-stack {
   display: grid;
   gap: 8px;
@@ -594,6 +598,123 @@ textarea {
   color: #7a4f00;
 }
 
+.status-banner--danger {
+  display: grid;
+  gap: 4px;
+  background: #feeceb;
+  color: #982b24;
+}
+
+.timeline {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline-step {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  position: relative;
+  padding: 0 0 16px;
+}
+
+.timeline-step::before {
+  position: absolute;
+  top: 38px;
+  bottom: 0;
+  left: 21px;
+  width: 2px;
+  background: #d9e0ec;
+  content: "";
+}
+
+.timeline-step:last-child {
+  padding-bottom: 0;
+}
+
+.timeline-step:last-child::before {
+  display: none;
+}
+
+.timeline-step__marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #334155;
+  font-weight: 700;
+}
+
+.timeline-step--completed .timeline-step__marker {
+  border-color: #41a36d;
+  color: #17633a;
+}
+
+.timeline-step--failed .timeline-step__marker,
+.timeline-step--rollback_failed .timeline-step__marker {
+  border-color: #d95d55;
+  color: #982b24;
+}
+
+.timeline-step--in_progress .timeline-step__marker,
+.timeline-step--retrying .timeline-step__marker {
+  border-color: #d99a00;
+  color: #7a4f00;
+}
+
+.timeline-step__body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #edf1f7;
+  border-radius: 8px;
+}
+
+.timeline-step__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timeline-step__header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.timeline-step__meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.timeline-step__meta dt {
+  font-weight: 700;
+}
+
+.timeline-step__meta dd {
+  margin: 2px 0 0;
+}
+
+.timeline-step__error {
+  margin: 0;
+  padding: 10px;
+  border-radius: 6px;
+  background: #feeceb;
+  color: #982b24;
+}
+
 .autocomplete-results {
   display: grid;
   gap: 4px;
@@ -779,6 +900,8 @@ textarea {
   .option-grid,
   .details-list div,
   .history-row,
+  .timeline-step,
+  .timeline-step__meta,
   .member-row,
   .permission-row,
   .checkbox-row {
