@@ -21,8 +21,13 @@ class ProvisioningJob < ApplicationRecord
 
   ACTIVE_STATUSES = %w[pending in_progress retrying rolling_back].freeze
   TERMINAL_STATUSES = %w[completed completed_with_warnings failed rolled_back rollback_failed].freeze
+  RETRYABLE_STATUSES = %w[failed rollback_failed].freeze
 
   def active?
     ACTIVE_STATUSES.include?(status)
+  end
+
+  def retryable?
+    RETRYABLE_STATUSES.include?(status)
   end
 end

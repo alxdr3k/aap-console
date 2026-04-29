@@ -36,6 +36,18 @@ RSpec.describe ProvisioningJob, type: :model do
     end
   end
 
+  describe "#retryable?" do
+    it "returns true only for failed and rollback_failed jobs" do
+      %w[failed rollback_failed].each do |status|
+        expect(build(:provisioning_job, status: status)).to be_retryable
+      end
+
+      %w[pending in_progress completed completed_with_warnings retrying rolling_back rolled_back].each do |status|
+        expect(build(:provisioning_job, status: status)).not_to be_retryable
+      end
+    end
+  end
+
   describe "concurrent job constraint" do
     it "prevents creating a second active job for the same project" do
       project = create(:project)

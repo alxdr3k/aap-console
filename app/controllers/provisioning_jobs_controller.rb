@@ -18,13 +18,18 @@ class ProvisioningJobsController < ApplicationController
   end
 
   def retry
-    if @job.failed? || @job.rollback_failed?
-      @job.update!(status: :pending, error_message: nil)
-      ProvisioningExecuteJob.perform_later(@job.id, current_user_sub: Current.user_sub)
-      render json: { message: "Job re-enqueued", id: @job.id }
-    else
-      render json: { error: "Job is not in a retryable state" }, status: :unprocessable_entity
+    return retry_error("Job is not in a retryable state", :unprocessable_entity) unless @job.retryable?
+    return retry_error("Another provisioning job is in progress", :conflict) if retry_conflict?
+
+    ActiveRecord::Base.transaction do
+      reset_project_for_retry!
+      @job.update!(status: :retrying, error_message: nil, completed_at: nil)
     end
+
+    ProvisioningExecuteJob.perform_later(@job.id, current_user_sub: Current.user_sub)
+    retry_success
+  rescue ActiveRecord::RecordNotUnique
+    retry_error("Another provisioning job is in progress", :conflict)
   end
 
   def secrets
@@ -90,6 +95,48 @@ class ProvisioningJobsController < ApplicationController
     respond_to do |format|
       format.html { render plain: "Not found", status: :not_found }
       format.json { render json: { error: "Not found" }, status: :not_found }
+    end
+  end
+
+  def retry_success
+    return render json: { message: "Job re-enqueued", id: @job.id, status: @job.status } if default_json_request?
+
+    respond_to do |format|
+      format.html do
+        flash[:success] = "프로비저닝 재시도를 시작했습니다."
+        redirect_to provisioning_job_path(@job), status: :see_other
+      end
+      format.json { render json: { message: "Job re-enqueued", id: @job.id, status: @job.status } }
+    end
+  end
+
+  def retry_error(message, status)
+    return render json: { error: message }, status: status if default_json_request?
+
+    respond_to do |format|
+      format.html do
+        flash[:alert] = message
+        redirect_to provisioning_job_path(@job), status: :see_other
+      end
+      format.json { render json: { error: message }, status: status }
+    end
+  end
+
+  def retry_conflict?
+    @job.project.provisioning_jobs
+        .where(status: ProvisioningJob::ACTIVE_STATUSES)
+        .where.not(id: @job.id)
+        .exists?
+  end
+
+  def reset_project_for_retry!
+    case @job.operation
+    when "create"
+      @job.project.update!(status: :provisioning)
+    when "update"
+      @job.project.update!(status: :update_pending)
+    when "delete"
+      @job.project.update!(status: :deleting)
     end
   end
 

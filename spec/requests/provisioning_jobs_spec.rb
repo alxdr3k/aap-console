@@ -81,6 +81,17 @@ RSpec.describe "ProvisioningJobs", type: :request do
         expect(response.media_type).to eq("application/json")
         expect(response.parsed_body["name"]).to eq("app_registry_register")
       end
+
+      it "renders manual-intervention retry controls for retryable jobs" do
+        failed_job = create(:provisioning_job, :rollback_failed, project: project, operation: "delete")
+
+        get "/provisioning_jobs/#{failed_job.id}", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("수동 조치 필요")
+        expect(response.body).to include("수동 재시도")
+        expect(response.body).to include(retry_provisioning_job_path(failed_job))
+      end
     end
 
     context "as member with project permission" do
@@ -127,9 +138,31 @@ RSpec.describe "ProvisioningJobs", type: :request do
       create(:project_permission, org_membership: membership, project: project, role: "write")
     end
 
-    it "re-enqueues the job and returns 200" do
-      post "/provisioning_jobs/#{failed_job.id}/retry"
+    it "re-enqueues the job, marks it retrying, and returns 200" do
+      post "/provisioning_jobs/#{failed_job.id}/retry", headers: wildcard_headers
       expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["status"]).to eq("retrying")
+      expect(failed_job.reload).to be_retrying
+    end
+
+    it "retries from the browser and restores the project provisioning state" do
+      failed_job.project.update!(status: :provision_failed)
+
+      post "/provisioning_jobs/#{failed_job.id}/retry", headers: html_headers
+
+      expect(response).to redirect_to(provisioning_job_path(failed_job))
+      expect(failed_job.reload).to be_retrying
+      expect(failed_job.project.reload).to be_provisioning
+    end
+
+    it "rejects retry when another provisioning job is already active" do
+      create(:provisioning_job, :in_progress, project: project, operation: "update")
+
+      post "/provisioning_jobs/#{failed_job.id}/retry", headers: wildcard_headers
+
+      expect(response).to have_http_status(:conflict)
+      expect(response.parsed_body["error"]).to eq("Another provisioning job is in progress")
+      expect(failed_job.reload).to be_failed
     end
 
     it "returns 403 for read-only member" do

@@ -35,6 +35,25 @@
     </div>
   <% end %>
 
+  <% if @job.retryable? %>
+    <div class="status-banner status-banner--danger">
+      <strong>수동 조치 필요</strong>
+      <span>실패 원인을 확인한 뒤 같은 프로비저닝 Job을 다시 실행할 수 있습니다.</span>
+      <div class="status-banner__actions">
+        <% if current_authorization.can?(:write_project, @project) %>
+          <%= button_to "수동 재시도",
+                        retry_provisioning_job_path(@job),
+                        method: :post,
+                        class: "button",
+                        data: { turbo_confirm: "이 프로비저닝 Job을 다시 실행할까요?" } %>
+        <% else %>
+          <span class="badge badge--muted">write 권한 필요</span>
+        <% end %>
+        <%= link_to "Project 목록으로", organization_projects_path(@organization.slug), class: "button button--secondary" %>
+      </div>
+    </div>
+  <% end %>
+
   <% if @job.warnings.present? %>
     <div class="status-banner status-banner--warning">
       <strong>경고</strong>

@@ -18,11 +18,15 @@
 
     <div class="page-actions">
       <% if current_authorization.can?(:manage_org, @organization) %>
-        <%= button_to "Project 삭제",
-                      organization_project_path(@organization.slug, @project.slug),
-                      method: :delete,
-                      class: "button button--ghost",
-                      data: { turbo_confirm: "Project 삭제 프로비저닝을 시작할까요?" } %>
+        <% if @active_provisioning_job %>
+          <span class="button button--disabled" title="진행 중인 작업이 완료된 후 삭제할 수 있습니다.">Project 삭제 대기</span>
+        <% else %>
+          <%= button_to "Project 삭제",
+                        organization_project_path(@organization.slug, @project.slug),
+                        method: :delete,
+                        class: "button button--ghost",
+                        data: { turbo_confirm: "Project 삭제 프로비저닝을 시작할까요?" } %>
+        <% end %>
       <% end %>
       <%= link_to "Project 목록", organization_projects_path(@organization.slug), class: "button button--secondary" %>
     </div>
@@ -34,6 +38,16 @@
         <li><%= error %></li>
       <% end %>
     </ul>
+  <% end %>
+
+  <% if @active_provisioning_job %>
+    <div class="status-banner status-banner--warning">
+      <strong>진행 중인 프로비저닝 작업이 있습니다.</strong>
+      <span>현재 작업이 완료된 후 Project 삭제나 외부 설정 변경을 진행하세요.</span>
+      <div class="status-banner__actions">
+        <%= link_to "진행 상황 보기", provisioning_job_path(@active_provisioning_job), class: "button button--secondary" %>
+      </div>
+    </div>
   <% end %>
 
   <% if @latest_provisioning_job&.completed_with_warnings? %>

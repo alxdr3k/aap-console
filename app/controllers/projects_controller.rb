@@ -169,6 +169,10 @@ class ProjectsController < ApplicationController
 
   def prepare_project_show
     @auth_config = @project.project_auth_config
+    @active_provisioning_job = @project.provisioning_jobs
+                                      .where(status: ProvisioningJob::ACTIVE_STATUSES)
+                                      .order(created_at: :desc)
+                                      .first
     @latest_provisioning_job = @project.provisioning_jobs.order(created_at: :desc).first
     @provisioning_jobs = @project.provisioning_jobs.order(created_at: :desc).limit(5)
     @config_versions = @project.config_versions.order(created_at: :desc).limit(3)

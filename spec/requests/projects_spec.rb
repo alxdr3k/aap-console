@@ -176,6 +176,17 @@ RSpec.describe "Projects", type: :request do
         expect(response.body).to include("azure-gpt4")
         expect(response.body).to include("completed_with_warnings")
       end
+
+      it "renders an active provisioning warning and disables delete affordance" do
+        active_job = create(:provisioning_job, :in_progress, project: project, operation: "update")
+
+        get "/organizations/#{org.slug}/projects/#{project.slug}", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("진행 중인 프로비저닝 작업이 있습니다.")
+        expect(response.body).to include(provisioning_job_path(active_job))
+        expect(response.body).to include("Project 삭제 대기")
+      end
     end
 
     context "as member with project permission" do
