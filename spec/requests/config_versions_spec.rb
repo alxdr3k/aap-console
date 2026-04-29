@@ -49,29 +49,73 @@ RSpec.describe "ConfigVersions", type: :request do
     end
   end
 
-  describe "POST /config_versions/:id/rollback (not implemented)" do
+  describe "POST /config_versions/:id/rollback" do
     before do
       membership = create(:org_membership, organization: org, user_sub: user_sub, role: "write")
       create(:project_permission, org_membership: membership, project: project, role: "write")
     end
 
-    it "returns 501 Not Implemented for FR-8 (rollback pipeline not yet built)" do
-      post "/config_versions/#{config_version.id}/rollback"
-      expect(response).to have_http_status(:not_implemented)
+    it "reverts Config Server to the target version and records a rollback ConfigVersion" do
+      stub_config_server_revert_changes(version: "v-rollback-1")
+
+      expect {
+        post "/config_versions/#{config_version.id}/rollback"
+      }.to change(ConfigVersion, :count).by(1)
+
+      expect(response).to have_http_status(:ok)
       body = JSON.parse(response.body)
-      expect(body["status"]).to eq("not_implemented")
+      expect(body["status"]).to eq("completed")
+      expect(body["target_version_id"]).to eq("v1")
+      expect(body["config_version"]["version_id"]).to eq("v-rollback-1")
+      expect(body["diagnostics"]).to include(
+        "config_server" => "restored",
+        "keycloak" => "not_applicable_no_snapshot",
+        "langfuse" => "not_applicable_no_snapshot"
+      )
+
+      rollback_version = project.config_versions.order(:created_at).last
+      expect(rollback_version.change_type).to eq("rollback")
+      expect(rollback_version.snapshot).to eq(config_version.snapshot)
+      expect(WebMock).to have_requested(:post, "#{ConfigServerMock::ADMIN_BASE}/changes/revert")
+        .with { |request| JSON.parse(request.body)["targetVersion"] == "v1" }
     end
 
     it "does not enqueue a provisioning job" do
+      stub_config_server_revert_changes(version: "v-rollback-1")
+
       expect {
         post "/config_versions/#{config_version.id}/rollback"
       }.not_to have_enqueued_job(ProvisioningExecuteJob)
     end
 
-    it "writes an audit log of the attempt" do
+    it "writes an audit log of the completed rollback" do
+      stub_config_server_revert_changes(version: "v-rollback-1")
+
       expect {
         post "/config_versions/#{config_version.id}/rollback"
-      }.to change { AuditLog.where(action: "config.rollback.attempted").count }.by(1)
+      }.to change { AuditLog.where(action: "config.rollback.completed").count }.by(1)
+    end
+
+    it "returns 409 when another provisioning job is active" do
+      create(:provisioning_job, :in_progress, project: project)
+
+      post "/config_versions/#{config_version.id}/rollback"
+
+      expect(response).to have_http_status(:conflict)
+      expect(a_request(:post, "#{ConfigServerMock::ADMIN_BASE}/changes/revert")).not_to have_been_made
+    end
+
+    it "returns 502 and records a failed audit log when Config Server revert fails" do
+      stub_config_server_revert_changes_failure(status: 500)
+
+      expect {
+        post "/config_versions/#{config_version.id}/rollback"
+      }.to change { AuditLog.where(action: "config.rollback.failed").count }.by(1)
+
+      expect(response).to have_http_status(:bad_gateway)
+      body = JSON.parse(response.body)
+      expect(body["status"]).to eq("failed")
+      expect(body["diagnostics"]).to include("config_server" => "failed")
     end
 
     it "returns 403 for read-only member" do

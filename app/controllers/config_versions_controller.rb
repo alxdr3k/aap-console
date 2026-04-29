@@ -18,31 +18,17 @@ class ConfigVersionsController < ApplicationController
     render json: @config_version
   end
 
-  # FR-8 ConfigVersion rollback is not yet implemented in the provisioning
-  # pipeline — the StepSeeder has no plan for rolling back to a target version
-  # and the previous implementation enqueued a stepless update Job that
-  # immediately fails. Returning 501 here keeps the route reachable for
-  # forward compatibility but signals "do not call yet" instead of silently
-  # creating broken jobs. The audit log is still written so we can see who
-  # tried and when.
   def rollback
-    project = @config_version.project
-    organization = project.organization
+    result = ConfigVersions::RollbackService.new(
+      config_version: @config_version,
+      current_user_sub: Current.user_sub
+    ).call
 
-    AuditLog.create!(
-      organization: organization,
-      project: project,
-      user_sub: Current.user_sub,
-      action: "config.rollback.attempted",
-      resource_type: "ConfigVersion",
-      resource_id: @config_version.id.to_s,
-      details: { target_version_id: @config_version.version_id, status: "not_implemented" }
-    )
-
-    render json: {
-      error: "ConfigVersion rollback is not yet implemented",
-      status: "not_implemented"
-    }, status: :not_implemented
+    if result.success?
+      render json: rollback_payload(result.data), status: :ok
+    else
+      render json: rollback_error_payload(result.error), status: result.error.fetch(:status)
+    end
   end
 
   private
@@ -61,5 +47,23 @@ class ConfigVersionsController < ApplicationController
   def authorize_config_version_write!
     return if @config_version.nil?
     authorize_project!(@config_version.project, minimum_role: :write)
+  end
+
+  def rollback_payload(data)
+    {
+      status: "completed",
+      target_version_id: @config_version.version_id,
+      config_version: data.rollback_version,
+      diagnostics: data.diagnostics
+    }
+  end
+
+  def rollback_error_payload(error)
+    {
+      status: "failed",
+      error: error.fetch(:message),
+      target_version_id: @config_version.version_id,
+      diagnostics: error.fetch(:diagnostics)
+    }
   end
 end

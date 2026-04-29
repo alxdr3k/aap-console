@@ -34,7 +34,7 @@ Keycloak client, Langfuse project, Config Server applied config를 각각 어떤
 - Owner: Platform TG
 - Time-box: 1-3 days
 - Start / End: anchor missing
-- Status: open
+- Status: completed
 
 **Experiment**
 
@@ -42,12 +42,12 @@ Keycloak client, Langfuse project, Config Server applied config를 각각 어떤
 
 **Result**
 
-Not run.
+Current `ConfigVersion` snapshot은 LiteLLM Config Server 설정만 보유한다. `ConfigVersions::RollbackService`는 Config Server revert와 rollback `ConfigVersion` 생성을 수행하고, Keycloak/Langfuse는 snapshot 대상이 아니므로 diagnostics에 `not_applicable_no_snapshot`으로 기록한다.
 
 **Decision / Next Step**
 
-- Decision: pending
-- Follow-up: `OPS-3A.3`, `AC-010`
+- Decision: `OPS-3A.3` / `AC-010` accepted.
+- Follow-up: Keycloak/Langfuse snapshot rollback이 제품 요구로 승격되면 별도 schema/service slice로 추적한다.
 
 ---
 
