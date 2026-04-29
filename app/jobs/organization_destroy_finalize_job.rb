@@ -43,8 +43,7 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
 
   def delete_in_progress?(projects)
     projects.any? do |project|
-      project.deleting? ||
-        project.provisioning_jobs.where(operation: "delete", status: ProvisioningJob::ACTIVE_STATUSES).exists?
+      project.provisioning_jobs.where(operation: "delete", status: ProvisioningJob::ACTIVE_STATUSES).exists?
     end
   end
 end

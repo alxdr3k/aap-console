@@ -6,7 +6,8 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
 
   describe "#perform" do
     it "reschedules itself while projects are still deleting" do
-      create(:project, :deleting, organization: organization)
+      project = create(:project, :deleting, organization: organization)
+      create(:provisioning_job, :in_progress, project: project, operation: "delete")
 
       expect {
         described_class.perform_now(organization.id, current_user_sub: user_sub)
@@ -41,6 +42,17 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
       }.not_to have_enqueued_job(described_class)
 
       expect(Rails.logger).to have_received(:error).with(/blocked-project:provision_failed/)
+    end
+
+    it "stops rescheduling when a deleting project has no active delete job" do
+      create(:project, :deleting, organization: organization, slug: "stalled-project")
+      allow(Rails.logger).to receive(:error)
+
+      expect {
+        described_class.perform_now(organization.id, current_user_sub: user_sub)
+      }.not_to have_enqueued_job(described_class)
+
+      expect(Rails.logger).to have_received(:error).with(/stalled-project:deleting/)
     end
   end
 end
