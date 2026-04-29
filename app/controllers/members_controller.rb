@@ -1,16 +1,31 @@
 class MembersController < ApplicationController
+  before_action :prefer_json_for_default_requests
   before_action :set_organization
   before_action -> { authorize_org!(@organization) }, only: [ :index ]
   before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [ :create, :update, :destroy ]
   before_action :set_membership, only: [ :update, :destroy ]
 
   def index
-    memberships = @organization.org_memberships.includes(project_permissions: :project).order(:created_at)
-    users_by_sub = keycloak_client.get_users_by_ids(user_subs: memberships.map(&:user_sub))
+    prepare_members_index
 
-    render json: memberships.map { |membership| serialize_membership(membership, users_by_sub[membership.user_sub]) }
+    respond_to do |format|
+      format.json do
+        render json: @memberships.map { |membership| serialize_membership(membership, @users_by_sub[membership.user_sub]) }
+      end
+      format.html
+    end
   rescue BaseClient::ApiError
-    render json: { error: "Keycloak user lookup failed" }, status: :service_unavailable
+    @memberships = membership_scope
+    @projects = active_projects
+    @users_by_sub = {}
+
+    respond_to do |format|
+      format.json { render json: { error: "Keycloak user lookup failed" }, status: :service_unavailable }
+      format.html do
+        @member_errors = [ "Keycloak user lookup failed" ]
+        render :index, status: :service_unavailable
+      end
+    end
   end
 
   def create
@@ -20,7 +35,7 @@ class MembersController < ApplicationController
     role = attrs[:role]
 
     if user_sub.blank?
-      return render json: { errors: [ "user_sub or email can't be blank" ] }, status: :unprocessable_entity
+      return render_member_errors([ "user_sub or email can't be blank" ], :unprocessable_entity)
     end
 
     membership = @organization.org_memberships.build(
@@ -49,18 +64,24 @@ class MembersController < ApplicationController
         )
       end
 
-      render json: serialize_membership(membership.reload), status: :created
+      respond_to do |format|
+        format.json { render json: serialize_membership(membership.reload), status: :created }
+        format.html do
+          flash[:success] = "멤버가 추가되었습니다."
+          redirect_to organization_members_path(@organization.slug), status: :see_other
+        end
+      end
     rescue ActiveRecord::RecordInvalid => e
       compensate_keycloak_user(created_keycloak_user_sub)
-      render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+      render_member_errors(e.record.errors.full_messages, :unprocessable_entity)
     end
   rescue BaseClient::NotFoundError
-    render json: { errors: [ "User not found" ] }, status: :unprocessable_entity
+    render_member_errors([ "User not found" ], :unprocessable_entity)
   rescue BaseClient::ApiError
-    render json: { error: "Keycloak user lookup failed" }, status: :service_unavailable
+    render_member_error("Keycloak user lookup failed", :service_unavailable)
   rescue ActiveRecord::RecordNotFound
     compensate_keycloak_user(created_keycloak_user_sub)
-    render json: { error: "Project not found" }, status: :not_found
+    render_member_error("Project not found", :not_found)
   end
 
   def update
@@ -68,8 +89,7 @@ class MembersController < ApplicationController
 
     @organization.with_lock do
       if demoting_last_admin?(@membership, new_role)
-        return render json: { error: "Cannot demote the last admin of this organization" },
-                      status: :unprocessable_entity
+        return render_member_error("Cannot demote the last admin of this organization", :unprocessable_entity)
       end
 
       if @membership.update(role: new_role)
@@ -86,9 +106,15 @@ class MembersController < ApplicationController
             cleared_project_permissions_count: cleared_project_permissions_count
           }
         )
-        render json: serialize_membership(@membership.reload)
+        respond_to do |format|
+          format.json { render json: serialize_membership(@membership.reload) }
+          format.html do
+            flash[:success] = "멤버 권한이 변경되었습니다."
+            redirect_to organization_members_path(@organization.slug), status: :see_other
+          end
+        end
       else
-        render json: { errors: @membership.errors.full_messages }, status: :unprocessable_entity
+        render_member_errors(@membership.errors.full_messages, :unprocessable_entity)
       end
     end
   end
@@ -109,11 +135,21 @@ class MembersController < ApplicationController
         resource_id: @membership.id.to_s,
         details: { removed_user_sub: @membership.user_sub }
       )
-      render json: { message: "Member removed" }
+      respond_to do |format|
+        format.json { render json: { message: "Member removed" } }
+        format.html do
+          flash[:success] = "멤버가 제거되었습니다."
+          redirect_to organization_members_path(@organization.slug), status: :see_other
+        end
+      end
     end
   end
 
   private
+
+  def prefer_json_for_default_requests
+    request.format = :json if default_json_request?
+  end
 
   def keycloak_client
     @keycloak_client ||= KeycloakClient.new
@@ -122,14 +158,16 @@ class MembersController < ApplicationController
   def member_params
     @member_params ||= begin
       member = parameter_hash(params.require(:member))
+      project_permissions = member[:project_permissions]
+      project_permissions = project_permissions.values if project_permissions.is_a?(Hash)
 
       {
         user_sub: member[:user_sub],
         email: member[:email],
         role: member[:role],
-        project_permissions: Array(member[:project_permissions]).filter_map do |permission|
+        project_permissions: Array(project_permissions).filter_map do |permission|
           permission = parameter_hash(permission)
-          next if permission.blank?
+          next if permission[:project_slug].blank?
 
           {
             project_slug: permission[:project_slug],
@@ -193,6 +231,42 @@ class MembersController < ApplicationController
     end
   end
 
+  def prepare_members_index
+    @memberships = membership_scope
+    @projects = active_projects
+    @users_by_sub = keycloak_client.get_users_by_ids(user_subs: @memberships.map(&:user_sub))
+  end
+
+  def membership_scope
+    @organization.org_memberships.includes(project_permissions: :project).order(:created_at)
+  end
+
+  def active_projects
+    @organization.projects.where.not(status: :deleted).order(:name)
+  end
+
+  def render_member_errors(errors, status)
+    respond_to do |format|
+      format.json { render json: { errors: Array(errors) }, status: status }
+      format.html { render_members_index_with_errors(Array(errors), status) }
+    end
+  end
+
+  def render_member_error(error, status)
+    respond_to do |format|
+      format.json { render json: { error: error }, status: status }
+      format.html { render_members_index_with_errors([ error ], status) }
+    end
+  end
+
+  def render_members_index_with_errors(errors, status)
+    @member_errors = errors
+    @memberships = membership_scope
+    @projects = active_projects
+    @users_by_sub = {}
+    render :index, status: status
+  end
+
   def clear_project_permissions_for_admin!(membership)
     return 0 unless membership.admin?
 
@@ -225,13 +299,22 @@ class MembersController < ApplicationController
   def set_organization
     @organization = Organization.find_by!(slug: params[:organization_slug])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    respond_to do |format|
+      format.json { render json: { error: "Not found" }, status: :not_found }
+      format.html { render "organizations/not_found", status: :not_found }
+    end
   end
 
   def set_membership
     @membership = @organization.org_memberships.find_by!(user_sub: params[:user_sub])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    respond_to do |format|
+      format.json { render json: { error: "Not found" }, status: :not_found }
+      format.html do
+        flash[:error] = "멤버를 찾을 수 없습니다."
+        redirect_to organization_members_path(@organization.slug), status: :see_other
+      end
+    end
   end
 
   # An admin being downgraded to a non-admin role counts as demotion.

@@ -1,0 +1,178 @@
+<% content_for :title, "#{@organization.name} members | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; <%= @organization.name %> &gt; 멤버 관리</div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">멤버 관리</h1>
+      <p class="page-description">Organization 역할과 Project 접근 권한을 관리합니다.</p>
+    </div>
+  </header>
+
+  <% if @member_errors.present? %>
+    <ul class="error-list">
+      <% @member_errors.each do |error| %>
+        <li><%= error %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <% if current_authorization.can?(:manage_org, @organization) %>
+    <section class="panel">
+      <header class="panel__header">
+        <h2 class="panel__title">멤버 추가</h2>
+      </header>
+
+      <%= form_with url: organization_members_path(@organization.slug),
+                    scope: :member,
+                    method: :post,
+                    class: "form form--wide",
+                    data: { controller: "role-permissions" } do |form| %>
+        <div class="form-grid">
+          <div class="field" data-controller="user-search" data-user-search-url-value="/users/search">
+            <%= label_tag :member_user_query, "사용자 검색" %>
+            <%= text_field_tag :member_user_query,
+                               nil,
+                               placeholder: "user@example.com",
+                               autocomplete: "off",
+                               data: {
+                                 user_search_target: "query",
+                                 action: "input->user-search#search"
+                               } %>
+            <%= form.hidden_field :user_sub, data: { user_search_target: "userSub" } %>
+            <div class="autocomplete-results" data-user-search-target="results"></div>
+          </div>
+
+          <div class="field">
+            <%= form.label :email, "또는 이메일 직접 입력" %>
+            <%= form.email_field :email, placeholder: "new-user@example.com" %>
+          </div>
+
+          <div class="field">
+            <%= form.label :role, "Org 권한" %>
+            <%= form.select :role,
+                            options_for_select(OrgMembership::ROLES, "write"),
+                            {},
+                            data: {
+                              role_permissions_target: "role",
+                              action: "change->role-permissions#toggle"
+                            } %>
+          </div>
+        </div>
+
+        <% if @projects.any? %>
+          <div class="field" data-role-permissions-target="permissions">
+            <span class="field__label">Project 접근 권한</span>
+            <div class="checkbox-grid">
+              <% @projects.each_with_index do |project, index| %>
+                <label class="checkbox-row">
+                  <%= check_box_tag "member[project_permissions][#{index}][project_slug]", project.slug, false %>
+                  <span>
+                    <strong><%= project.name %></strong>
+                    <small><%= project.app_id %></small>
+                  </span>
+                  <%= select_tag "member[project_permissions][#{index}][role]",
+                                 options_for_select(ProjectPermission::ROLES, "read") %>
+                </label>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
+        <div class="form-actions">
+          <%= form.submit "추가", class: "button" %>
+        </div>
+      <% end %>
+    </section>
+  <% end %>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">멤버 목록</h2>
+    </header>
+
+    <div class="member-list">
+      <% @memberships.each do |membership| %>
+        <% user = @users_by_sub[membership.user_sub] %>
+        <article class="member-row">
+          <div class="member-row__identity">
+            <strong><%= member_user_email(membership, user) %></strong>
+            <span><%= member_user_name(user) %></span>
+            <% if member_pending?(membership) %>
+              <span class="badge badge--muted">초대 대기 중</span>
+            <% end %>
+          </div>
+
+          <div class="member-row__role">
+            <% if current_authorization.can?(:manage_org, @organization) %>
+              <%= form_with url: organization_member_path(@organization.slug, membership.user_sub),
+                            scope: :member,
+                            method: :patch,
+                            class: "inline-form" do |form| %>
+                <%= form.select :role, options_for_select(OrgMembership::ROLES, membership.role) %>
+                <%= form.submit "저장", class: "button button--secondary" %>
+              <% end %>
+            <% else %>
+              <span class="badge"><%= membership.role %></span>
+            <% end %>
+          </div>
+
+          <% if current_authorization.can?(:manage_org, @organization) %>
+            <div class="member-row__actions">
+              <%= button_to "제거",
+                            organization_member_path(@organization.slug, membership.user_sub),
+                            method: :delete,
+                            class: "button button--ghost",
+                            data: { turbo_confirm: "멤버를 제거할까요?" } %>
+            </div>
+          <% end %>
+
+          <% if current_authorization.can?(:manage_org, @organization) && !membership.admin? %>
+            <div class="member-row__projects">
+              <h3>Project 권한</h3>
+              <% if @projects.any? %>
+                <div class="permission-list">
+                  <% @projects.each do |project| %>
+                    <% permission = project_permission_for(membership, project) %>
+                    <div class="permission-row">
+                      <span>
+                        <strong><%= project.name %></strong>
+                        <small><%= project.app_id %></small>
+                      </span>
+
+                      <% if permission %>
+                        <%= form_with url: organization_member_project_permission_path(@organization.slug, membership.user_sub, project.slug),
+                                      scope: :project_permission,
+                                      method: :patch,
+                                      class: "inline-form" do |form| %>
+                          <%= form.select :role, options_for_select(ProjectPermission::ROLES, permission.role) %>
+                          <%= form.submit "변경", class: "button button--secondary" %>
+                        <% end %>
+                        <%= button_to "해제",
+                                      organization_member_project_permission_path(@organization.slug, membership.user_sub, project.slug),
+                                      method: :delete,
+                                      class: "button button--ghost" %>
+                      <% else %>
+                        <%= form_with url: organization_member_project_permissions_path(@organization.slug, membership.user_sub),
+                                      scope: :project_permission,
+                                      method: :post,
+                                      class: "inline-form" do |form| %>
+                          <%= form.hidden_field :project_slug, value: project.slug %>
+                          <%= form.select :role, options_for_select(ProjectPermission::ROLES, "read") %>
+                          <%= form.submit "부여", class: "button button--secondary" %>
+                        <% end %>
+                      <% end %>
+                    </div>
+                  <% end %>
+                </div>
+              <% else %>
+                <p class="muted-text">Project가 없습니다.</p>
+              <% end %>
+            </div>
+          <% end %>
+        </article>
+      <% end %>
+    </div>
+  </section>
+</section>

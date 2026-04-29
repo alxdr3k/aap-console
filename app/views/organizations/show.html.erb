@@ -60,6 +60,7 @@
   <section class="panel">
     <header class="panel__header">
       <h2 class="panel__title">멤버 요약</h2>
+      <%= link_to "멤버 관리", organization_members_path(@organization.slug), class: "button button--secondary" %>
     </header>
 
     <div class="summary-grid">
