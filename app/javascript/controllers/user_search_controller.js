@@ -6,6 +6,7 @@ export default class extends Controller {
 
   connect() {
     this.timer = null
+    this.latestQuery = ""
   }
 
   search() {
@@ -13,6 +14,7 @@ export default class extends Controller {
     this.userSubTarget.value = ""
 
     const query = this.queryTarget.value.trim()
+    this.latestQuery = query
     if (query.length < 2) {
       this.resultsTarget.replaceChildren()
       return
@@ -31,6 +33,7 @@ export default class extends Controller {
   }
 
   clearSelection() {
+    this.latestQuery = ""
     this.userSubTarget.value = ""
     this.queryTarget.value = ""
     this.resultsTarget.replaceChildren()
@@ -42,7 +45,11 @@ export default class extends Controller {
 
     fetch(url, { headers: { Accept: "application/json" } })
       .then((response) => (response.ok ? response.json() : { users: [] }))
-      .then((payload) => this.renderResults(payload.users || []))
+      .then((payload) => {
+        if (this.latestQuery === query && this.queryTarget.value.trim() === query) {
+          this.renderResults(payload.users || [])
+        }
+      })
   }
 
   renderResults(users) {
