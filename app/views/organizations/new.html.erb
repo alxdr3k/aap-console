@@ -10,33 +10,12 @@
     </div>
   </header>
 
-  <%= form_with model: @organization, url: organizations_path, class: "form" do |form| %>
-    <% if @errors.present? %>
-      <ul class="error-list">
-        <% @errors.each do |error| %>
-          <li><%= error %></li>
-        <% end %>
-      </ul>
-    <% end %>
-
-    <div class="field">
-      <%= form.label :name, "이름" %>
-      <%= form.text_field :name, required: true, autofocus: true %>
-    </div>
-
-    <div class="field">
-      <%= form.label :description, "설명" %>
-      <%= form.textarea :description %>
-    </div>
-
-    <div class="field">
-      <%= form.label :initial_admin_user_sub, "초기 관리자 user_sub" %>
-      <%= form.text_field :initial_admin_user_sub %>
-    </div>
-
-    <div class="form-actions">
-      <%= link_to "취소", organizations_path, class: "button button--ghost" %>
-      <%= form.submit "생성", class: "button" %>
-    </div>
-  <% end %>
+  <%= render "form",
+             organization: @organization,
+             form_url: organizations_path,
+             form_method: :post,
+             cancel_path: organizations_path,
+             submit_label: "생성",
+             errors: @errors,
+             include_initial_admin: true %>
 </section>

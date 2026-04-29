@@ -1,0 +1,21 @@
+<% content_for :title, "#{@organization.name} edit | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; <%= @organization.name %> &gt; 편집</div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">Organization 편집</h1>
+      <p class="page-description">Organization 이름과 설명을 수정합니다.</p>
+    </div>
+  </header>
+
+  <%= render "form",
+             organization: @organization,
+             form_url: organization_path(@organization.slug),
+             form_method: :patch,
+             cancel_path: organization_path(@organization.slug),
+             submit_label: "저장",
+             errors: @errors,
+             include_initial_admin: false %>
+</section>

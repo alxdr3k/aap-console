@@ -17,7 +17,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
 - active tracks: `UI`, `SEC`
 - active phases: `UI-5A`, `UI-5B`, `UI-5C`, `SEC-5B`
-- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, and `UI-5A.1` landed; next candidates are `UI-5A.2`, `UI-5A.3`, `UI-5A.4`
+- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, and `UI-5A.2` landed; next candidates are `UI-5A.3`, `UI-5A.4`, `UI-5B.1`
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
 - next gates: `AC-014`, `AC-015`, `AC-016`
@@ -44,6 +44,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - `CORE-5A.2` landed: member create validates/pre-assigns users through Keycloak, member list can hydrate Keycloak user details, project permission grant/update/revoke API is present, and member/project-permission audit logs are covered.
 - `CORE-5A.3` landed: organization delete starts/observes child project delete jobs, records pending project/job summaries, and finalizes Langfuse/Console org deletion once all projects are deleted.
 - `UI-5A.1` landed: importmap/Turbo/Stimulus asset baseline, application shell, navigation, flash UI, Organization index/detail shell empty states, and super_admin create affordance are present.
+- `UI-5A.2` landed: Organization list/detail/new/edit ERB pages share a form partial, preserve JSON defaults for API-like requests, and render role-aware edit/delete actions and HTML 404/error states.
 
 ## Planned
 
@@ -62,7 +63,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 ## Current Priorities
 
-1. `UI-5A.2`~`UI-5A.4`로 Organization detail, member management, Project pages를 구현한다.
+1. `UI-5A.3`~`UI-5A.4`로 member management와 Project pages를 구현한다.
 2. `UI-5B.*` / `SEC-5B.1`로 provisioning detail/secret reveal을 구현한다.
 3. `UI-5C.*`로 auth/LiteLLM/config-version UI를 제품화한다.
 

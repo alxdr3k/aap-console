@@ -153,6 +153,17 @@ textarea {
   font-size: 14px;
 }
 
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.page-actions form {
+  margin: 0;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
@@ -472,6 +483,10 @@ textarea {
 
   .page-header {
     display: grid;
+  }
+
+  .page-actions {
+    justify-content: flex-start;
   }
 
   .table-list__row,
