@@ -14,7 +14,7 @@ Question, decision, requirement, acceptance gate, test, slice를 연결한다.
 | `TRACE-006` | `Q-001` | pending | FR-4 | `AC-011` | `AUTH-4A.1`, `AUTH-4A.2` | SAML/OAuth/PAK scope decision |
 | `TRACE-007` |  | `DEC-001` | DOC-M1 | `AC-DOC-001` | `DOC-1A.2`, `DOC-1A.3`, `DOC-1A.4` | Roadmap/status taxonomy and maintenance drift workflow migration |
 | `TRACE-008` |  | `DEC-002` | DOC-M1 | `AC-DOC-001` | `DOC-1A.1` | Numbered PRD/HLD canonical paths |
-| `TRACE-009` |  | pending | FR-9 | `AC-009` | `OPS-3A.2` | Health check detail spike |
+| `TRACE-009` |  | pending | FR-9 | `AC-009` / `TEST-009` | `OPS-3A.2` | Health check verifies Keycloak, LiteLLM Config Server, and Langfuse read paths |
 | `TRACE-010` |  | pending | FR-8 | `AC-010` | `OPS-3A.3` | Config rollback external restore gap |
 | `TRACE-011` |  | pending | OPS retention | `AC-013` / `TEST-013` | `OPS-3A.4` | Provisioning job retention cleanup |
 
@@ -26,5 +26,5 @@ Question, decision, requirement, acceptance gate, test, slice를 연결한다.
 
 ## Gaps
 
-- `AC-009`, `AC-010`, `AC-011`, `AC-012`, `AC-013`는 아직 passing gate가 아니다.
+- `AC-010`, `AC-011`, `AC-012`, `AC-013`는 아직 passing gate가 아니다.
 - `Q-001`, `Q-002`는 decision으로 승격되지 않았다.
