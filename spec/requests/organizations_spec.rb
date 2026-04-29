@@ -169,6 +169,23 @@ RSpec.describe "Organizations", type: :request do
       get "/organizations/#{other_org.slug}"
       expect(response).to have_http_status(:forbidden)
     end
+
+    it "keeps JSON 404 for wildcard Accept" do
+      get "/organizations/missing", headers: { "ACCEPT" => "*/*" }
+
+      expect(response).to have_http_status(:not_found)
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body).to eq("error" => "Not found")
+    end
+
+    it "renders the not found shell for HTML" do
+      get "/organizations/missing", headers: { "ACCEPT" => "text/html" }
+
+      expect(response).to have_http_status(:not_found)
+      expect(response.media_type).to eq("text/html")
+      expect(response.body).to include("AAP Console")
+      expect(response.body).to include("Organization을 찾을 수 없습니다.")
+    end
   end
 
   describe "PATCH /organizations/:slug" do

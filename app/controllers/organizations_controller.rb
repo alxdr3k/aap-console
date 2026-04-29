@@ -17,7 +17,7 @@ class OrganizationsController < ApplicationController
     @projects = current_authorization.accessible_projects(@organization).order(:name)
     @member_counts = @organization.org_memberships.group(:role).count
 
-    return render json: @organization if default_organization_detail_json_request?
+    return render json: @organization if default_organization_json_request?
 
     respond_to do |format|
       format.html
@@ -95,14 +95,19 @@ class OrganizationsController < ApplicationController
   def set_organization
     @organization = Organization.find_by!(slug: params[:slug])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    return render json: { error: "Not found" }, status: :not_found if default_organization_json_request?
+
+    respond_to do |format|
+      format.html { render :not_found, status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
   end
 
   def organization_params
     params.require(:organization).permit(:name, :description, :initial_admin_user_sub)
   end
 
-  def default_organization_detail_json_request?
+  def default_organization_json_request?
     return false if params[:format].present?
 
     accept_header = request.get_header("HTTP_ACCEPT").to_s.strip

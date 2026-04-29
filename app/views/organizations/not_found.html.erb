@@ -1,0 +1,17 @@
+<% content_for :title, "Organization not found | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; Organizations</div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">Organization을 찾을 수 없습니다.</h1>
+      <p class="page-description">요청한 Organization이 없거나 삭제되었습니다.</p>
+    </div>
+  </header>
+
+  <%= render "shared/empty_state",
+             title: "Organization이 없습니다.",
+             body: "URL을 확인하거나 접근 가능한 Organization 목록으로 돌아가세요.",
+             action: link_to("Organizations로 이동", organizations_path, class: "button") %>
+</section>
