@@ -14,6 +14,7 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
       }.to have_enqueued_job(described_class)
 
       expect(organization.reload).to be_present
+      expect(organization.destroy_finalizer_reserved_until).to be_future
     end
 
     it "finalizes organization deletion after all projects are deleted" do
@@ -66,6 +67,7 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
         described_class.perform_now(organization.id, current_user_sub: user_sub)
       }.not_to have_enqueued_job(described_class)
 
+      expect(organization.reload.destroy_finalizer_reserved_until).to be_nil
       expect(Rails.logger).to have_received(:error).with(/blocked-project:provision_failed/)
     end
 
@@ -77,6 +79,7 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
         described_class.perform_now(organization.id, current_user_sub: user_sub)
       }.not_to have_enqueued_job(described_class)
 
+      expect(organization.reload.destroy_finalizer_reserved_until).to be_nil
       expect(Rails.logger).to have_received(:error).with(/stalled-project:deleting/)
     end
   end

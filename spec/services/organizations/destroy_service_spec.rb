@@ -75,7 +75,7 @@ RSpec.describe Organizations::DestroyService do
       end
 
       it "does not enqueue duplicate finalizers for the same organization" do
-        OrganizationDestroyFinalizeJob.enqueue_once(organization.id, current_user_sub: user_sub)
+        OrganizationDestroyFinalizeJob.enqueue_once(organization, current_user_sub: user_sub)
 
         expect {
           described_class.new(organization: organization, current_user_sub: user_sub).call
