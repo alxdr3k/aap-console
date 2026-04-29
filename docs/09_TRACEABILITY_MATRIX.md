@@ -28,7 +28,7 @@ Question, decision, requirement, acceptance gate, test, slice를 연결한다.
 | `TRACE-020` | `Q-003` | pending | Admin observability | `AC-021` / `TEST-021` | `ADMIN-8A.1`, `ADMIN-8A.2`, `ADMIN-8A.3` | Super-admin dashboard scope must be decided before implementation |
 | `TRACE-021` |  | SPIKE-002 | FR-8 full rollback | `AC-022` / `TEST-022` | `OPS-7A.5` | Current rollback diagnoses non-snapshotted Keycloak/Langfuse state; full final-product rollback remains planned |
 | `TRACE-022` |  |  | FR-1 | `AC-001` / `TEST-001` | `CORE-1A.1` | Organization baseline CRUD accepted; product completion gaps continue in `CORE-5A.*` / `UI-5A.*` |
-| `TRACE-023` |  |  | FR-3 | `AC-003` / `TEST-003` | `CORE-1A.3` | Project baseline CRUD and provisioning job creation accepted; product UI continues in `UI-5A.4` |
+| `TRACE-023` |  |  | FR-3 | `AC-003` / `TEST-003` | `CORE-1A.3`, `UI-5A.4` | Project baseline CRUD, provisioning job creation, and product list/detail/create/delete UI landed |
 | `TRACE-024` |  | ADR-003 | FR-4 OIDC | `AC-004` / `TEST-004` | `INTEG-2A.1` | OIDC Keycloak client provisioning accepted; auth expansion continues in `AUTH-4A.*` / `AUTH-6A.*` |
 
 ## Invariants

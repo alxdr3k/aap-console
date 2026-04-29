@@ -22,7 +22,7 @@ Rails.application.routes.draw do
 
     resources :members, param: :user_sub, only: [ :index, :create, :update, :destroy ]
 
-    resources :projects, param: :slug do
+    resources :projects, param: :slug, only: [ :index, :new, :create, :show, :update, :destroy ] do
       resource  :auth_config,    only: [ :show, :update ]
       resource  :litellm_config, only: [ :show, :update ]
       resources :config_versions, only: [ :index ]

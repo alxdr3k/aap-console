@@ -60,7 +60,9 @@ module Projects
           provisioning_job.id,
           auth_type: @params[:auth_type],
           models: @params[:models],
+          guardrails: @params[:guardrails],
           s3_retention_days: @params[:s3_retention_days],
+          redirect_uris: @params[:redirect_uris],
           current_user_sub: @current_user_sub
         )
       end

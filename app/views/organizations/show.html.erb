@@ -29,6 +29,12 @@
   <section class="panel">
     <header class="panel__header">
       <h2 class="panel__title">Projects</h2>
+      <div class="page-actions">
+        <%= link_to "전체 보기", organization_projects_path(@organization.slug), class: "button button--secondary" %>
+        <% if current_authorization.can?(:manage_org, @organization) %>
+          <%= link_to "새 Project", new_organization_project_path(@organization.slug), class: "button" %>
+        <% end %>
+      </div>
     </header>
 
     <% if @projects.any? %>
@@ -39,17 +45,18 @@
           <span>상태</span>
         </div>
         <% @projects.each do |project| %>
-          <div class="table-list__row">
-            <span><%= project.name %></span>
+          <%= link_to organization_project_path(@organization.slug, project.slug), class: "table-list__row table-list__row--link" do %>
+            <span><strong><%= project.name %></strong></span>
             <span><%= project.app_id %></span>
-            <span><%= project.status %></span>
-          </div>
+            <span class="<%= project_status_badge_class(project) %>"><%= project.status %></span>
+          <% end %>
         <% end %>
       </div>
     <% elsif current_authorization.can?(:manage_org, @organization) %>
       <%= render "shared/empty_state",
                  title: "Project가 없습니다.",
-                 body: "Project 생성 화면은 다음 UI leaf에서 연결됩니다." %>
+                 body: "새 Project를 생성하여 프로비저닝을 시작하세요.",
+                 action: link_to("새 Project 생성", new_organization_project_path(@organization.slug), class: "button") %>
     <% else %>
       <%= render "shared/empty_state",
                  title: "접근 가능한 Project가 없습니다.",
