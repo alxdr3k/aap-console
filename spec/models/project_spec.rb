@@ -30,6 +30,15 @@ RSpec.describe Project, type: :model do
       expect(project).not_to be_valid
       expect(project.errors[:slug]).to include("is reserved")
     end
+
+    it "allows preexisting route-reserved slugs to remain operable on update" do
+      project = create(:project, :active)
+      project.update_column(:slug, "new")
+
+      expect {
+        project.update!(status: :deleting)
+      }.to change { project.reload.status }.from("active").to("deleting")
+    end
   end
 
   describe "app_id generation resilience" do

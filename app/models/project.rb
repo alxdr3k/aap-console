@@ -20,9 +20,8 @@ class Project < ApplicationRecord
   }
 
   validates :name, presence: true, length: { minimum: 2, maximum: 100 }
-  validates :slug, presence: true,
-                   uniqueness: { scope: :organization_id },
-                   exclusion: { in: RESERVED_SLUGS }
+  validates :slug, presence: true, uniqueness: { scope: :organization_id }
+  validates :slug, exclusion: { in: RESERVED_SLUGS }, on: :create
   validates :app_id, presence: true, uniqueness: true
 
   before_validation :generate_app_id, on: :create, if: -> { app_id.blank? }
