@@ -94,6 +94,16 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(body.fetch("revoked_at")).to be_present
       expect(ProjectApiKey.exists?(project_api_key.id)).to be(true)
     end
+
+    it "does not write duplicate revoke audit events for an already revoked PAK" do
+      project_api_key.update!(revoked_at: Time.current)
+
+      expect {
+        delete "#{path}/#{project_api_key.id}"
+      }.not_to change { AuditLog.where(action: "project_api_key.revoke").count }
+
+      expect(response).to have_http_status(:ok)
+    end
   end
 
   def grant_project_role(role)

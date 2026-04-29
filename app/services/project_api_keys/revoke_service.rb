@@ -7,8 +7,13 @@ module ProjectApiKeys
     end
 
     def call
-      unless project_api_key.revoked?
-        project_api_key.update!(revoked_at: Time.current)
+      revoked_at = Time.current
+      updated = ProjectApiKey
+                .where(id: project_api_key.id, revoked_at: nil)
+                .update_all(revoked_at: revoked_at, updated_at: revoked_at)
+
+      if updated == 1
+        project_api_key.reload
         audit!("project_api_key.revoke")
       end
 

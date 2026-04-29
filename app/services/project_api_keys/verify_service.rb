@@ -9,15 +9,20 @@ module ProjectApiKeys
     def call
       return Result.failure("Token is required") if token.blank?
 
-      project_api_key = ProjectApiKey
-                        .active
-                        .includes(project: :organization)
-                        .joins(:project)
-                        .where(projects: { status: Project.statuses.values_at(*VERIFIABLE_PROJECT_STATUSES) })
-                        .find_by(token_digest: ProjectApiKey.digest_token(token))
-      return Result.failure("Invalid token") unless project_api_key
+      digest = ProjectApiKey.digest_token(token)
+      verified_at = Time.current
+      updated = ProjectApiKey
+                .active
+                .joins(:project)
+                .where(token_digest: digest)
+                .where(projects: { status: Project.statuses.values_at(*VERIFIABLE_PROJECT_STATUSES) })
+                .update_all(last_used_at: verified_at, updated_at: verified_at)
+      return Result.failure("Invalid token") unless updated == 1
 
-      project_api_key.update_columns(last_used_at: Time.current)
+      project_api_key = ProjectApiKey
+                        .includes(project: :organization)
+                        .find_by!(token_digest: digest)
+
       Result.success(project_api_key)
     end
 
