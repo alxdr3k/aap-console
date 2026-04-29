@@ -13,11 +13,13 @@ export default class extends Controller {
   }
 
   connect() {
+    this.disconnecting = false
     this.polling = false
     this.startSubscription()
   }
 
   disconnect() {
+    this.disconnecting = true
     this.stopPolling()
     if (this.subscription) this.subscription.unsubscribe()
     if (this.consumer) this.consumer.disconnect()
@@ -108,6 +110,8 @@ export default class extends Controller {
   }
 
   usePollingFallback() {
+    if (this.disconnecting) return
+
     this.updateConnection("polling")
     this.startPolling()
   }
