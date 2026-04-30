@@ -81,6 +81,73 @@ module ApplicationHelper
     entries.join(", ")
   end
 
+  def config_version_change_badge_class(config_version)
+    case config_version.change_type
+    when "create"
+      "badge"
+    when "update"
+      "badge badge--warning"
+    when "delete"
+      "badge badge--danger"
+    when "rollback"
+      "badge badge--muted"
+    else
+      "badge badge--muted"
+    end
+  end
+
+  def config_diff_line_class(line)
+    case line.kind
+    when :meta
+      "diff-view__line diff-view__line--meta"
+    when :added
+      "diff-view__line diff-view__line--added"
+    when :removed
+      "diff-view__line diff-view__line--removed"
+    else
+      "diff-view__line"
+    end
+  end
+
+  def config_diagnostic_badge_class(status)
+    case status.to_s
+    when "restored"
+      "badge"
+    when "failed"
+      "badge badge--danger"
+    when "not_applicable_no_snapshot", "not_started"
+      "badge badge--muted"
+    else
+      "badge badge--warning"
+    end
+  end
+
+  def config_diagnostic_label(status)
+    case status.to_s
+    when "restored"
+      "restored"
+    when "failed"
+      "failed"
+    when "not_applicable_no_snapshot"
+      "snapshot 없음"
+    when "not_started"
+      "시작 안 됨"
+    else
+      status.to_s
+    end
+  end
+
+  def rollback_result_badge_class(status)
+    case status.to_s
+    when "completed"
+      "badge"
+    when "blocked"
+      "badge badge--warning"
+    else
+      "badge badge--danger"
+    end
+  end
+
   def short_datetime(value)
     value&.strftime("%Y-%m-%d %H:%M") || "-"
   end

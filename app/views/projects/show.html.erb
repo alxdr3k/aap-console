@@ -182,7 +182,9 @@
   <section class="panel">
     <header class="panel__header">
       <h2 class="panel__title">변경 이력</h2>
-      <span class="button button--disabled">전체 이력 준비 중</span>
+      <%= link_to "전체 이력 보기",
+                  organization_project_config_versions_path(@organization.slug, @project.slug),
+                  class: "button button--secondary" %>
     </header>
 
     <% if @config_versions.any? %>

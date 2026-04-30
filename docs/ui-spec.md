@@ -856,9 +856,9 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 
 **롤백 실행 후 동작**:
 1. [이 버전으로 롤백] 클릭 → 위험 액션 확인 모달 (6.2절): "v{N} 버전으로 롤백하면 현재 설정이 교체됩니다. 진행하시겠습니까?"
-2. 확인 → Keycloak Client 설정 복구 + Langfuse 설정 복구 + Config Server revert API 호출을 포함하는 프로비저닝 Job 자동 생성
-3. 프로비저닝 현황 페이지(8.7, update 유형)로 리다이렉트 — 실시간 진행 상태 표시
-4. 완료 시 Project 상세로 이동 가능
+2. 확인 → 현재 구현은 `ConfigVersions::RollbackService`를 동기 실행하여 Config Server revert API를 호출하고 rollback `ConfigVersion` + audit log를 기록한다
+3. 같은 변경 이력 페이지로 돌아와 rollback 결과 배너와 diagnostics(Config Server restored 여부, Keycloak/Langfuse snapshot 부재)를 표시한다
+4. 별도 프로비저닝 Job이나 실시간 진행 화면은 만들지 않는다. full external restore flow는 후속 `OPS-7A.5` 범위다
 
 ### 8.10 Playground — FR-10 (Phase 4)
 

@@ -1,0 +1,33 @@
+<% content_for :title, "Config Version | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">
+    Console &gt;
+    <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
+    <%= link_to @project.name, organization_project_path(@organization.slug, @project.slug) %> &gt;
+    <%= link_to "변경 이력", organization_project_config_versions_path(@organization.slug, @project.slug, version_id: @config_version.id) %> &gt;
+    <%= @config_version.version_id %>
+  </div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title"><%= @config_version.version_id %></h1>
+      <p class="page-description"><%= @project.name %> config snapshot과 diff를 확인합니다.</p>
+    </div>
+
+    <div class="page-actions">
+      <%= link_to "변경 이력으로 돌아가기",
+                  organization_project_config_versions_path(@organization.slug, @project.slug, version_id: @config_version.id),
+                  class: "button button--secondary" %>
+    </div>
+  </header>
+
+  <%= turbo_frame_tag "config-version-detail" do %>
+    <%= render "detail_panel",
+               config_version: @config_version,
+               comparison_config_version: @comparison_config_version,
+               diff_lines: @diff_lines,
+               can_write_project: @can_write_project,
+               active_provisioning_job: @active_provisioning_job %>
+  <% end %>
+</section>

@@ -1,0 +1,76 @@
+<section class="panel">
+  <header class="panel__header">
+    <h2 class="panel__title">변경 상세</h2>
+    <span class="<%= config_version_change_badge_class(config_version) %>"><%= config_version.change_type %></span>
+  </header>
+
+  <section class="summary-grid summary-grid--four">
+    <div class="summary-item">
+      <span class="summary-item__label">Version</span>
+      <strong class="summary-item__value summary-item__value--code"><%= config_version.version_id %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Changed At</span>
+      <strong class="summary-item__value summary-item__value--time"><%= short_datetime(config_version.created_at) %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Changed By</span>
+      <strong class="summary-item__value summary-item__value--time"><%= config_version.changed_by_sub %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Compare To</span>
+      <strong class="summary-item__value summary-item__value--time"><%= comparison_config_version&.version_id || "empty" %></strong>
+    </div>
+  </section>
+
+  <dl class="details-list">
+    <div>
+      <dt>Change Summary</dt>
+      <dd><%= config_version.change_summary.presence || config_version.change_type %></dd>
+    </div>
+    <div>
+      <dt>Models</dt>
+      <dd><%= project_list_value(config_version.snapshot&.fetch("models", nil) || config_version.snapshot&.fetch(:models, nil)) %></dd>
+    </div>
+    <div>
+      <dt>Guardrails</dt>
+      <dd><%= project_list_value(config_version.snapshot&.fetch("guardrails", nil) || config_version.snapshot&.fetch(:guardrails, nil), fallback: "없음") %></dd>
+    </div>
+    <div>
+      <dt>S3 Retention</dt>
+      <dd><%= project_snapshot_value(config_version.snapshot, "s3_retention_days") %></dd>
+    </div>
+    <div>
+      <dt>S3 Path</dt>
+      <dd><%= project_snapshot_value(config_version.snapshot, "s3_path") %></dd>
+    </div>
+  </dl>
+
+  <section class="form-section">
+    <h3 class="form-section__title">Snapshot Diff</h3>
+    <pre class="diff-view"><% diff_lines.each do |line| %><span class="<%= config_diff_line_class(line) %>"><%= line.text %></span>
+<% end %></pre>
+  </section>
+
+  <section class="form-section">
+    <h3 class="form-section__title">Rollback</h3>
+    <p class="muted-text">현재 rollback은 즉시 실행된다. Config Server는 복구하고 Keycloak/Langfuse는 snapshot 유무를 diagnostics로만 표시한다.</p>
+
+    <% if can_write_project %>
+      <% if active_provisioning_job %>
+        <span class="button button--disabled" title="진행 중인 프로비저닝 작업이 끝난 뒤 롤백할 수 있습니다.">진행 중인 작업으로 롤백 대기</span>
+      <% else %>
+        <%= button_to "이 버전으로 롤백",
+                      rollback_config_version_path(config_version),
+                      method: :post,
+                      class: "button button--ghost",
+                      form: { data: { turbo_frame: "_top" } },
+                      data: {
+                        turbo_confirm: "#{config_version.version_id} 버전으로 현재 LiteLLM 설정을 즉시 교체합니다. 계속하시겠습니까?"
+                      } %>
+      <% end %>
+    <% else %>
+      <span class="badge badge--muted">write 권한 필요</span>
+    <% end %>
+  </section>
+</section>

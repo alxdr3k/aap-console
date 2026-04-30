@@ -17,7 +17,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
 - active tracks: `UI`
 - active phases: `UI-5A`, `UI-5B`, `UI-5C`
-- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1`, `UI-5C.1`, and `UI-5C.2` landed; next candidate is `UI-5C.3`
+- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1`, `UI-5C.1`, `UI-5C.2`, and `UI-5C.3` landed; next candidate is `AUTH-6A.1`
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
 - next gates: `AC-014`, `AC-015`, `AC-016`
@@ -29,7 +29,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - Project create/update/delete용 provisioning job seeding.
 - Parallel step group, scheduled retry, rollback, warning step handling을 가진 provisioning orchestrator.
 - Keycloak OIDC client path, Langfuse project create path, Config Server apply/delete path.
-- Config version listing과 rollback entry point. `POST /config_versions/:id/rollback`는 Config Server revert, rollback `ConfigVersion` 기록, Keycloak/Langfuse diagnostics를 반환한다.
+- Config version browser page, inline diff/detail view, and rollback diagnostics UI. `POST /config_versions/:id/rollback`는 Config Server revert, rollback `ConfigVersion` 기록, Keycloak/Langfuse diagnostics를 반환하고 browser flow는 같은 history page로 되돌린다.
 - Authorization check와 JSON `step_update` / `job_completed` payload를 포함한 ActionCable `ProvisioningChannel`.
 - Core request, model, service, job, client, channel path에 대한 RSpec/WebMock coverage.
 - `OPS-3A.1` release smoke validation accepted on 2026-04-29.
@@ -53,6 +53,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - `SEC-5B.1` landed: OIDC client secrets are written only to 10-minute `Rails.cache`, served by authorized completed-job fetch, and displayed with masked/copy/confirm UX on the provisioning page.
 - `UI-5C.1` landed: auth config browser page renders OIDC redirect/post-logout URI editing, write-gated Client Secret regeneration with masked/copy/confirm reveal, project-detail link-through, and disabled SAML/OAuth/PAK placeholders while keeping JSON compatibility.
 - `UI-5C.2` landed: LiteLLM config browser page renders model/guardrail/S3 retention editing, read-only summary for readers, HTML provisioning redirects, basic form validation, and JSON compatibility.
+- `UI-5C.3` landed: config-version browser page renders version history, Turbo Frame detail/diff view, synchronous rollback entry with diagnostics banner, Project-detail link-through, and JSON compatibility.
 
 ## Planned
 
@@ -71,8 +72,8 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 ## Current Priorities
 
-1. `UI-5C.3`로 config-version UI를 제품화한다.
-2. `AUTH-6A.3`에서 PAK one-time reveal UI를 확장한다.
+1. `AUTH-6A.1`로 SAML metadata UI와 validation 범위를 제품화한다.
+2. `AUTH-6A.2`와 `AUTH-6A.3`의 sequencing을 정리하고 PAK reveal/UI gaps를 줄인다.
 3. `OPS-7A.*`와 `PLAY-8A.*`의 ready 조건을 계속 추적한다.
 
 ## Current Risks / Unknowns

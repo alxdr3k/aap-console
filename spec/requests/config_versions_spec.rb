@@ -4,6 +4,8 @@ RSpec.describe "ConfigVersions", type: :request do
   let(:user_sub) { "user-sub-123" }
   let!(:org) { create(:organization) }
   let!(:project) { create(:project, :active, organization: org) }
+  let(:wildcard_headers) { { "ACCEPT" => "*/*" } }
+  let(:html_headers) { { "ACCEPT" => "text/html" } }
   let!(:config_version) do
     create(:config_version, project: project, version_id: "v1", change_type: "create",
            changed_by_sub: user_sub, snapshot: { models: [ "gpt-4" ] })
@@ -17,9 +19,40 @@ RSpec.describe "ConfigVersions", type: :request do
       create(:project_permission, org_membership: membership, project: project, role: "read")
     end
 
+    let!(:previous_version) do
+      create(:config_version,
+             project: project,
+             version_id: "v0",
+             change_type: "create",
+             changed_by_sub: user_sub,
+             snapshot: { models: [ "claude-sonnet" ] },
+             created_at: 1.day.ago)
+    end
+
     it "returns 200 with version list" do
       get "/organizations/#{org.slug}/projects/#{project.slug}/config_versions"
       expect(response).to have_http_status(:ok)
+    end
+
+    it "preserves the JSON default for API-like history requests" do
+      get "/organizations/#{org.slug}/projects/#{project.slug}/config_versions", headers: wildcard_headers
+
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body.first["version_id"]).to eq(config_version.version_id)
+    end
+
+    it "renders the browser config history page with diff and rollback context" do
+      get "/organizations/#{org.slug}/projects/#{project.slug}/config_versions", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("변경 이력")
+      expect(response.body).to include("동기 실행")
+      expect(response.body).to include(config_version.version_id)
+      expect(response.body).to include(previous_version.version_id)
+      expect(response.body).to include("Snapshot Diff")
+      expect(response.body).to include("--- v0")
+      expect(response.body).to include("+++ v1")
+      expect(response.body).to include("write 권한 필요")
     end
 
     it "returns 403 without project permission" do
@@ -35,9 +68,29 @@ RSpec.describe "ConfigVersions", type: :request do
       create(:project_permission, org_membership: membership, project: project, role: "read")
     end
 
+    let!(:previous_version) do
+      create(:config_version,
+             project: project,
+             version_id: "v0",
+             change_type: "create",
+             changed_by_sub: user_sub,
+             snapshot: { models: [ "claude-sonnet" ] },
+             created_at: 1.day.ago)
+    end
+
     it "returns 200 with version details" do
       get "/config_versions/#{config_version.id}"
       expect(response).to have_http_status(:ok)
+    end
+
+    it "renders the browser detail page for turbo frame and direct navigation" do
+      get "/config_versions/#{config_version.id}", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("config-version-detail")
+      expect(response.body).to include("변경 이력으로 돌아가기")
+      expect(response.body).to include("--- v0")
+      expect(response.body).to include("+++ v1")
     end
 
     it "returns 403 when no project permission" do
@@ -59,7 +112,7 @@ RSpec.describe "ConfigVersions", type: :request do
       stub_config_server_revert_changes(version: "v-rollback-1")
 
       expect {
-        post "/config_versions/#{config_version.id}/rollback"
+        post "/config_versions/#{config_version.id}/rollback", headers: wildcard_headers
       }.to change(ConfigVersion, :count).by(1)
 
       expect(response).to have_http_status(:ok)
@@ -84,7 +137,7 @@ RSpec.describe "ConfigVersions", type: :request do
       stub_config_server_revert_changes(version: "v-rollback-1")
 
       expect {
-        post "/config_versions/#{config_version.id}/rollback"
+        post "/config_versions/#{config_version.id}/rollback", headers: wildcard_headers
       }.not_to have_enqueued_job(ProvisioningExecuteJob)
     end
 
@@ -92,7 +145,7 @@ RSpec.describe "ConfigVersions", type: :request do
       stub_config_server_revert_changes(version: "v-rollback-1")
 
       expect {
-        post "/config_versions/#{config_version.id}/rollback"
+        post "/config_versions/#{config_version.id}/rollback", headers: wildcard_headers
       }.to change { AuditLog.where(action: "config.rollback.completed").count }.by(1)
     end
 
@@ -108,7 +161,7 @@ RSpec.describe "ConfigVersions", type: :request do
           }
         end
 
-      2.times { post "/config_versions/#{config_version.id}/rollback" }
+      2.times { post "/config_versions/#{config_version.id}/rollback", headers: wildcard_headers }
 
       expect(idempotency_keys.size).to eq(2)
       expect(idempotency_keys.uniq.size).to eq(2)
@@ -118,7 +171,7 @@ RSpec.describe "ConfigVersions", type: :request do
       stub_config_server_revert_changes(version: "v-rollback-same")
 
       expect {
-        2.times { post "/config_versions/#{config_version.id}/rollback" }
+        2.times { post "/config_versions/#{config_version.id}/rollback", headers: wildcard_headers }
       }.to change { ConfigVersion.where(project: project, version_id: "v-rollback-same", change_type: "rollback").count }.by(2)
     end
 
@@ -126,7 +179,7 @@ RSpec.describe "ConfigVersions", type: :request do
       create(:provisioning_job, :in_progress, project: project)
 
       expect {
-        post "/config_versions/#{config_version.id}/rollback"
+        post "/config_versions/#{config_version.id}/rollback", headers: wildcard_headers
       }.to change { AuditLog.where(action: "config.rollback.blocked").count }.by(1)
 
       expect(response).to have_http_status(:conflict)
@@ -134,17 +187,53 @@ RSpec.describe "ConfigVersions", type: :request do
       expect(a_request(:post, "#{ConfigServerMock::ADMIN_BASE}/changes/revert")).not_to have_been_made
     end
 
+    it "redirects browser rollback back to history and shows diagnostics" do
+      stub_config_server_revert_changes(version: "v-rollback-1")
+
+      post "/config_versions/#{config_version.id}/rollback", headers: html_headers
+
+      rollback_version = project.config_versions.order(:created_at).last
+      expect(response).to redirect_to(
+        organization_project_config_versions_path(org.slug, project.slug, version_id: rollback_version.id)
+      )
+
+      follow_redirect!
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("최근 롤백 결과")
+      expect(response.body).to include("v-rollback-1 버전으로 롤백되었습니다.")
+      expect(response.body).to include("snapshot 없음")
+      expect(response.body).to include("Config Server")
+    end
+
     it "returns 502 and records a failed audit log when Config Server revert fails" do
       stub_config_server_revert_changes_failure(status: 500)
 
       expect {
-        post "/config_versions/#{config_version.id}/rollback"
+        post "/config_versions/#{config_version.id}/rollback", headers: wildcard_headers
       }.to change { AuditLog.where(action: "config.rollback.failed").count }.by(1)
 
       expect(response).to have_http_status(:bad_gateway)
       body = JSON.parse(response.body)
       expect(body["status"]).to eq("failed")
       expect(body["diagnostics"]).to include("config_server" => "failed")
+    end
+
+    it "redirects browser rollback failures back to history with diagnostics" do
+      stub_config_server_revert_changes_failure(status: 500)
+
+      post "/config_versions/#{config_version.id}/rollback", headers: html_headers
+
+      expect(response).to redirect_to(
+        organization_project_config_versions_path(org.slug, project.slug, version_id: config_version.id)
+      )
+
+      follow_redirect!
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("최근 롤백 결과")
+      expect(response.body).to include("Config Server rollback failed")
+      expect(response.body).to include("failed")
     end
 
     it "returns 403 for read-only member" do
@@ -154,7 +243,7 @@ RSpec.describe "ConfigVersions", type: :request do
       read_membership = create(:org_membership, organization: org, user_sub: "reader", role: "read")
       create(:project_permission, org_membership: read_membership, project: other_project, role: "read")
       login_as("reader")
-      post "/config_versions/#{other_cv.id}/rollback"
+      post "/config_versions/#{other_cv.id}/rollback", headers: wildcard_headers
       expect(response).to have_http_status(:forbidden)
     end
   end
