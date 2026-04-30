@@ -6,6 +6,7 @@ RSpec.describe "AuthConfigs", type: :request do
   let!(:project) { create(:project, :active, organization: org) }
   let(:html_headers) { { "ACCEPT" => "text/html" } }
   let(:wildcard_headers) { { "ACCEPT" => "*/*" } }
+  let(:json_headers) { { "ACCEPT" => "application/json" } }
   let(:cache) { ActiveSupport::Cache::MemoryStore.new }
 
   before do
@@ -140,6 +141,16 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(response).to redirect_to(provisioning_job_path(project.provisioning_jobs.order(:id).last))
     end
 
+    it "keeps explicit JSON clients on the JSON contract" do
+      patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+            params: { auth_config: { redirect_uris: [ "https://json.example.com/callback" ] } },
+            headers: json_headers
+
+      expect(response).to have_http_status(:accepted)
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body["provisioning_job_id"]).to eq(project.provisioning_jobs.order(:id).last.id)
+    end
+
     it "renders browser errors when another provisioning job is active" do
       create(:provisioning_job, :in_progress, project: project, operation: "update")
 
@@ -184,6 +195,31 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(response.body).to include("일회성 인증 정보")
       expect(response.body).to include("10분 TTL")
       expect(response.body).to include("new-client-secret")
+    end
+
+    it "returns JSON for explicit JSON clients" do
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: json_headers
+
+      expect(response).to have_http_status(:created)
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body.dig("secrets", "client_secret", "value")).to eq("new-client-secret")
+    end
+
+    it "changes the reveal confirmation storage key for each regenerated secret" do
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: html_headers
+      follow_redirect!
+      first_key = response.body[/data-secret-reveal-storage-key-value="([^"]+)"/, 1]
+
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: html_headers
+      follow_redirect!
+      second_key = response.body[/data-secret-reveal-storage-key-value="([^"]+)"/, 1]
+
+      expect(first_key).to be_present
+      expect(second_key).to be_present
+      expect(second_key).not_to eq(first_key)
     end
   end
 end

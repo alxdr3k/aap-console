@@ -9,8 +9,8 @@ module AuthConfigs
           "label" => label,
           "value" => value
         }
-        payload["generated_at"] ||= Time.current.iso8601
-        payload["expires_at"] = TTL.from_now.iso8601
+        payload["generated_at"] ||= Time.current.iso8601(6)
+        payload["expires_at"] = TTL.from_now.iso8601(6)
 
         Rails.cache.write(cache_key(project), payload, expires_in: TTL)
         payload

@@ -7,7 +7,7 @@ class AuthConfigsController < ApplicationController
 
   def show
     return render_auth_config_not_found unless @auth_config
-    return render json: @auth_config if default_json_request?
+    return render json: @auth_config if json_request?
 
     prepare_show
     disable_secret_response_cache! if @secret_payload.present?
@@ -34,7 +34,7 @@ class AuthConfigsController < ApplicationController
     if result.success?
       provisioning_job = result.data[:provisioning_job]
 
-      if default_json_request?
+      if json_request?
         if provisioning_job
           render json: { provisioning_job_id: provisioning_job.id }, status: :accepted
         else
@@ -48,7 +48,7 @@ class AuthConfigsController < ApplicationController
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end
     else
-      return render json: { error: result.error }, status: :unprocessable_entity if default_json_request?
+      return render json: { error: result.error }, status: :unprocessable_entity if json_request?
 
       @errors = [ result.error ]
       prepare_show(form_values: permitted_auth_params)
@@ -67,14 +67,14 @@ class AuthConfigsController < ApplicationController
     if result.success?
       flash[:warning] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
 
-      if default_json_request?
+      if json_request?
         disable_secret_response_cache!
         render json: AuthConfigs::SecretRevealCache.read(@project), status: :created
       else
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end
     else
-      return render json: { errors: [ result.error ] }, status: :unprocessable_entity if default_json_request?
+      return render json: { errors: [ result.error ] }, status: :unprocessable_entity if json_request?
 
       @errors = [ result.error ]
       prepare_show
@@ -87,7 +87,7 @@ class AuthConfigsController < ApplicationController
   def set_organization
     @organization = Organization.find_by!(slug: params[:organization_slug])
   rescue ActiveRecord::RecordNotFound
-    return render json: { error: "Not found" }, status: :not_found if default_json_request?
+    return render json: { error: "Not found" }, status: :not_found if json_request?
 
     respond_to do |format|
       format.html { render "projects/not_found", status: :not_found }
@@ -98,7 +98,7 @@ class AuthConfigsController < ApplicationController
   def set_project
     @project = @organization.projects.find_by!(slug: params[:project_slug])
   rescue ActiveRecord::RecordNotFound
-    return render json: { error: "Not found" }, status: :not_found if default_json_request?
+    return render json: { error: "Not found" }, status: :not_found if json_request?
 
     respond_to do |format|
       format.html { render "projects/not_found", status: :not_found }
@@ -145,7 +145,11 @@ class AuthConfigsController < ApplicationController
     @post_logout_redirect_uris = form_rows(values[:post_logout_redirect_uris])
     @secret_payload = @can_write_project ? AuthConfigs::SecretRevealCache.read(@project) : {}
     @secret_entries = @secret_payload.fetch("secrets", {})
-    @secret_reveal_storage_key = "auth-config-secret:#{@project.id}"
+    @secret_reveal_storage_key = [
+      "auth-config-secret",
+      @project.id,
+      @secret_payload["generated_at"].presence || "current"
+    ].join(":")
     @last_secret_regenerated_at = @project.audit_logs
                                           .where(action: "auth_config.secret_regenerated")
                                           .order(created_at: :desc)
@@ -162,7 +166,7 @@ class AuthConfigsController < ApplicationController
   end
 
   def render_auth_config_not_found
-    return render json: { error: "Not found" }, status: :not_found if default_json_request?
+    return render json: { error: "Not found" }, status: :not_found if json_request?
 
     respond_to do |format|
       format.html { render "projects/not_found", status: :not_found }
@@ -174,5 +178,9 @@ class AuthConfigsController < ApplicationController
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+  end
+
+  def json_request?
+    request.format.json? || default_json_request?
   end
 end
