@@ -28,6 +28,14 @@ RSpec.describe Provisioning::SecretCache do
     expect(payload.fetch("secrets").keys).to contain_exactly("client_secret", "pak")
   end
 
+  it "deletes a cached reveal payload by provisioning job id" do
+    described_class.write(job, key: "client_secret", label: "Client Secret", value: "kc-secret")
+
+    described_class.delete(job.id)
+
+    expect(described_class.read(job)).to eq({})
+  end
+
   it "ignores cache entries whose project metadata does not match the job" do
     cache.write(
       described_class.cache_key(job.id),

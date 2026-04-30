@@ -124,6 +124,35 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(auth_config.reload.keycloak_client_uuid).to eq(uuid)
       expect(Provisioning::SecretCache.read(job)).to eq({})
     end
+
+    it "clears a stale cached secret before attempting to fetch a replacement" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+
+      Provisioning::SecretCache.write(
+        job,
+        key: "client_secret",
+        label: "Client Secret",
+        value: "stale-secret"
+      )
+
+      uuid = stub_keycloak_create_client(client_id: auth_config.keycloak_client_id)
+      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
+                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
+
+      keycloak = instance_double(KeycloakClient)
+      allow(KeycloakClient).to receive(:new).and_return(keycloak)
+      allow(keycloak).to receive(:create_oidc_client).and_return({ "id" => uuid })
+      allow(keycloak).to receive(:get_client_secret).and_raise(BaseClient::TimeoutError.new("Request timed out"))
+      allow(Rails.logger).to receive(:warn)
+
+      step_record = create(:provisioning_step, :keycloak_client_create, provisioning_job: job)
+      step = described_class.new(step_record: step_record, project: project, params: {})
+
+      step.execute
+
+      expect(Provisioning::SecretCache.read(job)).to eq({})
+    end
   end
 
   describe "#execute auth type dispatch" do

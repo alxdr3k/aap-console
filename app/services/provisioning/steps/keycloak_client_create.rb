@@ -96,6 +96,7 @@ module Provisioning
       def cache_client_secret!(keycloak, client_uuid, auth_type)
         return unless auth_type == "oidc"
 
+        Provisioning::SecretCache.delete(step_record.provisioning_job_id)
         Provisioning::SecretCache.write(
           step_record.provisioning_job,
           key: "client_secret",

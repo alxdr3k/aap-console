@@ -33,6 +33,10 @@ module Provisioning
       "provisioning_job_secrets_#{provisioning_job_id}"
     end
 
+    def self.delete(provisioning_job_id)
+      Rails.cache.delete(cache_key(provisioning_job_id))
+    end
+
     def self.payload_for(provisioning_job, secrets)
       {
         "organization_id" => provisioning_job.project.organization_id,
