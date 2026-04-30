@@ -59,7 +59,10 @@ module Provisioning
         auth_config = project.project_auth_config
         return unless auth_config&.auth_type == "oidc"
 
-        cache_client_secret!(KeycloakClient.new, auth_config.keycloak_client_uuid, auth_config.auth_type)
+        client_uuid = step_record.result_snapshot&.dig("keycloak_client_uuid") || auth_config.keycloak_client_uuid
+        return if client_uuid.blank?
+
+        cache_client_secret!(KeycloakClient.new, client_uuid, auth_config.auth_type)
       end
 
       private

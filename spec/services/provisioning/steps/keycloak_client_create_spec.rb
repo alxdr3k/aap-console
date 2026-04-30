@@ -125,6 +125,34 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(Provisioning::SecretCache.read(job).dig("secrets", "client_secret", "value")).to eq("oidc-secret")
     end
 
+    it "uses the persisted snapshot UUID when the auth config mirror is still missing on skip" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+
+      uuid = "uuid-from-snapshot"
+      auth_config.update!(keycloak_client_uuid: nil)
+      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
+                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
+
+      step_record = create(
+        :provisioning_step,
+        :keycloak_client_create,
+        provisioning_job: job,
+        result_snapshot: {
+          "keycloak_client_uuid" => uuid,
+          "keycloak_client_id" => auth_config.keycloak_client_id
+        }
+      )
+
+      runner = Provisioning::StepRunner.new(step: step_record, provisioning_job: job, params: {})
+      result = runner.execute
+
+      expect(result[:status]).to eq(:completed)
+      expect(step_record.reload).to be_skipped
+      expect(Provisioning::SecretCache.read(job).dig("secrets", "client_secret", "value")).to eq("oidc-secret")
+    end
+
     it "does not fail provisioning when secret caching cannot fetch the client secret" do
       cache = ActiveSupport::Cache::MemoryStore.new
       allow(Rails).to receive(:cache).and_return(cache)
