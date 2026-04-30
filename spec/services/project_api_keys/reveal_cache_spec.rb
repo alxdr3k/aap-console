@@ -13,6 +13,7 @@ RSpec.describe ProjectApiKeys::RevealCache do
 
     payload = described_class.read(project)
 
+    expect(payload.dig("secrets", "project_api_key", "project_api_key_id")).to eq(project_api_key.id)
     expect(payload.dig("secrets", "project_api_key", "name")).to eq("staging-ci")
     expect(payload.dig("secrets", "project_api_key", "token_prefix")).to eq(project_api_key.token_prefix)
     expect(payload.dig("secrets", "project_api_key", "value")).to eq("pak-secret-token")
@@ -41,6 +42,17 @@ RSpec.describe ProjectApiKeys::RevealCache do
 
     described_class.delete(project)
 
+    expect(described_class.read(project)["secrets"]).to eq({})
+  end
+
+  it "deletes only the matching cached payload" do
+    other_key = create(:project_api_key, project: project, name: "other-ci")
+    described_class.write(project, project_api_key: project_api_key, token: "pak-secret-token")
+
+    described_class.delete_if_matches(project, project_api_key_id: other_key.id)
+    expect(described_class.read(project).dig("secrets", "project_api_key", "project_api_key_id")).to eq(project_api_key.id)
+
+    described_class.delete_if_matches(project, project_api_key_id: project_api_key.id)
     expect(described_class.read(project)["secrets"]).to eq({})
   end
 end

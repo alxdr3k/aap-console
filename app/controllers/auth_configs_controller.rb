@@ -151,7 +151,7 @@ class AuthConfigsController < ApplicationController
       @secret_payload["generated_at"].presence || "current"
     ].join(":")
     @project_api_keys = @project.project_api_keys.order(created_at: :desc)
-    @project_api_key_reveal_payload = @can_write_project ? ProjectApiKeys::RevealCache.read(@project) : {}
+    @project_api_key_reveal_payload = @can_write_project ? project_api_key_reveal_payload : {}
     @project_api_key_reveal = @project_api_key_reveal_payload.dig("secrets", "project_api_key") || {}
     @project_api_key_reveal_storage_key = [
       "project-api-key",
@@ -190,5 +190,40 @@ class AuthConfigsController < ApplicationController
 
   def json_request?
     request.format.json? || default_json_request?
+  end
+
+  def project_api_key_reveal_payload
+    cache_payload = ProjectApiKeys::RevealCache.read(@project)
+    return cache_payload if cache_payload.dig("secrets", "project_api_key").present?
+
+    session_payload = session_project_api_key_reveal_payload
+    return {} unless session_payload.present?
+
+    session_payload
+  end
+
+  def session_project_api_key_reveal_payload
+    fallbacks = session[:project_api_key_reveal_fallbacks]
+    return {} unless fallbacks.is_a?(Hash)
+
+    payload = fallbacks[@project.id.to_s]
+    return {} unless payload.is_a?(Hash)
+    return clear_session_project_api_key_reveal_payload unless payload["organization_id"] == @project.organization_id
+    return clear_session_project_api_key_reveal_payload unless payload["project_id"] == @project.id
+
+    expires_at = Time.zone.iso8601(payload["expires_at"])
+    return payload if expires_at.future?
+  rescue ArgumentError
+    clear_session_project_api_key_reveal_payload
+  else
+    clear_session_project_api_key_reveal_payload
+  end
+
+  def clear_session_project_api_key_reveal_payload
+    fallbacks = session[:project_api_key_reveal_fallbacks]
+    return {} unless fallbacks.is_a?(Hash)
+
+    fallbacks.delete(@project.id.to_s)
+    {}
   end
 end

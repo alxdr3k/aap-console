@@ -84,7 +84,7 @@ current `ConfigVersion` model.
 
 - Project users with `write` permission can issue and revoke PAKs through `ProjectApiKeysController`; browser HTML requests redirect back to the auth-config page while JSON/default API clients keep the existing response contract.
 - The issue response includes the plaintext `token` once. Console stores only `token_digest` and `token_prefix`.
-- Browser issue flow stores a 10-minute project-scoped reveal payload in `ProjectApiKeys::RevealCache`; `AuthConfigsController#show` renders it with `no-store` headers on the auth-config page.
+- Browser issue flow stores a 10-minute project-scoped reveal payload in `ProjectApiKeys::RevealCache`; if that shared cache write fails, the same payload falls back to the current browser session so the newly issued token is not lost. `AuthConfigsController#show` renders either path with `no-store` headers on the auth-config page.
 - `DELETE /project_api_keys/:id` soft-revokes by setting `revoked_at`; it does not delete the row.
 - `POST /api/v1/project_api_keys/verify` is protected by `CONSOLE_INBOUND_API_KEY`, matches active PAK digests for `active` / `update_pending` projects, and updates `last_used_at`.
 - Audit events: `project_api_key.create`, `project_api_key.revoke`.
@@ -121,7 +121,7 @@ current `ConfigVersion` model.
 |---|---|
 | Organization/member/project completion | Designated initial admin and Langfuse org name sync are landed in `CORE-5A.1`; Keycloak pre-assignment and project permission CRUD API are landed in `CORE-5A.2`; org delete finalization is landed in `CORE-5A.3`; Organization list/detail/new/edit UI is landed in `UI-5A.1` / `UI-5A.2`; member management UI is landed in `UI-5A.3`; Project list/detail/new/delete UI is landed in `UI-5A.4` |
 | Hotwire provisioning detail UI | ERB timeline, ActionCable/Stimulus step replacement, manual retry UX, active-job warning banners, and OIDC secret reveal are landed in `UI-5B.1` / `UI-5B.2` / `UI-5B.3` / `SEC-5B.1`. `Q-002` is resolved by `DEC-004`; auth-config PAK reveal is landed in `AUTH-6A.3` |
-| Secret reveal cache write path | `KeycloakClientCreate` writes provisioning-created OIDC secrets through `Provisioning::SecretCache`, auth config secret regeneration writes through `AuthConfigs::SecretRevealCache`, and browser PAK issuance writes through `ProjectApiKeys::RevealCache`; all use 10-minute TTL and Project authorization metadata guards |
+| Secret reveal cache write path | `KeycloakClientCreate` writes provisioning-created OIDC secrets through `Provisioning::SecretCache`, auth config secret regeneration writes through `AuthConfigs::SecretRevealCache`, and browser PAK issuance writes through `ProjectApiKeys::RevealCache`; PAK browser flow falls back to a project-scoped session payload if shared cache persistence fails. Primary paths use 10-minute TTL and Project authorization metadata guards |
 | Config/product UI | Auth config, LiteLLM config, and config-version server-rendered UI are landed in `UI-5C.1` / `UI-5C.2` / `UI-5C.3`; PAK auth-config extensions are landed in `AUTH-6A.3` |
 | Full external config rollback | Current rollback restores Config Server and reports Keycloak/Langfuse as non-snapshotted diagnostics. Full Keycloak/Langfuse snapshot restore is `OPS-7A.5` / `AC-022` |
 | SAML/OAuth/PAK UI | Backend/API gate is accepted by `DEC-003`; PAK auth-config UI is landed in `AUTH-6A.3`, while SAML/OAuth product UI remains `AUTH-6A.1` / `AUTH-6A.2` |
