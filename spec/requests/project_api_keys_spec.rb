@@ -118,6 +118,21 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response.body).to include("pak-")
     end
 
+    it "prefers the browser-session fallback over a stale shared reveal payload" do
+      grant_project_role("write")
+      create(:project_auth_config, project: project, auth_type: "oidc")
+      stale_key = create(:project_api_key, project: project, name: "stale-reveal")
+      ProjectApiKeys::RevealCache.write(project, project_api_key: stale_key, token: "pak-old-secret-token")
+      allow(cache).to receive(:write).and_return(false)
+
+      post path, params: { project_api_key: { name: "fresh-fallback" } }, headers: html_headers
+      follow_redirect!
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("fresh-fallback")
+      expect(response.body).not_to include("pak-old-secret-token")
+    end
+
     it "rejects duplicate names within the same project" do
       grant_project_role("write")
       create(:project_api_key, project: project, name: "staging-ci")

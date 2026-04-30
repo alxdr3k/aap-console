@@ -193,13 +193,13 @@ class AuthConfigsController < ApplicationController
   end
 
   def project_api_key_reveal_payload
+    session_payload = session_project_api_key_reveal_payload
+    return session_payload if session_payload.present?
+
     cache_payload = ProjectApiKeys::RevealCache.read(@project)
     return cache_payload if cache_payload.dig("secrets", "project_api_key").present?
 
-    session_payload = session_project_api_key_reveal_payload
-    return {} unless session_payload.present?
-
-    session_payload
+    {}
   end
 
   def session_project_api_key_reveal_payload
