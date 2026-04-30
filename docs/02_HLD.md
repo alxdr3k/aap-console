@@ -1060,7 +1060,7 @@ Flow는 다음 경로를 사용한다:
 2. 시크릿 생성 단계가 성공하면 값은 Rails **단기 캐시**(`Rails.cache` with `expires_in: 10.minutes`, 저장소는 아래 §6.5 끝 단락 참조)에 `provisioning_job_id` 키로 저장된다. 저장 시점에 Project에 대한 권한 메타(org/project ID) 를 함께 기록하여 fetch 시 인가 검증에 사용한다.
 3. 브라우저는 현황 페이지가 `completed` 상태를 감지하면 `GET /provisioning_jobs/:id/secrets` 를 호출한다. 이 엔드포인트는 **TTL(10분) 내에 반복 호출 가능** 하며, 동일 Project에 대한 서로 다른 세션(여러 관리자, 재방문) 도 권한이 있다면 모두 접근할 수 있다.
 4. 컨트롤러는 매 호출마다 요청 사용자의 해당 Project `write`+ 권한을 다시 검증하고, 캐시가 존재하면 값을 응답한다. 캐시는 TTL 만료 시에만 자동 삭제되며 **응답 즉시 무효화하지 않는다** — "누가 먼저 fetch 했는지" 로 나머지 관리자가 차단되는 구조를 피하기 위함.
-5. UI 측 Stimulus 컨트롤러는 "확인 — 안전하게 저장했습니다" 클릭 시 **해당 브라우저 세션에서만** 재조회 방지 플래그를 기록한다(localStorage). 이는 UX 힌트이며 서버는 여전히 응답한다.
+5. UI 측 Stimulus 컨트롤러는 "확인 — 안전하게 저장했습니다" 클릭 시 **해당 탭의 브라우저 세션에서만** 재조회 방지 플래그를 기록한다(`sessionStorage`). 이는 UX 힌트이며 서버는 여전히 응답한다.
 
 캐시 저장소는 production에서 `solid_cache_store`를 사용한다. development는
 `:memory_store`, test는 `:null_store`다. Pod 재시작 시 캐시가 소실되면 시크릿

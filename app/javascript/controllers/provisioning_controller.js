@@ -232,9 +232,9 @@ export default class extends Controller {
 
   confirmSecrets() {
     try {
-      window.localStorage.setItem(this.secretConfirmationKey(), "true")
+      window.sessionStorage.setItem(this.secretConfirmationKey(), "true")
     } catch {
-      // Local storage can be disabled; confirmation still applies to this page.
+      // Session storage can be disabled; confirmation still applies to this page.
     }
 
     if (this.hasSecretsTarget) this.secretsTarget.hidden = true
@@ -243,7 +243,7 @@ export default class extends Controller {
 
   secretsConfirmed() {
     try {
-      return window.localStorage.getItem(this.secretConfirmationKey()) === "true"
+      return window.sessionStorage.getItem(this.secretConfirmationKey()) === "true"
     } catch {
       return false
     }
