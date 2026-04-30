@@ -100,6 +100,59 @@
     </section>
   <% end %>
 
+  <% if @project_api_key_reveal.present? %>
+    <section class="panel"
+             data-controller="secret-reveal"
+             data-secret-reveal-storage-key-value="<%= @project_api_key_reveal_storage_key %>">
+      <header class="panel__header">
+        <h2 class="panel__title">일회성 PAK</h2>
+        <span class="badge badge--warning">10분 TTL</span>
+      </header>
+
+      <div class="status-banner status-banner--warning">
+        <strong>발급된 PAK 평문은 지금만 다시 볼 수 있습니다.</strong>
+        <span>복사한 뒤 안전한 저장소에 보관하세요.</span>
+      </div>
+
+      <dl class="details-list secret-list">
+        <div>
+          <dt>이름</dt>
+          <dd><%= @project_api_key_reveal["name"] %></dd>
+        </div>
+        <div>
+          <dt>Prefix</dt>
+          <dd><code><%= @project_api_key_reveal["token_prefix"] %></code></dd>
+        </div>
+        <div>
+          <% field_id = "project-api-key-secret" %>
+          <dt>Token</dt>
+          <dd class="secret-value">
+            <code id="<%= field_id %>" data-masked="true"><%= "•" * 24 %></code>
+            <button type="button"
+                    class="button button--secondary"
+                    data-action="secret-reveal#toggle"
+                    data-secret-reveal-target-id-param="<%= field_id %>"
+                    data-secret-reveal-secret-param="<%= @project_api_key_reveal["value"] %>">
+              표시
+            </button>
+            <button type="button"
+                    class="button button--secondary"
+                    data-action="secret-reveal#copy"
+                    data-secret-reveal-secret-param="<%= @project_api_key_reveal["value"] %>">
+              복사
+            </button>
+          </dd>
+        </div>
+      </dl>
+
+      <div class="form-actions">
+        <button type="button" class="button" data-action="secret-reveal#confirm">
+          확인 - 안전하게 저장했습니다
+        </button>
+      </div>
+    </section>
+  <% end %>
+
   <section class="summary-grid summary-grid--four">
     <div class="summary-item">
       <span class="summary-item__label">Auth Type</span>
@@ -227,6 +280,70 @@
     </section>
   <% end %>
 
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">Project API Keys</h2>
+      <% unless @can_write_project %>
+        <span class="badge badge--muted">read only</span>
+      <% end %>
+    </header>
+
+    <% if @can_write_project %>
+      <%= form_with url: organization_project_project_api_keys_path(@organization.slug, @project.slug),
+                    scope: :project_api_key,
+                    method: :post,
+                    class: "form form--inline-panel" do |form| %>
+        <div class="form-grid form-grid--two">
+          <div class="field">
+            <%= form.label :name, "새 PAK 이름" %>
+            <%= form.text_field :name, required: true, placeholder: "staging-ci" %>
+          </div>
+        </div>
+        <div class="form-actions">
+          <%= form.submit "새 PAK 발급", class: "button" %>
+        </div>
+      <% end %>
+    <% end %>
+
+    <% if @project_api_keys.any? %>
+      <div class="resource-list">
+        <% @project_api_keys.each do |project_api_key| %>
+          <div class="resource-row">
+            <div>
+              <h3 class="resource-row__title"><%= project_api_key.name %></h3>
+              <p class="resource-row__description">
+                <span class="code-token"><%= project_api_key.token_prefix %></span>
+                · 생성 <%= short_datetime(project_api_key.created_at) %>
+                · 마지막 사용 <%= short_datetime(project_api_key.last_used_at) %>
+              </p>
+              <div class="resource-row__meta">
+                <span class="<%= project_api_key.revoked? ? "badge badge--muted" : "badge" %>">
+                  <%= project_api_key.revoked? ? "revoked" : "active" %>
+                </span>
+              </div>
+            </div>
+
+            <div class="page-actions">
+              <% if @can_write_project %>
+                <% if project_api_key.revoked? %>
+                  <span class="button button--disabled">폐기됨</span>
+                <% else %>
+                  <%= button_to "폐기",
+                                organization_project_project_api_key_path(@organization.slug, @project.slug, project_api_key),
+                                method: :delete,
+                                class: "button button--ghost",
+                                data: { turbo_confirm: "#{project_api_key.name} PAK를 폐기할까요?" } %>
+                <% end %>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="muted-text">발급된 PAK가 없습니다.</p>
+    <% end %>
+  </section>
+
   <section class="panel panel--disabled">
     <header class="panel__header">
       <h2 class="panel__title">추가 인증 기능</h2>
@@ -235,7 +352,6 @@
     <ul class="muted-list">
       <li>SAML metadata 입력과 다운로드</li>
       <li>OAuth/PKCE public client 제약 설정</li>
-      <li>PAK 발급/폐기/일회성 표시</li>
     </ul>
   </section>
 </section>

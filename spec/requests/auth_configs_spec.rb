@@ -35,6 +35,7 @@ RSpec.describe "AuthConfigs", type: :request do
 
     it "renders the browser auth config page for project readers" do
       config = project.project_auth_config
+      create(:project_api_key, project: project, name: "staging-ci")
       config.update!(
         redirect_uris: [ "https://app.example.com/callback" ],
         post_logout_redirect_uris: [ "https://app.example.com" ]
@@ -47,6 +48,8 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(response.body).to include(config.keycloak_client_id)
       expect(response.body).to include("https://app.example.com/callback")
       expect(response.body).to include("read only")
+      expect(response.body).to include("Project API Keys")
+      expect(response.body).to include("staging-ci")
     end
 
     it "shows disabled non-oidc editing copy until AUTH-6A" do

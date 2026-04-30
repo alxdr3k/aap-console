@@ -10,7 +10,7 @@ class AuthConfigsController < ApplicationController
     return render json: @auth_config if json_request?
 
     prepare_show
-    disable_secret_response_cache! if @secret_payload.present?
+    disable_secret_response_cache! if @secret_entries.present? || @project_api_key_reveal.present?
 
     respond_to do |format|
       format.html
@@ -149,6 +149,14 @@ class AuthConfigsController < ApplicationController
       "auth-config-secret",
       @project.id,
       @secret_payload["generated_at"].presence || "current"
+    ].join(":")
+    @project_api_keys = @project.project_api_keys.order(created_at: :desc)
+    @project_api_key_reveal_payload = @can_write_project ? ProjectApiKeys::RevealCache.read(@project) : {}
+    @project_api_key_reveal = @project_api_key_reveal_payload.dig("secrets", "project_api_key") || {}
+    @project_api_key_reveal_storage_key = [
+      "project-api-key",
+      @project.id,
+      @project_api_key_reveal_payload["generated_at"].presence || "current"
     ].join(":")
     @last_secret_regenerated_at = @project.audit_logs
                                           .where(action: "auth_config.secret_regenerated")

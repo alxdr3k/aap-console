@@ -6,7 +6,11 @@ class ProjectApiKeysController < ApplicationController
   before_action :set_project_api_key, only: [ :destroy ]
 
   def index
-    render json: @project.project_api_keys.order(created_at: :desc).map { |key| serialize_key(key) }
+    if browser_request?
+      redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+    else
+      render json: @project.project_api_keys.order(created_at: :desc).map { |key| serialize_key(key) }
+    end
   end
 
   def create
@@ -18,9 +22,22 @@ class ProjectApiKeysController < ApplicationController
 
     if result.success?
       key = result.data.fetch(:project_api_key)
-      render json: serialize_key(key).merge(token: result.data.fetch(:token)), status: :created
+      token = result.data.fetch(:token)
+
+      if browser_request?
+        ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token)
+        flash[:success] = "PAK가 발급되었습니다."
+        redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+      else
+        render json: serialize_key(key).merge(token: token), status: :created
+      end
     else
-      render json: { errors: [ result.error ] }, status: :unprocessable_entity
+      if browser_request?
+        flash[:error] = result.error
+        redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+      else
+        render json: { errors: [ result.error ] }, status: :unprocessable_entity
+      end
     end
   end
 
@@ -30,7 +47,14 @@ class ProjectApiKeysController < ApplicationController
       current_user_sub: Current.user_sub
     ).call
 
-    render json: serialize_key(result.data)
+    ProjectApiKeys::RevealCache.delete(@project)
+
+    if browser_request?
+      flash[:success] = "PAK를 폐기했습니다."
+      redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+    else
+      render json: serialize_key(result.data)
+    end
   end
 
   private
@@ -38,19 +62,25 @@ class ProjectApiKeysController < ApplicationController
   def set_organization
     @organization = Organization.find_by!(slug: params[:organization_slug])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    return render json: { error: "Not found" }, status: :not_found unless browser_request?
+
+    render "projects/not_found", status: :not_found
   end
 
   def set_project
     @project = @organization.projects.find_by!(slug: params[:project_slug])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    return render json: { error: "Not found" }, status: :not_found unless browser_request?
+
+    render "projects/not_found", status: :not_found
   end
 
   def set_project_api_key
     @project_api_key = @project.project_api_keys.find(params[:id])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    return render json: { error: "Not found" }, status: :not_found unless browser_request?
+
+    render "projects/not_found", status: :not_found
   end
 
   def project_api_key_params
@@ -66,5 +96,9 @@ class ProjectApiKeysController < ApplicationController
       revoked_at: project_api_key.revoked_at,
       created_at: project_api_key.created_at
     }
+  end
+
+  def browser_request?
+    request.format.html? && !default_json_request?
   end
 end

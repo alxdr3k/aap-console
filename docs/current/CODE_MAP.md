@@ -19,10 +19,10 @@
 | `app/controllers/projects_controller.rb` | Project CRUD, HTML pages, and service/provisioning redirects |
 | `app/controllers/members_controller.rb` | Org membership, Keycloak user lookup/pre-assignment, and create-time project permission management |
 | `app/controllers/member_project_permissions_controller.rb` | Project permission grant/update/revoke API for write/read org members |
-| `app/controllers/auth_configs_controller.rb` | Project auth config JSON/HTML show, update provisioning redirect, and OIDC secret regeneration entry point |
+| `app/controllers/auth_configs_controller.rb` | Project auth config JSON/HTML show, update provisioning redirect, and OIDC/PAK reveal rendering surface |
 | `app/controllers/litellm_configs_controller.rb` | LiteLLM config JSON/HTML show, validation, and provisioning redirect/update flow |
 | `app/controllers/config_versions_controller.rb` | Config version JSON/HTML history page, Turbo Frame detail/diff view, and synchronous rollback redirect/diagnostics flow |
-| `app/controllers/project_api_keys_controller.rb` | Project-scoped PAK issue/list/revoke API |
+| `app/controllers/project_api_keys_controller.rb` | Project-scoped PAK JSON API plus HTML auth-config redirect/reveal flow |
 | `app/controllers/provisioning_jobs_controller.rb` | Provisioning job show/retry/secrets endpoint |
 | `app/channels/provisioning_channel.rb` | Provisioning job status용 ActionCable stream |
 | `app/controllers/api/v1/project_api_keys_controller.rb` | Inbound PAK verification API |
@@ -39,7 +39,7 @@
 | `app/services/projects/update_service.rb` | Project update와 provisioning trigger |
 | `app/services/auth_configs/` | Auth config secret regeneration service와 10-minute reveal cache payload |
 | `app/services/projects/destroy_service.rb` | Project deletion flow |
-| `app/services/project_api_keys/` | PAK issue/revoke/verify services. Plaintext token is returned only from issue response |
+| `app/services/project_api_keys/` | PAK issue/revoke/verify services plus project-scoped reveal cache. Plaintext token is returned only from issue response/cache |
 | `app/services/organizations/create_service.rb` | Organization create flow |
 | `app/services/organizations/update_service.rb` | Organization update flow with Langfuse org name sync |
 | `app/services/organizations/destroy_service.rb` | Organization deletion flow |
@@ -121,5 +121,5 @@ completed-job secrets for masked reveal/copy/confirm UX.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Playground, PAK reveal UI, and dashboard leaves remain planned in `AUTH-6A.3`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | Playground and dashboard leaves remain planned in `PLAY-8A.*`, `ADMIN-8A.*`; SAML/OAuth auth-config follow-up remains `AUTH-6A.1` / `AUTH-6A.2` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |
