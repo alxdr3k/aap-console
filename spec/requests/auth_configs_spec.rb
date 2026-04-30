@@ -4,8 +4,15 @@ RSpec.describe "AuthConfigs", type: :request do
   let(:user_sub) { "user-sub-123" }
   let!(:org) { create(:organization) }
   let!(:project) { create(:project, :active, organization: org) }
+  let(:html_headers) { { "ACCEPT" => "text/html" } }
+  let(:wildcard_headers) { { "ACCEPT" => "*/*" } }
+  let(:json_headers) { { "ACCEPT" => "application/json" } }
+  let(:cache) { ActiveSupport::Cache::MemoryStore.new }
 
-  before { login_as(user_sub) }
+  before do
+    login_as(user_sub)
+    allow(Rails).to receive(:cache).and_return(cache)
+  end
 
   describe "GET /organizations/:org_slug/projects/:slug/auth_config" do
     before do
@@ -24,6 +31,32 @@ RSpec.describe "AuthConfigs", type: :request do
       create(:project_auth_config, project: other_project, auth_type: "oidc")
       get "/organizations/#{org.slug}/projects/#{other_project.slug}/auth_config"
       expect(response).to have_http_status(:forbidden)
+    end
+
+    it "renders the browser auth config page for project readers" do
+      config = project.project_auth_config
+      config.update!(
+        redirect_uris: [ "https://app.example.com/callback" ],
+        post_logout_redirect_uris: [ "https://app.example.com" ]
+      )
+
+      get "/organizations/#{org.slug}/projects/#{project.slug}/auth_config", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("인증 설정")
+      expect(response.body).to include(config.keycloak_client_id)
+      expect(response.body).to include("https://app.example.com/callback")
+      expect(response.body).to include("read only")
+    end
+
+    it "shows disabled non-oidc editing copy until AUTH-6A" do
+      project.project_auth_config.update!(auth_type: "saml")
+
+      get "/organizations/#{org.slug}/projects/#{project.slug}/auth_config", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("AUTH-6A 예정")
+      expect(response.body).to include("준비 중")
     end
   end
 
@@ -44,7 +77,8 @@ RSpec.describe "AuthConfigs", type: :request do
             params: { auth_config: {
               keycloak_client_id: "hacker-value",
               keycloak_client_uuid: "hacker-uuid"
-            } }
+            } },
+            headers: wildcard_headers
 
       expect(response).to have_http_status(:ok)
       original.reload
@@ -55,7 +89,8 @@ RSpec.describe "AuthConfigs", type: :request do
     it "returns 202 Accepted with provisioning_job_id when redirect_uris change" do
       expect {
         patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
-              params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } }
+              params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } },
+              headers: wildcard_headers
       }.to change(ProvisioningJob, :count).by(1)
 
       expect(response).to have_http_status(:accepted)
@@ -65,7 +100,8 @@ RSpec.describe "AuthConfigs", type: :request do
 
     it "seeds the correct steps for a redirect_uri update" do
       patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
-            params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } }
+            params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } },
+            headers: wildcard_headers
 
       job = project.provisioning_jobs.order(:id).last
       expect(job.operation).to eq("update")
@@ -76,6 +112,15 @@ RSpec.describe "AuthConfigs", type: :request do
       ])
     end
 
+    it "normalizes blank URI rows to an explicit empty array so users can clear values" do
+      patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+            params: { auth_config: { redirect_uris: [ "" ] } },
+            headers: wildcard_headers
+
+      job = project.provisioning_jobs.order(:id).last
+      expect(job.input_snapshot["redirect_uris"]).to eq([])
+    end
+
     it "returns 403 for read-only member" do
       other_project = create(:project, :active, organization: org)
       read_membership = create(:org_membership, organization: org, user_sub: "reader", role: "read")
@@ -83,8 +128,98 @@ RSpec.describe "AuthConfigs", type: :request do
       create(:project_auth_config, project: other_project, auth_type: "oidc")
       login_as("reader")
       patch "/organizations/#{org.slug}/projects/#{other_project.slug}/auth_config",
-            params: { auth_config: { redirect_uris: [ "https://hack" ] } }
+            params: { auth_config: { redirect_uris: [ "https://hack" ] } },
+            headers: wildcard_headers
       expect(response).to have_http_status(:forbidden)
+    end
+
+    it "redirects browser updates to the provisioning job detail page" do
+      patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+            params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } },
+            headers: html_headers
+
+      expect(response).to redirect_to(provisioning_job_path(project.provisioning_jobs.order(:id).last))
+    end
+
+    it "keeps explicit JSON clients on the JSON contract" do
+      patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+            params: { auth_config: { redirect_uris: [ "https://json.example.com/callback" ] } },
+            headers: json_headers
+
+      expect(response).to have_http_status(:accepted)
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body["provisioning_job_id"]).to eq(project.provisioning_jobs.order(:id).last.id)
+    end
+
+    it "renders browser errors when another provisioning job is active" do
+      create(:provisioning_job, :in_progress, project: project, operation: "update")
+
+      patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+            params: { auth_config: { redirect_uris: [ "https://new.example.com/callback" ] } },
+            headers: html_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("Another provisioning job is in progress")
+    end
+  end
+
+  describe "POST /organizations/:org_slug/projects/:slug/auth_config/regenerate_secret" do
+    before do
+      membership = create(:org_membership, organization: org, user_sub: user_sub, role: "write")
+      create(:project_permission, org_membership: membership, project: project, role: "write")
+      create(:project_auth_config,
+             project: project,
+             auth_type: "oidc",
+             keycloak_client_id: "aap-acme-chatbot-oidc",
+             keycloak_client_uuid: "server-owned-uuid")
+      stub_keycloak_regenerate_client_secret(uuid: "server-owned-uuid", secret: "new-client-secret")
+      cache.clear
+    end
+
+    it "regenerates the secret and redirects back to the auth config page" do
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: html_headers
+
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+      expect(AuthConfigs::SecretRevealCache.read(project).dig("secrets", "client_secret", "value")).to eq("new-client-secret")
+    end
+
+    it "renders the reveal panel with no-store headers after redirect" do
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: html_headers
+
+      follow_redirect!
+
+      expect(response).to have_http_status(:ok)
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.body).to include("일회성 인증 정보")
+      expect(response.body).to include("10분 TTL")
+      expect(response.body).to include("new-client-secret")
+    end
+
+    it "returns JSON for explicit JSON clients" do
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: json_headers
+
+      expect(response).to have_http_status(:created)
+      expect(response.media_type).to eq("application/json")
+      expect(response.parsed_body.dig("secrets", "client_secret", "value")).to eq("new-client-secret")
+    end
+
+    it "changes the reveal confirmation storage key for each regenerated secret" do
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: html_headers
+      follow_redirect!
+      first_key = response.body[/data-secret-reveal-storage-key-value="([^"]+)"/, 1]
+
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: html_headers
+      follow_redirect!
+      second_key = response.body[/data-secret-reveal-storage-key-value="([^"]+)"/, 1]
+
+      expect(first_key).to be_present
+      expect(second_key).to be_present
+      expect(second_key).not_to eq(first_key)
     end
   end
 end

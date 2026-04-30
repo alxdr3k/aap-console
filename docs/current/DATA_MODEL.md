@@ -54,8 +54,8 @@ Code, migrations, schemas, generated references가 authoritative source다. 이 
 | Area | Gap |
 |---|---|
 | Organization/member completion | Backend/API completion is landed in `CORE-5A.*` / `AC-018`; member management and org/project UI remain tracked by `UI-5A.*` |
-| Auth UI | PAK UI와 SAML/OAuth UI/metadata 입력 범위는 아직 구현되지 않음 |
-| Secret reveal | OIDC client secrets are stored only in `Rails.cache` via `Provisioning::SecretCache` with a 10-minute TTL and job/project metadata guard; PAK one-time reveal remains planned in `AUTH-6A.3` |
+| Auth UI | OIDC auth config HTML edit/reveal path is landed. PAK UI와 SAML/OAuth UI/metadata 입력 범위는 아직 구현되지 않음 |
+| Secret reveal | OIDC client secrets are stored only in `Rails.cache`: provisioning completion uses `Provisioning::SecretCache` keyed by provisioning job, and auth-config regeneration uses `AuthConfigs::SecretRevealCache` keyed by project. Both keep a 10-minute TTL and metadata guard; PAK one-time reveal remains planned in `AUTH-6A.3` |
 | Config rollback snapshots | Current `ConfigVersion` snapshot does not carry Keycloak/Langfuse mutable config required for full FR-8 restore; tracked by `OPS-7A.5` / `AC-022` |
 | Audit archive | `audit_logs` retention archive job is a target design item, not current code |
 | Generated docs | `docs/generated/`는 있으나 active generator는 아직 없음 |

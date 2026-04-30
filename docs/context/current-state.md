@@ -15,9 +15,9 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 - current milestone: `P0-M5` core product UI / provisioning detail / FR-1~3 completion
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
-- active tracks: `UI`, `SEC`
-- active phases: `UI-5A`, `UI-5B`, `UI-5C`, `SEC-5B`
-- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, and `SEC-5B.1` landed; next candidates are `UI-5C.1`, `UI-5C.2`, `UI-5C.3`
+- active tracks: `UI`
+- active phases: `UI-5A`, `UI-5B`, `UI-5C`
+- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1`, and `UI-5C.1` landed; next candidates are `UI-5C.2`, `UI-5C.3`
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
 - next gates: `AC-014`, `AC-015`, `AC-016`
@@ -51,6 +51,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - `UI-5B.2` landed: provisioning show page subscribes to `ProvisioningChannel`, replaces individual step partials, and keeps JSON polling fallback for reconnect/refresh.
 - `UI-5B.3` landed: retryable provisioning jobs show manual-intervention controls, HTML retry redirects, retry conflict protection, and Project detail active-job warning banners.
 - `SEC-5B.1` landed: OIDC client secrets are written only to 10-minute `Rails.cache`, served by authorized completed-job fetch, and displayed with masked/copy/confirm UX on the provisioning page.
+- `UI-5C.1` landed: auth config browser page renders OIDC redirect/post-logout URI editing, write-gated Client Secret regeneration with masked/copy/confirm reveal, project-detail link-through, and disabled SAML/OAuth/PAK placeholders while keeping JSON compatibility.
 
 ## Planned
 
@@ -69,7 +70,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 ## Current Priorities
 
-1. `UI-5C.*`로 auth/LiteLLM/config-version UI를 제품화한다.
+1. `UI-5C.2` / `UI-5C.3`로 LiteLLM/config-version UI를 제품화한다.
 2. `AUTH-6A.3`에서 PAK one-time reveal UI를 확장한다.
 3. `OPS-7A.*`와 `PLAY-8A.*`의 ready 조건을 계속 추적한다.
 
