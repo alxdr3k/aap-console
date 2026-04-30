@@ -158,7 +158,9 @@
   <section class="panel">
     <header class="panel__header">
       <h2 class="panel__title">LiteLLM Config</h2>
-      <span class="button button--disabled">설정 편집 준비 중</span>
+      <%= link_to current_authorization.can?(:write_project, @project) ? "설정 편집" : "상세 보기",
+                  organization_project_litellm_config_path(@organization.slug, @project.slug),
+                  class: "button button--secondary" %>
     </header>
 
     <dl class="details-list">
