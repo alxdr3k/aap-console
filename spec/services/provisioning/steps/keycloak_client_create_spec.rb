@@ -96,6 +96,34 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(step_record.reload.result_snapshot.to_json).not_to include("oidc-secret")
       expect(reveal.dig("secrets", "client_secret", "value")).to eq("oidc-secret")
     end
+
+    it "does not fail provisioning when secret caching cannot fetch the client secret" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+
+      uuid = stub_keycloak_create_client(client_id: auth_config.keycloak_client_id)
+      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
+                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
+
+      keycloak = instance_double(KeycloakClient)
+      allow(KeycloakClient).to receive(:new).and_return(keycloak)
+      allow(keycloak).to receive(:create_oidc_client).and_return({ "id" => uuid })
+      allow(keycloak).to receive(:get_client_secret).and_raise(BaseClient::TimeoutError.new("Request timed out"))
+
+      step_record = create(:provisioning_step, :keycloak_client_create, provisioning_job: job)
+      step = described_class.new(step_record: step_record, project: project, params: {})
+
+      expect(Rails.logger).to receive(:warn).with(include("skipped secret cache"))
+
+      result = step.execute
+
+      expect(result).to include(
+        keycloak_client_uuid: uuid,
+        keycloak_client_id: auth_config.keycloak_client_id
+      )
+      expect(auth_config.reload.keycloak_client_uuid).to eq(uuid)
+      expect(Provisioning::SecretCache.read(job)).to eq({})
+    end
   end
 
   describe "#execute auth type dispatch" do

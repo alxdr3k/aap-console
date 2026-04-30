@@ -102,6 +102,12 @@ module Provisioning
           label: "Client Secret",
           value: keycloak.get_client_secret(uuid: client_uuid)
         )
+      rescue StandardError => e
+        Rails.logger.warn(
+          "[Provisioning::Steps::KeycloakClientCreate] skipped secret cache " \
+          "job=#{step_record.provisioning_job_id} step=#{step_record.id} " \
+          "client_uuid=#{client_uuid} error=#{e.class}: #{e.message}"
+        )
       end
     end
   end
