@@ -20,7 +20,7 @@
 | `app/controllers/members_controller.rb` | Org membership, Keycloak user lookup/pre-assignment, and create-time project permission management |
 | `app/controllers/member_project_permissions_controller.rb` | Project permission grant/update/revoke API for write/read org members |
 | `app/controllers/auth_configs_controller.rb` | Project auth config JSON/HTML show, update provisioning redirect, and OIDC secret regeneration entry point |
-| `app/controllers/litellm_configs_controller.rb` | LiteLLM config update와 provisioning trigger |
+| `app/controllers/litellm_configs_controller.rb` | LiteLLM config JSON/HTML show, validation, and provisioning redirect/update flow |
 | `app/controllers/config_versions_controller.rb` | Config version index/show/rollback entry point |
 | `app/controllers/project_api_keys_controller.rb` | Project-scoped PAK issue/list/revoke API |
 | `app/controllers/provisioning_jobs_controller.rb` | Provisioning job show/retry/secrets endpoint |
@@ -119,5 +119,5 @@ completed-job secrets for masked reveal/copy/confirm UX.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | LiteLLM/config-version UI, Playground, PAK reveal UI, and dashboard leaves remain planned in `UI-5C.2`, `UI-5C.3`, `AUTH-6A.3`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | Config-version UI, Playground, PAK reveal UI, and dashboard leaves remain planned in `UI-5C.3`, `AUTH-6A.3`, `PLAY-8A.*`, `ADMIN-8A.*` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

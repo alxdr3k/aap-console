@@ -176,6 +176,7 @@ RSpec.describe "Projects", type: :request do
         expect(response.body).to include("azure-gpt4")
         expect(response.body).to include("completed_with_warnings")
         expect(response.body).to include(organization_project_auth_config_path(org.slug, project.slug))
+        expect(response.body).to include(organization_project_litellm_config_path(org.slug, project.slug))
       end
 
       it "renders an active provisioning warning and disables delete affordance" do
