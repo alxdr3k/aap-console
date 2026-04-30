@@ -6,6 +6,7 @@ RSpec.describe "ProjectApiKeys", type: :request do
   let!(:project) { create(:project, :active, organization: org) }
   let(:path) { "/organizations/#{org.slug}/projects/#{project.slug}/project_api_keys" }
   let(:html_headers) { { "ACCEPT" => "text/html" } }
+  let(:turbo_headers) { { "ACCEPT" => "text/vnd.turbo-stream.html, text/html, application/xhtml+xml" } }
   let(:wildcard_headers) { { "ACCEPT" => "*/*" } }
   let(:cache) { ActiveSupport::Cache::MemoryStore.new }
 
@@ -91,6 +92,15 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response.body).to include("pak-")
     end
 
+    it "treats Turbo browser issue requests as the auth config redirect flow" do
+      grant_project_role("write")
+      create(:project_auth_config, project: project, auth_type: "oidc")
+
+      post path, params: { project_api_key: { name: "turbo-ci" } }, headers: turbo_headers
+
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+    end
+
     it "rejects duplicate names within the same project" do
       grant_project_role("write")
       create(:project_api_key, project: project, name: "staging-ci")
@@ -139,6 +149,14 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include(project_api_key.name)
       expect(response.body).to include("revoked")
+    end
+
+    it "treats Turbo browser revoke requests as the auth config redirect flow" do
+      create(:project_auth_config, project: project, auth_type: "oidc")
+
+      delete "#{path}/#{project_api_key.id}", headers: turbo_headers
+
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
     end
 
     it "does not write duplicate revoke audit events for an already revoked PAK" do

@@ -99,6 +99,6 @@ class ProjectApiKeysController < ApplicationController
   end
 
   def browser_request?
-    request.format.html? && !default_json_request?
+    (request.format.html? || request.format.turbo_stream?) && !default_json_request?
   end
 end
