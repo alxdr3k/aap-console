@@ -1,4 +1,6 @@
 class ConfigVersionsController < ApplicationController
+  ROLLBACK_RESULT_SESSION_KEY = "config_versions.rollback_result".freeze
+
   before_action :set_project_context, only: [ :index ]
   before_action -> { authorize_project!(@project) }, only: [ :index ]
   before_action :set_config_version, only: [ :show, :rollback ]
@@ -7,9 +9,10 @@ class ConfigVersionsController < ApplicationController
 
   def index
     @config_versions = ordered_project_versions
-    prepare_index_state
 
     return render json: @config_versions if json_request?
+
+    prepare_index_state
 
     respond_to do |format|
       format.html
@@ -38,7 +41,7 @@ class ConfigVersionsController < ApplicationController
       return render json: rollback_payload(result.data), status: :ok if json_request?
 
       flash[:success] = "Config #{result.data.rollback_version.version_id} 버전으로 롤백되었습니다."
-      flash[:rollback_result] = rollback_flash_payload(result.data)
+      store_rollback_result!(rollback_flash_payload(result.data))
       redirect_to organization_project_config_versions_path(
         @config_version.project.organization.slug,
         @config_version.project.slug,
@@ -48,7 +51,7 @@ class ConfigVersionsController < ApplicationController
       return render json: rollback_error_payload(result.error), status: result.error.fetch(:status) if json_request?
 
       flash[:error] = result.error.fetch(:message)
-      flash[:rollback_result] = rollback_error_flash_payload(result.error)
+      store_rollback_result!(rollback_error_flash_payload(result.error))
       redirect_to organization_project_config_versions_path(
         @config_version.project.organization.slug,
         @config_version.project.slug,
@@ -117,7 +120,7 @@ class ConfigVersionsController < ApplicationController
   def prepare_index_state
     @can_write_project = current_authorization.can?(:write_project, @project)
     @active_provisioning_job = active_provisioning_job_for(@project)
-    @rollback_result = flash[:rollback_result]
+    @rollback_result = pop_rollback_result
 
     selected_version = selected_project_version
     return unless selected_version
@@ -180,6 +183,14 @@ class ConfigVersionsController < ApplicationController
       "target_version_id" => @config_version.version_id,
       "diagnostics" => error.fetch(:diagnostics)
     }
+  end
+
+  def store_rollback_result!(payload)
+    session[ROLLBACK_RESULT_SESSION_KEY] = payload
+  end
+
+  def pop_rollback_result
+    session.delete(ROLLBACK_RESULT_SESSION_KEY)
   end
 
   def json_request?
