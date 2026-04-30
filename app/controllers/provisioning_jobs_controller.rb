@@ -33,8 +33,10 @@ class ProvisioningJobsController < ApplicationController
   end
 
   def secrets
-    cached = Rails.cache.read("provisioning_job_secrets_#{@job.id}")
-    render json: cached || {}
+    disable_secret_response_cache!
+    return render json: {} unless @job.completed? || @job.completed_with_warnings?
+
+    render json: Provisioning::SecretCache.read(@job)
   end
 
   def step
@@ -96,6 +98,12 @@ class ProvisioningJobsController < ApplicationController
       format.html { render plain: "Not found", status: :not_found }
       format.json { render json: { error: "Not found" }, status: :not_found }
     end
+  end
+
+  def disable_secret_response_cache!
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
   end
 
   def retry_success

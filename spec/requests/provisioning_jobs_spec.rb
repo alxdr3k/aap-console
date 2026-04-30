@@ -92,6 +92,14 @@ RSpec.describe "ProvisioningJobs", type: :request do
         expect(response.body).to include("수동 재시도")
         expect(response.body).to include(retry_provisioning_job_path(failed_job))
       end
+
+      it "renders the secret reveal shell for non-delete jobs" do
+        get "/provisioning_jobs/#{provisioning_job.id}", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("일회성 인증 정보")
+        expect(response.body).to include(secrets_provisioning_job_path(provisioning_job, format: :json))
+      end
     end
 
     context "as member with project permission" do
@@ -185,6 +193,42 @@ RSpec.describe "ProvisioningJobs", type: :request do
     it "returns 200 (empty when no cached secrets)" do
       get "/provisioning_jobs/#{provisioning_job.id}/secrets"
       expect(response).to have_http_status(:ok)
+    end
+
+    it "returns cached secrets for authorized write users" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+      Provisioning::SecretCache.write(
+        provisioning_job,
+        key: "client_secret",
+        label: "Client Secret",
+        value: "cached-client-secret"
+      )
+
+      get "/provisioning_jobs/#{provisioning_job.id}/secrets", headers: wildcard_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body.dig("secrets", "client_secret", "value")).to eq("cached-client-secret")
+      expect(response.parsed_body["expires_at"]).to be_present
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.headers["Pragma"]).to eq("no-cache")
+    end
+
+    it "does not return cached secrets before the job is complete" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+      active_job = create(:provisioning_job, :in_progress, project: project, operation: "create")
+      Provisioning::SecretCache.write(
+        active_job,
+        key: "client_secret",
+        label: "Client Secret",
+        value: "cached-client-secret"
+      )
+
+      get "/provisioning_jobs/#{active_job.id}/secrets", headers: wildcard_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to eq({})
     end
 
     it "returns 403 for read-only member" do

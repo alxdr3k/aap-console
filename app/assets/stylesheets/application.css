@@ -566,6 +566,22 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.secret-list dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.secret-list code {
+  min-width: min(220px, 100%);
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 .history-list {
   display: grid;
   gap: 8px;

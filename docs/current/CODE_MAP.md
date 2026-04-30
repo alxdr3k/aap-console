@@ -45,6 +45,7 @@
 | `app/services/provisioning/step_seeder.rb` | Operation별 provisioning step plan |
 | `app/services/provisioning/orchestrator.rb` | Step group execution, retry scheduling, rollback decision, completion broadcast |
 | `app/services/provisioning/step_runner.rb` | Individual step retry/defer execution |
+| `app/services/provisioning/secret_cache.rb` | 10-minute one-time provisioning secret cache payload and metadata guard |
 | `app/services/provisioning/rollback_runner.rb` | Completed-step rollback execution |
 | `app/services/provisioning/steps/*.rb` | Keycloak, Langfuse, Config Server, app registry, DB cleanup, health check step |
 | `app/services/config_versions/rollback_service.rb` | Config Server rollback restore + diagnostics |
@@ -65,18 +66,19 @@
 | `app/views/organizations/not_found.html.erb` | HTML 404 shell for missing Organization routes |
 | `app/views/members/index.html.erb` | Member management page with pending badges, role forms, and project permission controls |
 | `app/views/projects/` | Project index/new/show pages, OIDC-only create form, metadata edit, delete provisioning redirect, and recent config/provisioning summaries |
-| `app/views/provisioning_jobs/` | Provisioning show timeline and HTML 404 shell for persisted job/step state |
+| `app/views/provisioning_jobs/` | Provisioning show timeline, manual retry, secret reveal shell, and HTML 404 shell for persisted job/step state |
 | `app/views/sessions/login.html.erb` | SSO auto-submit login page |
 | `app/views/pwa/` | Generated PWA placeholder views |
 | `app/assets/stylesheets/application.css` | Application shell, navigation, forms, flash, and empty-state styling |
 | `app/javascript/application.js` | Importmap entrypoint for Turbo and Stimulus |
 | `app/javascript/controllers/flash_controller.js` | Flash dismissal/autoclose Stimulus controller |
-| `app/javascript/controllers/provisioning_controller.js` | Provisioning show ActionCable subscription, step partial replacement, and polling fallback |
+| `app/javascript/controllers/provisioning_controller.js` | Provisioning show ActionCable subscription, step partial replacement, polling fallback, and masked secret reveal UX |
 | `app/javascript/controllers/user_search_controller.js` / `role_permissions_controller.js` | Member management autocomplete and role-aware Project permission visibility |
 
 Importmap, Turbo, and Stimulus are wired as the UI baseline. Provisioning show
 ERB, ActionCable/Stimulus step replacement, manual retry controls, and active-job
-warning banners are present; secret reveal UI remains planned.
+warning banners are present. The provisioning controller also fetches authorized
+completed-job secrets for masked reveal/copy/confirm UX.
 
 ## Data / Persistence
 
@@ -114,5 +116,5 @@ warning banners are present; secret reveal UI remains planned.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Secret reveal, config UI, Playground, and dashboard leaves remain planned in `SEC-5B.1`, `UI-5C.*`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | Config UI, Playground, PAK reveal UI, and dashboard leaves remain planned in `UI-5C.*`, `AUTH-6A.3`, `PLAY-8A.*`, `ADMIN-8A.*` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |
