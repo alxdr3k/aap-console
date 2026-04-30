@@ -19,7 +19,7 @@
 | `app/controllers/projects_controller.rb` | Project CRUD, HTML pages, and service/provisioning redirects |
 | `app/controllers/members_controller.rb` | Org membership, Keycloak user lookup/pre-assignment, and create-time project permission management |
 | `app/controllers/member_project_permissions_controller.rb` | Project permission grant/update/revoke API for write/read org members |
-| `app/controllers/auth_configs_controller.rb` | Project auth config update와 provisioning trigger |
+| `app/controllers/auth_configs_controller.rb` | Project auth config JSON/HTML show, update provisioning redirect, and OIDC secret regeneration entry point |
 | `app/controllers/litellm_configs_controller.rb` | LiteLLM config update와 provisioning trigger |
 | `app/controllers/config_versions_controller.rb` | Config version index/show/rollback entry point |
 | `app/controllers/project_api_keys_controller.rb` | Project-scoped PAK issue/list/revoke API |
@@ -37,6 +37,7 @@
 |---|---|
 | `app/services/projects/create_service.rb` | Project create transaction과 provisioning job setup |
 | `app/services/projects/update_service.rb` | Project update와 provisioning trigger |
+| `app/services/auth_configs/` | Auth config secret regeneration service와 10-minute reveal cache payload |
 | `app/services/projects/destroy_service.rb` | Project deletion flow |
 | `app/services/project_api_keys/` | PAK issue/revoke/verify services. Plaintext token is returned only from issue response |
 | `app/services/organizations/create_service.rb` | Organization create flow |
@@ -73,6 +74,8 @@
 | `app/javascript/application.js` | Importmap entrypoint for Turbo and Stimulus |
 | `app/javascript/controllers/flash_controller.js` | Flash dismissal/autoclose Stimulus controller |
 | `app/javascript/controllers/provisioning_controller.js` | Provisioning show ActionCable subscription, step partial replacement, polling fallback, and masked secret reveal UX |
+| `app/javascript/controllers/secret_reveal_controller.js` | Auth config regenerate-secret masked reveal/copy/confirm UX |
+| `app/javascript/controllers/uri_list_controller.js` | Auth config URI list add/remove controller |
 | `app/javascript/controllers/user_search_controller.js` / `role_permissions_controller.js` | Member management autocomplete and role-aware Project permission visibility |
 
 Importmap, Turbo, and Stimulus are wired as the UI baseline. Provisioning show
@@ -116,5 +119,5 @@ completed-job secrets for masked reveal/copy/confirm UX.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Config UI, Playground, PAK reveal UI, and dashboard leaves remain planned in `UI-5C.*`, `AUTH-6A.3`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | LiteLLM/config-version UI, Playground, PAK reveal UI, and dashboard leaves remain planned in `UI-5C.2`, `UI-5C.3`, `AUTH-6A.3`, `PLAY-8A.*`, `ADMIN-8A.*` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |

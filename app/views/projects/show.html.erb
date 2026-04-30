@@ -115,9 +115,12 @@
   <section class="panel">
     <header class="panel__header">
       <h2 class="panel__title">인증 설정</h2>
-      <span class="button button--disabled">상세 편집 준비 중</span>
+      <%= link_to current_authorization.can?(:write_project, @project) ? "상세 편집" : "상세 보기",
+                  organization_project_auth_config_path(@organization.slug, @project.slug),
+                  class: "button button--secondary" %>
     </header>
 
+    <% redirect_uris = @auth_config&.redirect_uris.presence || project_snapshot_list(@latest_config_snapshot, "redirect_uris") %>
     <dl class="details-list">
       <div>
         <dt>방식</dt>
@@ -129,7 +132,7 @@
       </div>
       <div>
         <dt>Redirect URIs</dt>
-        <dd><%= project_snapshot_value(@latest_config_snapshot, "redirect_uris") %></dd>
+        <dd><%= project_list_value(redirect_uris) %></dd>
       </div>
     </dl>
   </section>

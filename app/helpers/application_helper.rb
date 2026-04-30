@@ -74,6 +74,13 @@ module ApplicationHelper
     value.to_s
   end
 
+  def project_list_value(values, fallback: "아직 없음")
+    entries = Array(values).compact_blank
+    return fallback if entries.blank?
+
+    entries.join(", ")
+  end
+
   def short_datetime(value)
     value&.strftime("%Y-%m-%d %H:%M") || "-"
   end

@@ -23,8 +23,10 @@ Rails.application.routes.draw do
     resources :members, param: :user_sub, only: [ :index, :create, :update, :destroy ]
 
     resources :projects, param: :slug, only: [ :index, :new, :create, :show, :update, :destroy ] do
-      resource  :auth_config,    only: [ :show, :update ]
-      resource  :litellm_config, only: [ :show, :update ]
+      resource :auth_config, only: [ :show, :update ] do
+        post :regenerate_secret
+      end
+      resource :litellm_config, only: [ :show, :update ]
       resources :config_versions, only: [ :index ]
       resources :project_api_keys, only: [ :index, :create, :destroy ]
     end

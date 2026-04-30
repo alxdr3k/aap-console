@@ -566,6 +566,13 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.secret-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .secret-list dd {
   display: flex;
   flex-wrap: wrap;
@@ -631,6 +638,36 @@ textarea {
   gap: 4px;
   background: #feeceb;
   color: #982b24;
+}
+
+.field-group {
+  display: grid;
+  gap: 12px;
+}
+
+.uri-list {
+  display: grid;
+  gap: 10px;
+}
+
+.uri-list__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-actions--compact {
+  justify-content: flex-start;
+}
+
+.muted-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #64748b;
+  font-size: 14px;
 }
 
 .timeline {
@@ -927,6 +964,7 @@ textarea {
   .radio-grid,
   .option-grid,
   .details-list div,
+  .uri-list__row,
   .history-row,
   .timeline-step,
   .timeline-step__meta,

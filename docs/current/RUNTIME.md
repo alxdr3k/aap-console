@@ -45,6 +45,13 @@ consistency를 확인한다. 실패해도 rollback하지 않고 `completed_with_
 Auth config와 LiteLLM config update controller는 external propagation이 필요할
 때 `202 Accepted`와 `provisioning_job_id`를 반환한다.
 
+### Auth Config HTML / Secret Regeneration
+
+- Browser `GET /organizations/:org_slug/projects/:slug/auth_config` renders the OIDC auth config page for Project `read`+ users while preserving JSON compatibility for API-like requests.
+- Browser `PATCH /organizations/:org_slug/projects/:slug/auth_config` redirects write users to the update provisioning job page when redirect URI fields change.
+- `POST /organizations/:org_slug/projects/:slug/auth_config/regenerate_secret` calls Keycloak `client-secret` regeneration directly for OIDC projects, blocks while another provisioning job is active, writes an audit log, and stores the new secret only in a 10-minute `AuthConfigs::SecretRevealCache`.
+- The auth config page applies `Cache-Control: no-store` whenever a regenerated secret is present and uses masked reveal/copy/confirm UX gated by Project `write` permission.
+
 ### Provisioning Delete
 
 `delete` operation steps:
@@ -101,8 +108,8 @@ current `ConfigVersion` model.
 |---|---|
 | Organization/member/project completion | Designated initial admin and Langfuse org name sync are landed in `CORE-5A.1`; Keycloak pre-assignment and project permission CRUD API are landed in `CORE-5A.2`; org delete finalization is landed in `CORE-5A.3`; Organization list/detail/new/edit UI is landed in `UI-5A.1` / `UI-5A.2`; member management UI is landed in `UI-5A.3`; Project list/detail/new/delete UI is landed in `UI-5A.4` |
 | Hotwire provisioning detail UI | ERB timeline, ActionCable/Stimulus step replacement, manual retry UX, active-job warning banners, and OIDC secret reveal are landed in `UI-5B.1` / `UI-5B.2` / `UI-5B.3` / `SEC-5B.1`. `Q-002` is resolved by `DEC-004`; PAK reveal remains `AUTH-6A.3` |
-| Secret reveal cache write path | `KeycloakClientCreate` writes OIDC client secrets through `Provisioning::SecretCache` with 10-minute TTL; `ProvisioningJobsController#secrets` only returns values for completed jobs after Project `write`+ authorization |
-| Config/product UI | Auth config, LiteLLM config, and config-version APIs exist, but server-rendered product UI is `UI-5C.*` |
+| Secret reveal cache write path | `KeycloakClientCreate` writes provisioning-created OIDC secrets through `Provisioning::SecretCache`, and auth config secret regeneration writes through `AuthConfigs::SecretRevealCache`; both use 10-minute TTL and Project authorization metadata guards |
+| Config/product UI | Auth config server-rendered UI is landed in `UI-5C.1`; LiteLLM config and config-version UI remain `UI-5C.2` / `UI-5C.3` |
 | Full external config rollback | Current rollback restores Config Server and reports Keycloak/Langfuse as non-snapshotted diagnostics. Full Keycloak/Langfuse snapshot restore is `OPS-7A.5` / `AC-022` |
 | SAML/OAuth/PAK UI | Backend/API gate is accepted by `DEC-003`; product UI remains `AUTH-6A.*` |
 | Deployment/restore/archive operations | Deploy command, rollback procedure, Litestream restore, audit archive, and ConfigVersion storage policy are `OPS-7A.*` |

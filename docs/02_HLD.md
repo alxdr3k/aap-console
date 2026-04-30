@@ -647,7 +647,8 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 | Method | Path | 설명 | 권한 |
 |--------|------|------|------|
 | GET | `/organizations/:org_slug/projects/:slug/auth_config` | 인증 설정 조회 | Project `read`+ |
-| PATCH | `/organizations/:org_slug/projects/:slug/auth_config` | 인증 방식 변경 | Project `write`+ |
+| PATCH | `/organizations/:org_slug/projects/:slug/auth_config` | Redirect URI / post-logout URI 변경 (→ 프로비저닝) | Project `write`+ |
+| POST | `/organizations/:org_slug/projects/:slug/auth_config/regenerate_secret` | OIDC Client Secret 재발급 + 10분 reveal cache 갱신 | Project `write`+ |
 
 #### Project API Keys — FR-4
 
@@ -752,7 +753,9 @@ Rails.application.routes.draw do
     resources :members, param: :user_sub, only: [:index, :create, :update, :destroy]
 
     resources :projects, param: :slug do
-      resource :auth_config, only: [:show, :update]
+      resource :auth_config, only: [:show, :update] do
+        post :regenerate_secret
+      end
       resource :litellm_config, only: [:show, :update]
       resources :config_versions, only: [:index]
       resources :project_api_keys, only: [:index, :create, :destroy]
