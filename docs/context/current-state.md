@@ -15,9 +15,9 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 - current milestone: `P0-M5` core product UI / provisioning detail / FR-1~3 completion
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
-- active tracks: `UI`
-- active phases: `UI-5A`, `UI-5B`, `UI-5C`
-- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1`, `UI-5C.1`, `UI-5C.2`, and `UI-5C.3` landed; next candidate is `AUTH-6A.1`
+- active tracks: `UI`, `AUTH`
+- active phases: `UI-5A`, `UI-5B`, `UI-5C`, `AUTH-6A`
+- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1`, `UI-5C.1`, `UI-5C.2`, and `UI-5C.3` landed; next ready leaf is `AUTH-6A.3`
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
 - next gates: `AC-014`, `AC-015`, `AC-016`
@@ -72,8 +72,8 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 ## Current Priorities
 
-1. `AUTH-6A.1`로 SAML metadata UI와 validation 범위를 제품화한다.
-2. `AUTH-6A.2`와 `AUTH-6A.3`의 sequencing을 정리하고 PAK reveal/UI gaps를 줄인다.
+1. `AUTH-6A.3`로 PAK issue/revoke/one-time reveal UI를 제품화한다.
+2. `AUTH-6A.1` / `AUTH-6A.2`는 metadata/form contract를 더 구체화한 뒤 ready 승격을 다시 검토한다.
 3. `OPS-7A.*`와 `PLAY-8A.*`의 ready 조건을 계속 추적한다.
 
 ## Current Risks / Unknowns
