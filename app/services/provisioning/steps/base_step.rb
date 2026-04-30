@@ -22,6 +22,10 @@ module Provisioning
         raise NotImplementedError, "#{self.class}#already_completed? is not implemented"
       end
 
+      # Optional hook for steps that need to refresh ephemeral side effects
+      # when the external resource already exists and the step is skipped.
+      def after_skip; end
+
       # Persist a snapshot describing a side-effect that has already been
       # applied to an external system. Steps must call this immediately
       # after the external call returns success and before any local DB

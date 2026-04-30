@@ -22,6 +22,7 @@ module Provisioning
       step_impl = build_step_impl
 
       if step_impl.already_completed?
+        step_impl.after_skip
         @step.update!(status: :skipped, completed_at: Time.current)
         broadcast_step_update
         return { status: :completed, step: @step, ephemeral_params: {} }
