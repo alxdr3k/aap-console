@@ -236,6 +236,29 @@ RSpec.describe "ConfigVersions", type: :request do
       expect(response.body).to include("failed")
     end
 
+    it "does not show another project's rollback diagnostics on this history page" do
+      other_project = create(:project, :active, organization: org)
+      create(:project_permission,
+             org_membership: OrgMembership.find_by!(organization: org, user_sub: user_sub),
+             project: other_project,
+             role: "write")
+      other_config_version = create(:config_version,
+                                    project: other_project,
+                                    version_id: "v2",
+                                    change_type: "update",
+                                    changed_by_sub: user_sub,
+                                    snapshot: { models: [ "claude-sonnet" ] })
+      stub_config_server_revert_changes(version: "v-rollback-2")
+
+      post "/config_versions/#{other_config_version.id}/rollback", headers: html_headers
+      follow_redirect!
+      get "/organizations/#{org.slug}/projects/#{project.slug}/config_versions", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).not_to include("최근 롤백 결과")
+      expect(response.body).not_to include("v-rollback-2")
+    end
+
     it "returns 403 for read-only member" do
       other_project = create(:project, :active, organization: org)
       other_cv = create(:config_version, project: other_project, version_id: "v2",

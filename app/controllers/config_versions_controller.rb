@@ -186,11 +186,26 @@ class ConfigVersionsController < ApplicationController
   end
 
   def store_rollback_result!(payload)
-    session[ROLLBACK_RESULT_SESSION_KEY] = payload
+    results = session[ROLLBACK_RESULT_SESSION_KEY]
+    results = {} unless results.is_a?(Hash)
+
+    results[@config_version.project.id.to_s] = payload
+    session[ROLLBACK_RESULT_SESSION_KEY] = results
   end
 
   def pop_rollback_result
-    session.delete(ROLLBACK_RESULT_SESSION_KEY)
+    results = session[ROLLBACK_RESULT_SESSION_KEY]
+    return unless results.is_a?(Hash)
+
+    payload = results.delete(@project.id.to_s)
+
+    if results.empty?
+      session.delete(ROLLBACK_RESULT_SESSION_KEY)
+    else
+      session[ROLLBACK_RESULT_SESSION_KEY] = results
+    end
+
+    payload
   end
 
   def json_request?
