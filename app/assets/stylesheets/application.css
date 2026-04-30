@@ -358,6 +358,22 @@ textarea {
   background: #f8fafc;
 }
 
+.table-list__row--config-version {
+  grid-template-columns: 120px 160px 160px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.table-list__row--selected {
+  background: #f8fafc;
+}
+
+.table-list__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -891,6 +907,36 @@ textarea {
 .muted-text {
   margin: 0;
   color: #64748b;
+}
+
+.diff-view {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #edf1f7;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+.diff-view__line {
+  display: block;
+  white-space: pre;
+}
+
+.diff-view__line--meta {
+  color: #93c5fd;
+}
+
+.diff-view__line--added {
+  color: #86efac;
+}
+
+.diff-view__line--removed {
+  color: #fca5a5;
 }
 
 .error-list {

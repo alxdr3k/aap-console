@@ -361,7 +361,7 @@ provisioning ── create 성공 ──▶ active
 | `change_type` | string NOT NULL | `create` / `update` / `delete` / `rollback` |
 | `change_summary` | text | 변경 요약 (예: "모델 목록 변경: +claude-sonnet, -gpt-3.5") |
 | `changed_by_sub` | string NOT NULL | 변경 사용자 Keycloak subject. 이름/이메일은 Keycloak API로 조회 |
-| `snapshot` | JSON | 변경 시점의 설정 스냅샷. Keycloak/Langfuse 롤백 시 사용 |
+| `snapshot` | JSON | 변경 시점의 LiteLLM 설정 스냅샷. 현재 rollback은 Config Server restore + diagnostics에 사용하며, Keycloak/Langfuse mutable snapshot 복원은 `OPS-7A.5` follow-up |
 | `created_at` | datetime | |
 
 **retention**: `config_versions`는 운영상 롤백 이력이므로 기본적으로 **영구 보존**한다. Project 가 삭제되면(`projects.status = deleted`) 연관 레코드도 cascade 삭제한다. 저장 공간 문제가 되면 Project당 최근 100개 + 최근 1년 이내 레코드만 유지하는 정책으로 전환한다. Current repo에는 아직 `ConfigVersionsPruneJob`이 없다.

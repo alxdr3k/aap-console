@@ -21,7 +21,7 @@
 | `app/controllers/member_project_permissions_controller.rb` | Project permission grant/update/revoke API for write/read org members |
 | `app/controllers/auth_configs_controller.rb` | Project auth config JSON/HTML show, update provisioning redirect, and OIDC secret regeneration entry point |
 | `app/controllers/litellm_configs_controller.rb` | LiteLLM config JSON/HTML show, validation, and provisioning redirect/update flow |
-| `app/controllers/config_versions_controller.rb` | Config version index/show/rollback entry point |
+| `app/controllers/config_versions_controller.rb` | Config version JSON/HTML history page, Turbo Frame detail/diff view, and synchronous rollback redirect/diagnostics flow |
 | `app/controllers/project_api_keys_controller.rb` | Project-scoped PAK issue/list/revoke API |
 | `app/controllers/provisioning_jobs_controller.rb` | Provisioning job show/retry/secrets endpoint |
 | `app/channels/provisioning_channel.rb` | Provisioning job status용 ActionCable stream |
@@ -50,6 +50,7 @@
 | `app/services/provisioning/rollback_runner.rb` | Completed-step rollback execution |
 | `app/services/provisioning/steps/*.rb` | Keycloak, Langfuse, Config Server, app registry, DB cleanup, health check step |
 | `app/services/config_versions/rollback_service.rb` | Config Server rollback restore + diagnostics |
+| `app/services/config_versions/diff_builder.rb` | Snapshot JSON diff lines for config-version HTML detail views |
 | `app/clients/keycloak_client.rb` | Keycloak Admin API client |
 | `app/clients/langfuse_client.rb` | Langfuse tRPC client |
 | `app/clients/config_server_client.rb` | Config Server Admin/read API client |
@@ -67,6 +68,7 @@
 | `app/views/organizations/not_found.html.erb` | HTML 404 shell for missing Organization routes |
 | `app/views/members/index.html.erb` | Member management page with pending badges, role forms, and project permission controls |
 | `app/views/projects/` | Project index/new/show pages, OIDC-only create form, metadata edit, delete provisioning redirect, and recent config/provisioning summaries |
+| `app/views/config_versions/` | Config-version history page, Turbo Frame detail/diff panel, and rollback UI |
 | `app/views/provisioning_jobs/` | Provisioning show timeline, manual retry, secret reveal shell, and HTML 404 shell for persisted job/step state |
 | `app/views/sessions/login.html.erb` | SSO auto-submit login page |
 | `app/views/pwa/` | Generated PWA placeholder views |
@@ -119,5 +121,5 @@ completed-job secrets for masked reveal/copy/confirm UX.
 
 | Path | Reason |
 |---|---|
-| `app/views/` / `app/javascript/` | Config-version UI, Playground, PAK reveal UI, and dashboard leaves remain planned in `UI-5C.3`, `AUTH-6A.3`, `PLAY-8A.*`, `ADMIN-8A.*` |
+| `app/views/` / `app/javascript/` | Playground, PAK reveal UI, and dashboard leaves remain planned in `AUTH-6A.3`, `PLAY-8A.*`, `ADMIN-8A.*` |
 | `app/jobs/` | `AuditLogsArchiveJob` is not implemented; tracked by `OPS-7A.3` |
