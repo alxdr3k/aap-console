@@ -20,7 +20,7 @@ Question, decision, requirement, acceptance gate, test, slice를 연결한다.
 | `TRACE-012` | `Q-002` | `DEC-004`, ADR-006 | FR-7.3 / secret zero-store | `AC-015` / `TEST-015` | `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1` | Provisioning detail UI is a product UI gate, not a reopened P0-M3 release gate |
 | `TRACE-013` |  | ADR-004, ADR-006 | FR-1 / FR-2 / FR-3 UI | `AC-014` / `TEST-014` | `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4` | Core server-rendered pages and role-aware controls |
 | `TRACE-014` |  | ADR-004 | FR-1 / FR-2 completion | `AC-018` / `TEST-018` | `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3` | Initial admin selection, Keycloak pre-assignment, project permission CRUD, org delete completion |
-| `TRACE-015` | `Q-001` | `DEC-003` | FR-4 auth UI | `AC-017` / `TEST-017` | `AUTH-6A.1`, `AUTH-6A.2`, `AUTH-6A.3` | Backend/API gate accepted; SAML/OAuth/PAK UI remains a planned productization gate |
+| `TRACE-015` | `Q-001` | `DEC-003` | FR-4 auth UI | `AC-017` / `TEST-017` | `AUTH-6A.1`, `AUTH-6A.2`, `AUTH-6A.3` | Backend/API gate accepted; PAK auth-config UI is landed and SAML/OAuth UI remains the planned productization follow-up |
 | `TRACE-016` |  | ADR-003, ADR-006 | FR-4 / FR-6 / FR-8 UI | `AC-016` / `TEST-016` | `UI-5C.1`, `UI-5C.2`, `UI-5C.3` | Auth config, LiteLLM config, and config-version UI |
 | `TRACE-017` |  | ADR-005 | NFR availability / deploy / storage | `AC-019` / `TEST-019` | `OPS-7A.1`, `OPS-7A.2`, `OPS-7A.4` | Deploy/rollback/restore evidence and ConfigVersion storage policy |
 | `TRACE-018` |  | ADR-005 | Audit retention | `AC-020` / `TEST-020` | `OPS-7A.3` | AuditLogsArchiveJob target from HLD |

@@ -12,7 +12,7 @@
 - Proposed Answer: OIDC는 유지하고, SAML/OAuth/PAK backend/API는 `P0-M4`에서 수용한다. UI는 release blocker가 아니라 후속 UI work로 둔다.
 - Blocks: `AUTH-4A.1`, `AUTH-4A.2`, `AC-011`
 - Decision: `DEC-003`
-- Resolution: backend/API gate accepted; SAML/OAuth/PAK UI remains deferred/non-gating.
+- Resolution: backend/API gate accepted; UI is non-gating. PAK product UI later landed in `AUTH-6A.3`, while SAML/OAuth UI remains deferred.
 
 **Context**
 

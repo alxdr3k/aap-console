@@ -17,10 +17,10 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - recently accepted: `DOC-M1` boilerplate migration via PR #24 on 2026-04-29
 - active tracks: `UI`, `AUTH`
 - active phases: `UI-5A`, `UI-5B`, `UI-5C`, `AUTH-6A`
-- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1`, `UI-5C.1`, `UI-5C.2`, and `UI-5C.3` landed; next ready leaf is `AUTH-6A.3`
+- active slices: `CORE-5A.1`, `CORE-5A.2`, `CORE-5A.3`, `UI-5A.1`, `UI-5A.2`, `UI-5A.3`, `UI-5A.4`, `UI-5B.1`, `UI-5B.2`, `UI-5B.3`, `SEC-5B.1`, `UI-5C.1`, `UI-5C.2`, `UI-5C.3`, and `AUTH-6A.3` landed; no additional ready auth leaf is open yet
 - last accepted gate: `AC-011` SAML/OAuth/PAK backend/API gate
 - last passing doc gate: `AC-DOC-001`
-- next gates: `AC-014`, `AC-015`, `AC-016`
+- next gates: `AC-014`, `AC-015`, `AC-016`, `AC-017`
 - canonical ledger: `docs/04_IMPLEMENTATION_PLAN.md`
 
 ## Implemented
@@ -51,9 +51,10 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - `UI-5B.2` landed: provisioning show page subscribes to `ProvisioningChannel`, replaces individual step partials, and keeps JSON polling fallback for reconnect/refresh.
 - `UI-5B.3` landed: retryable provisioning jobs show manual-intervention controls, HTML retry redirects, retry conflict protection, and Project detail active-job warning banners.
 - `SEC-5B.1` landed: OIDC client secrets are written only to 10-minute `Rails.cache`, served by authorized completed-job fetch, and displayed with masked/copy/confirm UX on the provisioning page.
-- `UI-5C.1` landed: auth config browser page renders OIDC redirect/post-logout URI editing, write-gated Client Secret regeneration with masked/copy/confirm reveal, project-detail link-through, and disabled SAML/OAuth/PAK placeholders while keeping JSON compatibility.
+- `UI-5C.1` landed: auth config browser page renders OIDC redirect/post-logout URI editing, write-gated Client Secret regeneration with masked/copy/confirm reveal, project-detail link-through, and disabled SAML/OAuth placeholders while keeping JSON compatibility.
 - `UI-5C.2` landed: LiteLLM config browser page renders model/guardrail/S3 retention editing, read-only summary for readers, HTML provisioning redirects, basic form validation, and JSON compatibility.
 - `UI-5C.3` landed: config-version browser page renders version history, Turbo Frame detail/diff view, synchronous rollback entry with diagnostics banner, Project-detail link-through, and JSON compatibility.
+- `AUTH-6A.3` landed: auth-config browser page now renders Project API Key list, writer-only issue/revoke actions, one-time reveal with 10-minute project-scoped cache, and JSON compatibility for existing PAK API clients.
 
 ## Planned
 
@@ -72,15 +73,15 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 ## Current Priorities
 
-1. `AUTH-6A.3`로 PAK issue/revoke/one-time reveal UI를 제품화한다.
-2. `AUTH-6A.1` / `AUTH-6A.2`는 metadata/form contract를 더 구체화한 뒤 ready 승격을 다시 검토한다.
-3. `OPS-7A.*`와 `PLAY-8A.*`의 ready 조건을 계속 추적한다.
+1. `AUTH-6A.1` / `AUTH-6A.2`의 metadata/form contract를 더 구체화해 다음 ready leaf를 만든다.
+2. `OPS-7A.*`와 `PLAY-8A.*`의 ready 조건을 계속 추적한다.
+3. `AC-017` 범위에서 남은 SAML/OAuth auth UI 정의와 검증 전략을 정리한다.
 
 ## Current Risks / Unknowns
 
 - `Q-003`: super-admin dashboard scope.
 - Deployment command, rollback procedure, and Litestream restore are not accepted until `OPS-7A.1` / `OPS-7A.2`.
-- PAK one-time reveal is still planned with `AUTH-6A.3`; current `SEC-5B.1` product path covers OIDC client secret reveal.
+- `AUTH-6A.3` 이후 다음 ready auth leaf가 비어 있다. SAML/OAuth contract tightening 없이는 `AUTH-6A.1` / `AUTH-6A.2`를 바로 구현 큐로 올리기 어렵다.
 - Full Keycloak/Langfuse config rollback is diagnostics-only until `OPS-7A.5`.
 
 ## Current Validation

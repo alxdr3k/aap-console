@@ -1055,14 +1055,16 @@ ActionCable의 pub/sub adapter로 `SolidCable`(SQLite 기반)을 사용한다. S
 `Provisioning::SecretCache`를 통해 10분 TTL `Rails.cache`에만 저장된다.
 `ProvisioningJobsController#secrets`는 Job이 `completed` /
 `completed_with_warnings` 상태이고 요청자가 Project `write`+ 권한을 가진 경우에만
-cache payload를 반환한다. PAK one-time reveal은 `AUTH-6A.3` UI 확장 범위다.
+cache payload를 반환한다. 인증 설정 화면의 OIDC secret 재발급은
+`AuthConfigs::SecretRevealCache`, browser PAK 발급은
+`ProjectApiKeys::RevealCache`를 통해 같은 TTL/metadata-guard 원칙을 재사용한다. 공유 cache write가 실패하면 token 유실을 막기 위해 동일 browser session에 한해 project-scoped fallback payload를 유지한다.
 
 Flow는 다음 경로를 사용한다:
 
 1. **시크릿을 생성하는 단계**는 현재 OIDC `KeycloakClientCreate`와 PAK 발급 단계(사용자가 명시적으로 PAK를 선택·추가한 경우)뿐이다. `ConfigServerApply` 는 이전 단계에서 받은 시크릿 평문을 Config Server로 전달하는 **소비자** 이며 새 시크릿을 생성하지 않는다. `LangfuseProjectCreate` 가 반환하는 SDK Key(PK/SK) 는 사용자에게 표시하지 않고 Config Server로 직접 전달되므로 이 채널을 사용하지 않는다 (PRD FR-5).
-2. 시크릿 생성 단계가 성공하면 값은 Rails **단기 캐시**(`Rails.cache` with `expires_in: 10.minutes`, 저장소는 아래 §6.5 끝 단락 참조)에 `provisioning_job_id` 키로 저장된다. 저장 시점에 Project에 대한 권한 메타(org/project ID) 를 함께 기록하여 fetch 시 인가 검증에 사용한다.
-3. 브라우저는 현황 페이지가 `completed` 상태를 감지하면 `GET /provisioning_jobs/:id/secrets` 를 호출한다. 이 엔드포인트는 **TTL(10분) 내에 반복 호출 가능** 하며, 동일 Project에 대한 서로 다른 세션(여러 관리자, 재방문) 도 권한이 있다면 모두 접근할 수 있다.
-4. 컨트롤러는 매 호출마다 요청 사용자의 해당 Project `write`+ 권한을 다시 검증하고, 캐시가 존재하면 값을 응답한다. 캐시는 TTL 만료 시에만 자동 삭제되며 **응답 즉시 무효화하지 않는다** — "누가 먼저 fetch 했는지" 로 나머지 관리자가 차단되는 구조를 피하기 위함.
+2. 시크릿 생성 단계가 성공하면 값은 Rails **단기 캐시**(`Rails.cache` with `expires_in: 10.minutes`, 저장소는 아래 §6.5 끝 단락 참조)에 저장된다. 프로비저닝 완료 시크릿은 `provisioning_job_id` 키를, 인증 설정 Secret 재발급과 browser PAK 발급은 `project_id` 기반 키를 사용한다. 저장 시점에 Project에 대한 권한 메타(org/project ID) 를 함께 기록하여 fetch/render 시 인가 검증에 사용한다.
+3. 브라우저는 프로비저닝 현황 페이지가 `completed` 상태를 감지하면 `GET /provisioning_jobs/:id/secrets` 를 호출한다. 인증 설정 Secret 재발급/PAK 발급 browser flow는 같은 Project의 `/auth_config` HTML redirect 뒤 렌더 단계에서 project-scoped cache payload를 읽는다. PAK 발급 시 공유 cache persistence가 실패하면 동일 browser session의 fallback payload를 대신 읽는다. 모든 경로는 **TTL(10분) 내에 반복 조회 가능** 하며, 공유 cache가 살아있는 경우 동일 Project에 대한 서로 다른 세션(여러 관리자, 재방문) 도 권한이 있다면 모두 접근할 수 있다.
+4. 컨트롤러는 매 fetch/render마다 요청 사용자의 해당 Project `write`+ 권한을 다시 검증하고, cache 또는 fallback payload가 존재하면 값을 응답하거나 렌더한다. 공유 cache는 TTL 만료 시에만 자동 삭제되며 **응답 즉시 무효화하지 않는다** — "누가 먼저 fetch 했는지" 로 나머지 관리자가 차단되는 구조를 피하기 위함. session fallback은 shared cache write failure에서만 사용되는 degraded path다.
 5. UI 측 Stimulus 컨트롤러는 "확인 — 안전하게 저장했습니다" 클릭 시 **해당 탭의 브라우저 세션에서만** 재조회 방지 플래그를 기록한다(`sessionStorage`). 이는 UX 힌트이며 서버는 여전히 응답한다.
 
 캐시 저장소는 production에서 `solid_cache_store`를 사용한다. development는
