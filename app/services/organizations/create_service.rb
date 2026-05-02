@@ -1,12 +1,23 @@
 module Organizations
   class CreateService
-    def initialize(params:, current_user_sub:, langfuse_client: LangfuseClient.new)
+    def initialize(params:, current_user_sub:, langfuse_client: LangfuseClient.new, keycloak_client: KeycloakClient.new)
       @params = params.to_h.symbolize_keys
       @current_user_sub = current_user_sub
       @langfuse_client = langfuse_client
+      @keycloak_client = keycloak_client
     end
 
     def call
+      if @params[:initial_admin_user_sub].present? && @params[:initial_admin_user_sub] != @current_user_sub
+        begin
+          @keycloak_client.get_user(user_sub: @params[:initial_admin_user_sub])
+        rescue BaseClient::NotFoundError
+          return Result.failure("Initial admin user not found")
+        rescue BaseClient::ApiError => e
+          return Result.failure("Keycloak error: #{e.message}")
+        end
+      end
+
       organization = Organization.new(
         name: @params[:name],
         description: @params[:description],

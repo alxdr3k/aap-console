@@ -21,7 +21,8 @@ module ProjectApiKeys
 
       project_api_key = ProjectApiKey
                         .includes(project: :organization)
-                        .find_by!(token_digest: digest)
+                        .find_by(token_digest: digest)
+      return Result.failure("Invalid token") if project_api_key.nil?
 
       Result.success(project_api_key)
     end

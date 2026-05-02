@@ -37,11 +37,15 @@ class ProjectsController < ApplicationController
     attributes = normalized_project_params
     form_errors = project_form_errors(attributes)
 
-    if html_project_request? && form_errors.any?
-      @project = @organization.projects.new(attributes.slice(:name, :description))
-      @errors = form_errors
-      prepare_project_form(attributes)
-      return render :new, status: :unprocessable_entity
+    if form_errors.any?
+      if html_project_request?
+        @project = @organization.projects.new(attributes.slice(:name, :description))
+        @errors = form_errors
+        prepare_project_form(attributes)
+        return render :new, status: :unprocessable_entity
+      else
+        return render json: { errors: form_errors }, status: :unprocessable_entity
+      end
     end
 
     result = Projects::CreateService.new(
@@ -195,7 +199,15 @@ class ProjectsController < ApplicationController
   def project_form_errors(attributes)
     errors = []
     errors << "인증 방식은 OIDC만 선택할 수 있습니다." unless attributes[:auth_type] == "oidc"
-    errors << "모델을 하나 이상 선택하세요." if Array(attributes[:models]).compact_blank.blank?
+
+    submitted_models = Array(attributes[:models]).compact_blank
+    errors << "모델을 하나 이상 선택하세요." if submitted_models.blank?
+    unknown_models = submitted_models - AVAILABLE_MODELS
+    errors << "허용되지 않은 모델: #{unknown_models.join(', ')}" if unknown_models.any?
+
+    submitted_guardrails = Array(attributes[:guardrails]).compact_blank
+    unknown_guardrails = submitted_guardrails - AVAILABLE_GUARDRAILS
+    errors << "허용되지 않은 가드레일: #{unknown_guardrails.join(', ')}" if unknown_guardrails.any?
 
     retention_days = attributes[:s3_retention_days].to_i
     unless retention_days.between?(1, 3650)

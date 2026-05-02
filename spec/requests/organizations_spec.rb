@@ -109,6 +109,7 @@ RSpec.describe "Organizations", type: :request do
 
       it "assigns a designated initial admin when provided" do
         stub_langfuse_create_org(name: "Acme Corp")
+        stub_keycloak_get_user(user_sub: "selected-admin-sub")
 
         post "/organizations",
              params: { organization: { name: "Acme Corp", initial_admin_user_sub: "selected-admin-sub" } }

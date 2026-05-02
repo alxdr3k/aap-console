@@ -65,12 +65,11 @@ class AuthConfigsController < ApplicationController
     ).call
 
     if result.success?
-      flash[:warning] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
-
       if json_request?
         disable_secret_response_cache!
         render json: AuthConfigs::SecretRevealCache.read(@project), status: :created
       else
+        flash[:warning] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end
     else
@@ -186,10 +185,6 @@ class AuthConfigsController < ApplicationController
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-  end
-
-  def json_request?
-    request.format.json? || default_json_request?
   end
 
   def project_api_key_reveal_payload
