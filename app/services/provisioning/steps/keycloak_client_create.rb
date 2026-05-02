@@ -47,8 +47,10 @@ module Provisioning
         # and either returns a single Hash or raises NotFoundError. Passing
         # a keyword arg lands as a Hash in the positional slot, and treating
         # the return value as an array was broken on both counts.
-        KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
-        true
+        # Confirm the live UUID matches the persisted snapshot — a recreated
+        # client with the same client_id would otherwise look like a no-op skip.
+        client = KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
+        client.is_a?(Hash) && client["id"] == uuid
       rescue BaseClient::NotFoundError
         false
       rescue BaseClient::ApiError

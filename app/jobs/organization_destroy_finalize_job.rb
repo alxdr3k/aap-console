@@ -1,5 +1,6 @@
 class OrganizationDestroyFinalizeJob < ApplicationJob
   RETRY_DELAY = 30.seconds
+  BLOCKED_RETRY_DELAY = 5.minutes
   FINALIZER_LEASE_DURATION = 10.minutes
 
   queue_as :default
@@ -14,16 +15,10 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
       end
     end
 
-    def reschedule!(organization, current_user_sub:)
+    def reschedule!(organization, current_user_sub:, wait: RETRY_DELAY)
       organization.with_lock do
         reserve_finalizer!(organization)
-        set(wait: RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
-      end
-    end
-
-    def release_reservation!(organization)
-      organization.with_lock do
-        organization.update!(destroy_finalizer_reserved_until: nil)
+        set(wait: wait).perform_later(organization.id, current_user_sub: current_user_sub)
       end
     end
 
@@ -55,11 +50,15 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
       return
     end
 
-    self.class.release_reservation!(organization)
-    Rails.logger.error(
+    # No active delete job, but the destroy contract is still pending. Reschedule
+    # with a longer backoff so an operator-driven recovery (e.g. manually retrying
+    # a stuck project's delete job) lets the finalizer pick the work back up.
+    Rails.logger.warn(
       "[OrganizationDestroyFinalizeJob] Organization #{organization.id} destroy is blocked; " \
-      "remaining projects: #{remaining_projects.map { |project| "#{project.slug}:#{project.status}" }.join(', ')}"
+      "remaining projects: #{remaining_projects.map { |project| "#{project.slug}:#{project.status}" }.join(', ')}; " \
+      "rescheduling in #{BLOCKED_RETRY_DELAY.inspect}"
     )
+    self.class.reschedule!(organization, current_user_sub: current_user_sub, wait: BLOCKED_RETRY_DELAY)
   end
 
   private

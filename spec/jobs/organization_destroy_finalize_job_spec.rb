@@ -59,28 +59,28 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
       }.not_to have_enqueued_job(described_class)
     end
 
-    it "stops rescheduling when remaining projects are not in a delete flow" do
+    it "reschedules with a backoff when a remaining project has no active delete job" do
       create(:project, :provision_failed, organization: organization, slug: "blocked-project")
-      allow(Rails.logger).to receive(:error)
+      allow(Rails.logger).to receive(:warn)
 
       expect {
         described_class.perform_now(organization.id, current_user_sub: user_sub)
-      }.not_to have_enqueued_job(described_class)
+      }.to have_enqueued_job(described_class)
 
-      expect(organization.reload.destroy_finalizer_reserved_until).to be_nil
-      expect(Rails.logger).to have_received(:error).with(/blocked-project:provision_failed/)
+      expect(organization.reload.destroy_finalizer_reserved_until).to be_future
+      expect(Rails.logger).to have_received(:warn).with(/blocked-project:provision_failed/)
     end
 
-    it "stops rescheduling when a deleting project has no active delete job" do
+    it "reschedules with a backoff when a deleting project has no active delete job" do
       create(:project, :deleting, organization: organization, slug: "stalled-project")
-      allow(Rails.logger).to receive(:error)
+      allow(Rails.logger).to receive(:warn)
 
       expect {
         described_class.perform_now(organization.id, current_user_sub: user_sub)
-      }.not_to have_enqueued_job(described_class)
+      }.to have_enqueued_job(described_class)
 
-      expect(organization.reload.destroy_finalizer_reserved_until).to be_nil
-      expect(Rails.logger).to have_received(:error).with(/stalled-project:deleting/)
+      expect(organization.reload.destroy_finalizer_reserved_until).to be_future
+      expect(Rails.logger).to have_received(:warn).with(/stalled-project:deleting/)
     end
   end
 end

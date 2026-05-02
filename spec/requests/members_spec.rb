@@ -143,6 +143,21 @@ RSpec.describe "Members", type: :request do
       expect(WebMock).to have_requested(:delete, "#{KeycloakMock::BASE}/users/preassigned-user-sub")
     end
 
+    it "compensates a pre-created Keycloak user when a transient DB error escapes the transaction" do
+      stub_keycloak_create_user(email: "transient@example.com", user_sub: "transient-user-sub")
+      stub_keycloak_delete_user(user_sub: "transient-user-sub")
+      allow_any_instance_of(OrgMembership).to receive(:save!).and_raise(ActiveRecord::StatementInvalid.new("simulated DB outage"))
+
+      expect {
+        post "/organizations/#{org.slug}/members",
+             params: { member: { email: "transient@example.com", role: "write" } },
+             headers: json_headers
+      }.to raise_error(ActiveRecord::StatementInvalid)
+
+      expect(OrgMembership.exists?(organization: org, user_sub: "transient-user-sub")).to be false
+      expect(WebMock).to have_requested(:delete, "#{KeycloakMock::BASE}/users/transient-user-sub")
+    end
+
     it "returns 403 for non-admin member" do
       create(:org_membership, organization: org, user_sub: "other-user", role: "read")
       login_as("other-user")

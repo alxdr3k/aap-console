@@ -48,6 +48,17 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
         expect(build_step(result_snapshot: snap).already_completed?).to be(false)
       end
     end
+
+    context "when the Keycloak client_id matches but the UUID differs from the snapshot" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:snap) { { "keycloak_client_uuid" => "uuid-snapshot" } }
+
+      it "returns false so a stale snapshot does not skip the step" do
+        stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
+                                  clients: [ { "id" => "uuid-live", "clientId" => auth_config.keycloak_client_id } ])
+        expect(build_step(result_snapshot: snap).already_completed?).to be(false)
+      end
+    end
   end
 
   describe "#execute side-effect snapshot atomicity" do
