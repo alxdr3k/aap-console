@@ -101,36 +101,54 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
     end
 
-    it "falls back to the browser session when shared reveal cache persistence fails" do
+    it "auto-revokes the issued PAK when shared reveal cache persistence fails" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
       allow(cache).to receive(:write).and_return(false)
 
-      post path, params: { project_api_key: { name: "session-ci" } }, headers: html_headers
+      expect {
+        post path, params: { project_api_key: { name: "session-ci" } }, headers: html_headers
+      }.to change { AuditLog.where(action: "project_api_key.revoke").count }.by(1)
+
+      issued = project.project_api_keys.find_by!(name: "session-ci")
+      expect(issued.revoked_at).to be_present
 
       expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
 
       follow_redirect!
 
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include("일회성 PAK")
-      expect(response.body).to include("session-ci")
-      expect(response.body).to include("pak-")
+      # PAK plaintext must never reach the rendered page when cache write fails.
+      expect(response.body).not_to include("일회성 PAK")
+      expect(response.body).to include("폐기")
     end
 
-    it "prefers the browser-session fallback over a stale shared reveal payload" do
+    it "auto-revokes the issued PAK when the reveal cache raises during persistence" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
-      stale_key = create(:project_api_key, project: project, name: "stale-reveal")
-      ProjectApiKeys::RevealCache.write(project, project_api_key: stale_key, token: "pak-old-secret-token")
+      allow(ProjectApiKeys::RevealCache).to receive(:write).and_raise("cache backend down")
+      allow(Rails.logger).to receive(:error)
+
+      expect {
+        post path, params: { project_api_key: { name: "raise-ci" } }, headers: html_headers
+      }.to change { AuditLog.where(action: "project_api_key.revoke").count }.by(1)
+
+      issued = project.project_api_keys.find_by!(name: "raise-ci")
+      expect(issued.revoked_at).to be_present
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+    end
+
+    it "does not persist the plaintext PAK in the browser session cookie when the cache fails" do
+      grant_project_role("write")
+      create(:project_auth_config, project: project, auth_type: "oidc")
       allow(cache).to receive(:write).and_return(false)
 
-      post path, params: { project_api_key: { name: "fresh-fallback" } }, headers: html_headers
-      follow_redirect!
+      post path, params: { project_api_key: { name: "no-cookie" } }, headers: html_headers
 
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include("fresh-fallback")
-      expect(response.body).not_to include("pak-old-secret-token")
+      cookie_jar = response.cookies
+      session_cookie = cookie_jar["_aap_console_session"] || cookie_jar.values.compact.find { |value| value.is_a?(String) }
+      expect(session_cookie.to_s).not_to include("project_api_key_reveal_fallbacks")
+      expect(session_cookie.to_s).not_to match(/pak-[A-Za-z0-9_-]+/)
     end
 
     it "rejects duplicate names within the same project" do

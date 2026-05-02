@@ -65,12 +65,22 @@ class AuthConfigsController < ApplicationController
     ).call
 
     if result.success?
-      flash[:warning] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
+      payload = result.data[:reveal_payload]
+      cache_failed = result.data[:cache_failed]
 
       if json_request?
         disable_secret_response_cache!
-        render json: AuthConfigs::SecretRevealCache.read(@project), status: :created
+        render json: payload, status: :created
+      elsif cache_failed
+        # Cache was unable to persist the rotated secret. Render the page in-band
+        # with the fresh secret so the operator can copy it once; redirecting
+        # would discard the value because the show action reads from the cache.
+        flash.now[:warning] = "Client Secret이 재발급되었지만 표시 캐시 저장에 실패했습니다. 이 화면을 떠나기 전에 즉시 복사하세요."
+        prepare_show(reveal_payload: payload)
+        disable_secret_response_cache!
+        render :show
       else
+        flash[:warning] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end
     else
@@ -128,7 +138,7 @@ class AuthConfigsController < ApplicationController
     normalized
   end
 
-  def prepare_show(form_values: nil)
+  def prepare_show(form_values: nil, reveal_payload: nil)
     base_values = {
       redirect_uris: @auth_config&.redirect_uris,
       post_logout_redirect_uris: @auth_config&.post_logout_redirect_uris
@@ -143,7 +153,13 @@ class AuthConfigsController < ApplicationController
                                       .first
     @redirect_uris = form_rows(values[:redirect_uris])
     @post_logout_redirect_uris = form_rows(values[:post_logout_redirect_uris])
-    @secret_payload = @can_write_project ? AuthConfigs::SecretRevealCache.read(@project) : {}
+    @secret_payload = if reveal_payload && @can_write_project
+                       reveal_payload
+    elsif @can_write_project
+                       AuthConfigs::SecretRevealCache.read(@project)
+    else
+                       {}
+    end
     @secret_entries = @secret_payload.fetch("secrets", {})
     @secret_reveal_storage_key = [
       "auth-config-secret",
@@ -151,7 +167,7 @@ class AuthConfigsController < ApplicationController
       @secret_payload["generated_at"].presence || "current"
     ].join(":")
     @project_api_keys = @project.project_api_keys.order(created_at: :desc)
-    @project_api_key_reveal_payload = @can_write_project ? project_api_key_reveal_payload : {}
+    @project_api_key_reveal_payload = @can_write_project ? ProjectApiKeys::RevealCache.read(@project) : {}
     @project_api_key_reveal = @project_api_key_reveal_payload.dig("secrets", "project_api_key") || {}
     @project_api_key_reveal_storage_key = [
       "project-api-key",
@@ -190,40 +206,5 @@ class AuthConfigsController < ApplicationController
 
   def json_request?
     request.format.json? || default_json_request?
-  end
-
-  def project_api_key_reveal_payload
-    session_payload = session_project_api_key_reveal_payload
-    return session_payload if session_payload.present?
-
-    cache_payload = ProjectApiKeys::RevealCache.read(@project)
-    return cache_payload if cache_payload.dig("secrets", "project_api_key").present?
-
-    {}
-  end
-
-  def session_project_api_key_reveal_payload
-    fallbacks = session[:project_api_key_reveal_fallbacks]
-    return {} unless fallbacks.is_a?(Hash)
-
-    payload = fallbacks[@project.id.to_s]
-    return {} unless payload.is_a?(Hash)
-    return clear_session_project_api_key_reveal_payload unless payload["organization_id"] == @project.organization_id
-    return clear_session_project_api_key_reveal_payload unless payload["project_id"] == @project.id
-
-    expires_at = Time.zone.iso8601(payload["expires_at"])
-    return payload if expires_at.future?
-  rescue ArgumentError
-    clear_session_project_api_key_reveal_payload
-  else
-    clear_session_project_api_key_reveal_payload
-  end
-
-  def clear_session_project_api_key_reveal_payload
-    fallbacks = session[:project_api_key_reveal_fallbacks]
-    return {} unless fallbacks.is_a?(Hash)
-
-    fallbacks.delete(@project.id.to_s)
-    {}
   end
 end

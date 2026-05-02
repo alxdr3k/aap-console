@@ -25,12 +25,26 @@ class ProjectApiKeysController < ApplicationController
       token = result.data.fetch(:token)
 
       if browser_request?
-        reveal_payload = ProjectApiKeys::RevealCache.reveal_payload(@project, project_api_key: key, token: token)
-        cache_persisted = ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
-        persist_reveal_fallback!(reveal_payload) unless cache_persisted
-        clear_reveal_fallback! if cache_persisted
-        flash[:success] = "PAK가 발급되었습니다."
-        flash[:warning] = "공유 캐시 저장에 실패해 이 브라우저 세션에서만 다시 볼 수 있습니다." unless cache_persisted
+        cache_persisted = begin
+          ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
+        rescue StandardError => e
+          Rails.logger.error("Project API Key reveal cache write failed for project #{@project.id}: #{e.class}: #{e.message}")
+          false
+        end
+
+        if cache_persisted
+          flash[:success] = "PAK가 발급되었습니다."
+        else
+          # Secret zero-store: refuse to mirror plaintext PAK into the browser
+          # session cookie. Revoke the just-issued key so no orphan secret
+          # remains in the database without any visible reveal path.
+          ProjectApiKeys::RevokeService.new(
+            project_api_key: key,
+            current_user_sub: Current.user_sub
+          ).call
+          flash[:error] = "표시 캐시에 저장하지 못해 PAK를 즉시 폐기했습니다. 잠시 후 다시 발급해주세요."
+        end
+
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       else
         render json: serialize_key(key).merge(token: token), status: :created
@@ -52,7 +66,6 @@ class ProjectApiKeysController < ApplicationController
     ).call
 
     ProjectApiKeys::RevealCache.delete_if_matches(@project, project_api_key_id: @project_api_key.id)
-    clear_reveal_fallback!(project_api_key_id: @project_api_key.id)
 
     if browser_request?
       flash[:success] = "PAK를 폐기했습니다."
@@ -105,23 +118,5 @@ class ProjectApiKeysController < ApplicationController
 
   def browser_request?
     (request.format.html? || request.format.turbo_stream?) && !default_json_request?
-  end
-
-  def persist_reveal_fallback!(payload)
-    session[:project_api_key_reveal_fallbacks] ||= {}
-    session[:project_api_key_reveal_fallbacks][@project.id.to_s] = payload
-  end
-
-  def clear_reveal_fallback!(project_api_key_id: nil)
-    fallbacks = session[:project_api_key_reveal_fallbacks]
-    return unless fallbacks.is_a?(Hash)
-
-    payload = fallbacks[@project.id.to_s]
-    return unless payload.is_a?(Hash)
-
-    revealed_key_id = payload.dig("secrets", "project_api_key", "project_api_key_id")
-    return if project_api_key_id.present? && revealed_key_id.to_i != project_api_key_id.to_i
-
-    fallbacks.delete(@project.id.to_s)
   end
 end
