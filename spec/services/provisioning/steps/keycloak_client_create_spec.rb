@@ -84,6 +84,17 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
         expect(build_step(result_snapshot: snap).already_completed?).to be(true)
       end
     end
+
+    context "when the live representation omits id entirely (schema drift)" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
+
+      it "still treats the UUID-targeted 200 as authoritative completion" do
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
+                                 client: { "clientId" => auth_config.keycloak_client_id })
+        expect(build_step(result_snapshot: snap).already_completed?).to be(true)
+      end
+    end
   end
 
   describe "#execute side-effect snapshot atomicity" do

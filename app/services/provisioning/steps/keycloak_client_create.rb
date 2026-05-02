@@ -46,24 +46,34 @@ module Provisioning
         # Look up the client by UUID directly. The list endpoint
         # `get_client_by_client_id` is a clientId search that only returns the
         # first match and depends on Keycloak's ordering — we already have the
-        # UUID from the snapshot, so use the stable path-based GET. A recreated
-        # client with the same clientId but a different UUID will surface as
-        # NotFoundError on this call and force the step to run again.
+        # UUID from the snapshot, so use the stable path-based GET. A
+        # NotFoundError or ApiError surface as the step needing to re-run.
         client = KeycloakClient.new.get_client(uuid: uuid)
-        return false unless client.is_a?(Hash) && client["id"] == uuid
 
-        # Treat the UUID match as authoritative completion. A clientId mismatch
-        # at this layer would mean an out-of-band Keycloak edit; we log the
-        # divergence for the operator instead of forcing a duplicate POST that
-        # would either succeed under a different clientId or fail with 409.
-        if auth_config.keycloak_client_id.present? &&
-           client["clientId"].present? &&
-           client["clientId"] != auth_config.keycloak_client_id
-          Rails.logger.warn(
-            "[Provisioning::Steps::KeycloakClientCreate] live clientId " \
-            "#{client["clientId"]} differs from snapshot " \
-            "#{auth_config.keycloak_client_id} for uuid=#{uuid}; treating step as complete"
-          )
+        # Treat any successful 200 against the UUID-targeted GET as
+        # authoritative completion: by design a UUID-targeted lookup that
+        # returns 200 means a client at that UUID exists. Returning false on
+        # representation drift (missing `id`, malformed body, omitted clientId)
+        # would push the orchestrator back into `execute`, which unconditionally
+        # POSTs a new client and either mints a duplicate or hard-fails on
+        # 409. Log any payload divergence so an operator can investigate.
+        if client.is_a?(Hash)
+          if client["id"].present? && client["id"] != uuid
+            Rails.logger.warn(
+              "[Provisioning::Steps::KeycloakClientCreate] live id " \
+              "#{client["id"].inspect} differs from snapshot uuid #{uuid}; " \
+              "treating step as complete to avoid duplicate creation"
+            )
+          end
+          if auth_config.keycloak_client_id.present? &&
+             client["clientId"].present? &&
+             client["clientId"] != auth_config.keycloak_client_id
+            Rails.logger.warn(
+              "[Provisioning::Steps::KeycloakClientCreate] live clientId " \
+              "#{client["clientId"]} differs from snapshot " \
+              "#{auth_config.keycloak_client_id} for uuid=#{uuid}; treating step as complete"
+            )
+          end
         end
         true
       rescue BaseClient::NotFoundError

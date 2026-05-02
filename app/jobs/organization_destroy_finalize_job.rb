@@ -50,23 +50,23 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
       return
     end
 
-    # No active delete job, but the destroy contract is still pending. Schedule
-    # the longer background retry FIRST and release the finalizer reservation
-    # only after the replacement job is durably queued. SolidQueue persists
-    # `perform_later` to the database, so wrapping both calls in a transaction
-    # keeps lease release atomic with retry enqueue: if scheduling fails, the
-    # transaction rolls back and the original lease stays held so the system
-    # has at least one finalizer record.
+    # No active delete job, but the destroy contract is still pending. Enqueue
+    # the longer background retry FIRST. Only after the replacement job has
+    # been durably persisted by the queue do we release the finalizer
+    # reservation. The Rails 8 default `enqueue_after_transaction_commit =
+    # :always` makes a transaction-wrapped `perform_later` defer the queue
+    # write past commit, so we deliberately stay outside any transaction here
+    # and rely on synchronous enqueue ordering: if the enqueue raises, the
+    # lease stays held and an existing operator-driven retry path can still
+    # fire. The lease release runs only on a successful enqueue.
     Rails.logger.warn(
       "[OrganizationDestroyFinalizeJob] Organization #{organization.id} destroy is blocked; " \
       "remaining projects: #{remaining_projects.map { |project| "#{project.slug}:#{project.status}" }.join(', ')}; " \
       "rescheduling in #{BLOCKED_RETRY_DELAY.inspect} and releasing reservation"
     )
-    ActiveRecord::Base.transaction do
-      self.class.set(wait: BLOCKED_RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
-      organization.with_lock do
-        organization.update!(destroy_finalizer_reserved_until: nil)
-      end
+    self.class.set(wait: BLOCKED_RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
+    organization.with_lock do
+      organization.update!(destroy_finalizer_reserved_until: nil)
     end
   end
 
