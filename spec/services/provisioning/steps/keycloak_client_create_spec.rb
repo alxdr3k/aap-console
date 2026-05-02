@@ -31,10 +31,10 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
       let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
 
-      it "returns true using a positional client_id call" do
-        stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
-                                  clients: [ { "id" => auth_config.keycloak_client_uuid,
-                                               "clientId" => auth_config.keycloak_client_id } ])
+      it "returns true via a direct UUID lookup that matches the snapshot" do
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
+                                 client: { "id" => auth_config.keycloak_client_uuid,
+                                           "clientId" => auth_config.keycloak_client_id })
         expect(build_step(result_snapshot: snap).already_completed?).to be(true)
       end
     end
@@ -44,18 +44,31 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
 
       it "returns false so the create step runs again" do
-        stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id, clients: [])
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid, status: 404)
         expect(build_step(result_snapshot: snap).already_completed?).to be(false)
       end
     end
 
-    context "when the Keycloak client_id matches but the UUID differs from the snapshot" do
+    context "when the snapshot UUID is stale (client recreated under same client_id)" do
       let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
       let(:snap) { { "keycloak_client_uuid" => "uuid-snapshot" } }
 
-      it "returns false so a stale snapshot does not skip the step" do
-        stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
-                                  clients: [ { "id" => "uuid-live", "clientId" => auth_config.keycloak_client_id } ])
+      it "returns false because the stale UUID no longer resolves" do
+        # Direct UUID GET returns 404 because the snapshot UUID has been removed
+        # (a new client with the same clientId now lives under a different UUID).
+        stub_keycloak_get_client(uuid: "uuid-snapshot", status: 404)
+        expect(build_step(result_snapshot: snap).already_completed?).to be(false)
+      end
+    end
+
+    context "when the live client id mismatches the snapshot's auth config client_id" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
+
+      it "returns false rather than skipping a divergent client" do
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
+                                 client: { "id" => auth_config.keycloak_client_uuid,
+                                           "clientId" => "aap-some-other-client" })
         expect(build_step(result_snapshot: snap).already_completed?).to be(false)
       end
     end
@@ -114,8 +127,8 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
 
       uuid = "uuid-existing"
       auth_config.update!(keycloak_client_uuid: uuid)
-      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
-                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
+      stub_keycloak_get_client(uuid: uuid,
+                               client: { "id" => uuid, "clientId" => auth_config.keycloak_client_id })
       stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
 
       step_record = create(
@@ -142,8 +155,8 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
 
       uuid = "uuid-from-snapshot"
       auth_config.update!(keycloak_client_uuid: nil)
-      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
-                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
+      stub_keycloak_get_client(uuid: uuid,
+                               client: { "id" => uuid, "clientId" => auth_config.keycloak_client_id })
       stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
 
       step_record = create(

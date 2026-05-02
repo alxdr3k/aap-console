@@ -10,10 +10,6 @@ module AuthConfigShowState
     }
     values = base_values.merge(form_values || {})
 
-    if @auth_config&.auth_type == "saml" && @auth_config.keycloak_client_uuid.present?
-      @saml_idp_metadata_url = saml_idp_metadata_url
-    end
-
     @errors ||= []
     @can_write_project = current_authorization.can?(:write_project, @project)
     @active_provisioning_job = @project.provisioning_jobs
@@ -26,17 +22,7 @@ module AuthConfigShowState
     @secret_payload = if reveal_payload && @can_write_project
                         reveal_payload
     elsif @can_write_project
-                        # Client-secret rotation is now in-band; the shared reveal cache
-                        # is no longer written by the rotation flow. Purge any legacy/stale
-                        # entry silently without displaying it. Wrap the entire read/delete
-                        # in rescue so a degraded cache backend does not block GET /auth_config.
-                        begin
-                          stale = AuthConfigs::SecretRevealCache.read(@project)
-                          AuthConfigs::SecretRevealCache.delete(@project) if stale.dig("secrets").present?
-                        rescue StandardError => e
-                          Rails.logger.error("SecretRevealCache purge failed for project #{@project.id}: #{e.class}: #{e.message}")
-                        end
-                        {}
+                        AuthConfigs::SecretRevealCache.read(@project)
     else
                         {}
     end
@@ -51,18 +37,7 @@ module AuthConfigShowState
     @project_api_key_reveal_payload = if pak_reveal_payload && @can_write_project
                                         pak_reveal_payload
     elsif @can_write_project
-                                        # Browser PAK issuance no longer writes to the shared
-                                        # reveal cache; the token is delivered in-band. Purge
-                                        # any legacy/stale entry silently without displaying it.
-                                        # Wrap in rescue so a degraded cache backend does not
-                                        # block GET /auth_config.
-                                        begin
-                                          stale = ProjectApiKeys::RevealCache.read(@project)
-                                          ProjectApiKeys::RevealCache.delete(@project) if stale.dig("secrets", "project_api_key").present?
-                                        rescue StandardError => e
-                                          Rails.logger.error("RevealCache purge failed for project #{@project.id}: #{e.class}: #{e.message}")
-                                        end
-                                        {}
+                                        ProjectApiKeys::RevealCache.read(@project)
     else
                                         {}
     end
@@ -92,11 +67,5 @@ module AuthConfigShowState
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-  end
-
-  def saml_idp_metadata_url
-    base = ENV.fetch("KEYCLOAK_URL", "")
-    realm = ENV.fetch("KEYCLOAK_REALM", "aap")
-    "#{base}/realms/#{realm}/protocol/saml/descriptor"
   end
 end

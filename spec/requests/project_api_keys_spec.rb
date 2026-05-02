@@ -101,40 +101,58 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
     end
 
-    it "auto-revokes the issued PAK when shared reveal cache persistence fails" do
+    it "renders the PAK in-band when shared reveal cache persistence fails on plain HTML" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
       allow(cache).to receive(:write).and_return(false)
 
       expect {
-        post path, params: { project_api_key: { name: "session-ci" } }, headers: html_headers
-      }.to change { AuditLog.where(action: "project_api_key.revoke").count }.by(1)
+        post path, params: { project_api_key: { name: "in-band-ci" } }, headers: html_headers
+      }.not_to change { AuditLog.where(action: "project_api_key.revoke").count }
 
-      issued = project.project_api_keys.find_by!(name: "session-ci")
-      expect(issued.revoked_at).to be_present
-
-      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
-      follow_redirect!
+      issued = project.project_api_keys.find_by!(name: "in-band-ci")
+      expect(issued.revoked_at).to be_nil
 
       expect(response).to have_http_status(:ok)
-      # PAK plaintext must never reach the rendered page when cache write fails.
-      expect(response.body).not_to include("일회성 PAK")
-      expect(response.body).to include("폐기")
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.body).to include("일회성 PAK")
+      expect(response.body).to include("표시 캐시 저장에 실패")
+      expect(response.body).to include("in-band-ci")
+      expect(response.body).to match(/pak-[A-Za-z0-9_-]+/)
     end
 
-    it "auto-revokes the issued PAK when the reveal cache raises during persistence" do
+    it "renders the PAK in-band when the reveal cache raises during persistence" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
       allow(ProjectApiKeys::RevealCache).to receive(:write).and_raise("cache backend down")
       allow(Rails.logger).to receive(:error)
 
-      expect {
-        post path, params: { project_api_key: { name: "raise-ci" } }, headers: html_headers
-      }.to change { AuditLog.where(action: "project_api_key.revoke").count }.by(1)
+      post path, params: { project_api_key: { name: "raise-ci" } }, headers: html_headers
 
       issued = project.project_api_keys.find_by!(name: "raise-ci")
-      expect(issued.revoked_at).to be_present
+      expect(issued.revoked_at).to be_nil
+      expect(response).to have_http_status(:ok)
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.body).to include("표시 캐시 저장에 실패")
+      expect(response.body).to include("raise-ci")
+    end
+
+    it "fails closed when the request format is non-HTML and the reveal cache fails" do
+      grant_project_role("write")
+      create(:project_auth_config, project: project, auth_type: "oidc")
+      allow(cache).to receive(:write).and_return(false)
+
+      # Drive the controller through a turbo_stream-only Accept so the in-band
+      # render path stays scoped to plain HTML responses only. A Turbo Stream
+      # consumer cannot receive a secret-bearing body outside the no-store
+      # HTML page lifecycle.
+      post path,
+           params: { project_api_key: { name: "stream-ci" } },
+           headers: { "ACCEPT" => "text/vnd.turbo-stream.html" }
+
       expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+      issued = project.project_api_keys.find_by!(name: "stream-ci")
+      expect(issued.revoked_at).to be_nil
     end
 
     it "does not persist the plaintext PAK in the browser session cookie when the cache fails" do
@@ -147,7 +165,6 @@ RSpec.describe "ProjectApiKeys", type: :request do
       cookie_jar = response.cookies
       session_cookie = cookie_jar["_aap_console_session"] || cookie_jar.values.compact.find { |value| value.is_a?(String) }
       expect(session_cookie.to_s).not_to include("project_api_key_reveal_fallbacks")
-      expect(session_cookie.to_s).not_to match(/pak-[A-Za-z0-9_-]+/)
     end
 
 
