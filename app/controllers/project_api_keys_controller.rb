@@ -167,36 +167,61 @@ class ProjectApiKeysController < ApplicationController
 
   # Returns true when the per-project reveal cache no longer holds a stale
   # token. The contract: after this method returns true, a later GET must not
-  # surface a different PAK than the one in the in-band response. The method
-  # treats only two cache states as safe: (a) the cache holds NO secret entries
-  # at all, or (b) the cache holds the freshly issued PAK and only that PAK.
-  # A malformed stale payload that hides under `.dig` would otherwise fool a
-  # naive blank? check, so we verify both shapes explicitly.
+  # surface an OLDER PAK than the one in the in-band response. The method
+  # treats three cache states as acceptable: (a) the cache holds no secret
+  # entries, (b) the cache holds the freshly issued PAK and only that PAK,
+  # or (c) the cache already holds a NEWER PAK reveal from a concurrent
+  # issuance — clobbering that with our older token would surface the wrong
+  # secret to the other operator. The whole reconciliation runs inside a
+  # project row lock so concurrent fallback paths cannot interleave.
   def reconcile_pak_reveal_cache(key, token)
-    delete_succeeded = begin
-      ProjectApiKeys::RevealCache.delete(@project)
-      true
-    rescue StandardError => delete_error
-      Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{delete_error.class}: #{delete_error.message}")
-      false
-    end
+    @project.with_lock do
+      current = read_pak_reveal_payload_safely
 
-    return true if delete_succeeded && pak_reveal_cache_truly_empty?
+      # Compare-and-swap guard: if a concurrent issue request already cached
+      # a newer reveal, leave it alone. Our in-band response still shows
+      # the operator the PAK they issued; later GETs should reflect the
+      # most recent successfully cached reveal.
+      if current.is_a?(Hash) && current["project_api_key_id"].to_i > key.id.to_i
+        Rails.logger.info(
+          "[ProjectApiKeysController] reconcile skipped: cache holds newer PAK reveal " \
+          "(id=#{current["project_api_key_id"]}) than current issuance (id=#{key.id})"
+        )
+        return true
+      end
 
-    # Cache may still hold a stale or malformed entry. Overwrite with the
-    # fresh payload and verify the read-back now matches the issued PAK.
-    written = begin
-      ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
-    rescue StandardError => write_error
-      Rails.logger.error("Project API Key reveal cache reconcile-write failed for project #{@project.id}: #{write_error.class}: #{write_error.message}")
-      false
-    end
-    unless written
-      Rails.logger.error("Project API Key reveal cache reconcile-write returned a falsy result for project #{@project.id}")
-      return false
-    end
+      delete_succeeded = begin
+        ProjectApiKeys::RevealCache.delete(@project)
+        true
+      rescue StandardError => delete_error
+        Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{delete_error.class}: #{delete_error.message}")
+        false
+      end
 
-    pak_reveal_cache_matches?(key)
+      return true if delete_succeeded && pak_reveal_cache_truly_empty?
+
+      # Cache may still hold a stale or malformed entry. Overwrite with the
+      # fresh payload and verify the read-back now matches the issued PAK.
+      written = begin
+        ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
+      rescue StandardError => write_error
+        Rails.logger.error("Project API Key reveal cache reconcile-write failed for project #{@project.id}: #{write_error.class}: #{write_error.message}")
+        false
+      end
+      unless written
+        Rails.logger.error("Project API Key reveal cache reconcile-write returned a falsy result for project #{@project.id}")
+        return false
+      end
+
+      pak_reveal_cache_matches?(key)
+    end
+  end
+
+  def read_pak_reveal_payload_safely
+    ProjectApiKeys::RevealCache.read(@project).dig("secrets", "project_api_key")
+  rescue StandardError => e
+    Rails.logger.error("Project API Key reveal cache read failed for project #{@project.id}: #{e.class}: #{e.message}")
+    nil
   end
 
   def pak_reveal_cache_truly_empty?

@@ -172,6 +172,43 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response.body).to include("표시 캐시 정리에 실패")
     end
 
+    it "does not clobber a newer concurrent reveal during the in-band fallback" do
+      grant_project_role("write")
+      create(:project_auth_config, project: project, auth_type: "oidc")
+
+      # Simulate a concurrent issuance whose cache.write succeeded with a PAK
+      # id strictly higher than the request we're about to fall back. The
+      # falling-back request must not erase that newer reveal.
+      newer_id = 999_999
+      cache.write(
+        ProjectApiKeys::RevealCache.send(:cache_key, project),
+        {
+          "organization_id" => project.organization_id,
+          "project_id" => project.id,
+          "secrets" => {
+            "project_api_key" => {
+              "project_api_key_id" => newer_id,
+              "value" => "pak-newer-secret",
+              "name" => "newer-concurrent",
+              "token_prefix" => "pak"
+            }
+          }
+        }
+      )
+      allow(cache).to receive(:write).and_return(false)
+
+      post path, params: { project_api_key: { name: "older-loser" } }, headers: html_headers
+
+      issued = project.project_api_keys.find_by!(name: "older-loser")
+      expect(issued.id).to be < newer_id
+      expect(issued.revoked_at).to be_nil
+
+      # The cache must continue to surface the newer PAK reveal.
+      cached = ProjectApiKeys::RevealCache.read(project)
+      expect(cached.dig("secrets", "project_api_key", "project_api_key_id")).to eq(newer_id)
+      expect(cached.dig("secrets", "project_api_key", "value")).to eq("pak-newer-secret")
+    end
+
     it "overwrites a malformed stale cache entry that hides from a naive blank? check" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
