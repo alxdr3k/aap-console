@@ -66,7 +66,6 @@ class MembersController < ApplicationController
           }
         )
       end
-
       membership_committed = true
 
       respond_to do |format|
