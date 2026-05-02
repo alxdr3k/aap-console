@@ -76,7 +76,7 @@ Gate status:
 | `INTEG` | Keycloak, Langfuse, Config Server client integration | `INTEG-2A` | `accepted` | 테스트는 WebMock 기반 |
 | `UI` | Realtime status path와 server-rendered UI | `UI-5A` / `UI-5B` / `UI-5C` | `in_progress` | ActionCable path and UI shell/Hotwire baseline landed. Product ERB pages continue as leaf work |
 | `SEC` | Secret reveal and zero-store product path | `SEC-5B` | `landed` | Provisioning secret reveal cache path is landed and now reused by auth-config secret/PAK reveal product flows |
-| `AUTH` | 인증 방식 확장과 PAK | `AUTH-6A` | `planned` | P0-M4 backend/API gate accepted; PAK product UI landed, SAML/OAuth product UI remains |
+| `AUTH` | 인증 방식 확장과 PAK | `AUTH-6A` | `in_progress` | P0-M4 backend/API gate accepted; PAK product UI landed, SAML/OAuth product UI remains |
 | `OPS` | Runbook, deployment, health check, rollback operation | `OPS-7A` | `planned` | P0-M3 stability accepted; production deploy/restore/archive remains |
 | `PLAY` | Playground AI chat | `PLAY-8A` | `planned` | PRD P2 gate |
 | `ADMIN` | Super-admin operations dashboard | `ADMIN-8A` | `planned` | Scope question open |
