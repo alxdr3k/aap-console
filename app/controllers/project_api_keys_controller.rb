@@ -165,14 +165,13 @@ class ProjectApiKeysController < ApplicationController
     render template: "auth_configs/show", formats: [ :html ]
   end
 
-  # Returns true when the per-project reveal cache no longer contains a stale
-  # entry. The contract: after this method returns true, a later GET that
-  # consults the reveal cache must not surface a different token than the
-  # freshly issued one. Tries delete first, then verifies via read because
-  # some cache adapters signal delete failure with a falsy return rather
-  # than raising. If a stale entry survives, attempts to overwrite with the
-  # fresh payload. Returns false only when reconciliation cannot guarantee
-  # the cache no longer holds a stale token.
+  # Returns true when the per-project reveal cache no longer holds a stale
+  # token. The contract: after this method returns true, a later GET must not
+  # surface a different PAK than the one in the in-band response. The method
+  # treats only two cache states as safe: (a) the cache holds NO secret entries
+  # at all, or (b) the cache holds the freshly issued PAK and only that PAK.
+  # A malformed stale payload that hides under `.dig` would otherwise fool a
+  # naive blank? check, so we verify both shapes explicitly.
   def reconcile_pak_reveal_cache(key, token)
     delete_succeeded = begin
       ProjectApiKeys::RevealCache.delete(@project)
@@ -182,24 +181,37 @@ class ProjectApiKeysController < ApplicationController
       false
     end
 
-    cache_clean = delete_succeeded && pak_reveal_cache_empty?
-    return true if cache_clean
+    return true if delete_succeeded && pak_reveal_cache_truly_empty?
 
-    begin
-      written = ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
-      return true if written
-      Rails.logger.error("Project API Key reveal cache reconcile-write returned a falsy result for project #{@project.id}")
-      false
+    # Cache may still hold a stale or malformed entry. Overwrite with the
+    # fresh payload and verify the read-back now matches the issued PAK.
+    written = begin
+      ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
     rescue StandardError => write_error
       Rails.logger.error("Project API Key reveal cache reconcile-write failed for project #{@project.id}: #{write_error.class}: #{write_error.message}")
       false
     end
+    unless written
+      Rails.logger.error("Project API Key reveal cache reconcile-write returned a falsy result for project #{@project.id}")
+      return false
+    end
+
+    pak_reveal_cache_matches?(key)
   end
 
-  def pak_reveal_cache_empty?
-    ProjectApiKeys::RevealCache.read(@project).dig("secrets", "project_api_key").blank?
+  def pak_reveal_cache_truly_empty?
+    secrets = ProjectApiKeys::RevealCache.read(@project).fetch("secrets", {})
+    secrets.is_a?(Hash) && secrets.empty?
   rescue StandardError => e
     Rails.logger.error("Project API Key reveal cache read-back failed for project #{@project.id}: #{e.class}: #{e.message}")
+    false
+  end
+
+  def pak_reveal_cache_matches?(key)
+    revealed = ProjectApiKeys::RevealCache.read(@project).dig("secrets", "project_api_key")
+    revealed.is_a?(Hash) && revealed["project_api_key_id"].to_i == key.id.to_i
+  rescue StandardError => e
+    Rails.logger.error("Project API Key reveal cache match check failed for project #{@project.id}: #{e.class}: #{e.message}")
     false
   end
 end
