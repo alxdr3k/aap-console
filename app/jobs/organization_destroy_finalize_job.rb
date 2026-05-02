@@ -50,20 +50,24 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
       return
     end
 
-    # No active delete job, but the destroy contract is still pending. Release
-    # the finalizer reservation so an operator-driven recovery path (e.g.
-    # `Organizations::DestroyService#enqueue_finalizer` after a stuck project
-    # is fixed) can fire `enqueue_once` immediately, then schedule a longer
-    # background retry as a safety net.
+    # No active delete job, but the destroy contract is still pending. Schedule
+    # the longer background retry FIRST and release the finalizer reservation
+    # only after the replacement job is durably queued. SolidQueue persists
+    # `perform_later` to the database, so wrapping both calls in a transaction
+    # keeps lease release atomic with retry enqueue: if scheduling fails, the
+    # transaction rolls back and the original lease stays held so the system
+    # has at least one finalizer record.
     Rails.logger.warn(
       "[OrganizationDestroyFinalizeJob] Organization #{organization.id} destroy is blocked; " \
       "remaining projects: #{remaining_projects.map { |project| "#{project.slug}:#{project.status}" }.join(', ')}; " \
-      "releasing reservation and rescheduling in #{BLOCKED_RETRY_DELAY.inspect}"
+      "rescheduling in #{BLOCKED_RETRY_DELAY.inspect} and releasing reservation"
     )
-    organization.with_lock do
-      organization.update!(destroy_finalizer_reserved_until: nil)
+    ActiveRecord::Base.transaction do
+      self.class.set(wait: BLOCKED_RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
+      organization.with_lock do
+        organization.update!(destroy_finalizer_reserved_until: nil)
+      end
     end
-    self.class.set(wait: BLOCKED_RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
   end
 
   private

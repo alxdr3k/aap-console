@@ -141,6 +141,17 @@ class ProjectApiKeysController < ApplicationController
       return
     end
 
+    # A previous reveal may have populated the per-project cache with a stale
+    # payload pointing at a now-superseded PAK. Drop that entry so a later
+    # auth-config GET cannot resurface the old token in place of the freshly
+    # issued one. Best-effort: if the cache deletion itself raises we still
+    # render in-band because the response carries the fresh PAK explicitly.
+    begin
+      ProjectApiKeys::RevealCache.delete(@project)
+    rescue StandardError => e
+      Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{e.class}: #{e.message}")
+    end
+
     payload = ProjectApiKeys::RevealCache
       .reveal_payload(@project, project_api_key: key, token: token)
       .merge("cache_failed" => true, "expires_at" => Time.current.iso8601(6))

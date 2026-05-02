@@ -50,9 +50,22 @@ module Provisioning
         # client with the same clientId but a different UUID will surface as
         # NotFoundError on this call and force the step to run again.
         client = KeycloakClient.new.get_client(uuid: uuid)
-        client.is_a?(Hash) &&
-          client["id"] == uuid &&
-          client["clientId"] == auth_config.keycloak_client_id
+        return false unless client.is_a?(Hash) && client["id"] == uuid
+
+        # Treat the UUID match as authoritative completion. A clientId mismatch
+        # at this layer would mean an out-of-band Keycloak edit; we log the
+        # divergence for the operator instead of forcing a duplicate POST that
+        # would either succeed under a different clientId or fail with 409.
+        if auth_config.keycloak_client_id.present? &&
+           client["clientId"].present? &&
+           client["clientId"] != auth_config.keycloak_client_id
+          Rails.logger.warn(
+            "[Provisioning::Steps::KeycloakClientCreate] live clientId " \
+            "#{client["clientId"]} differs from snapshot " \
+            "#{auth_config.keycloak_client_id} for uuid=#{uuid}; treating step as complete"
+          )
+        end
+        true
       rescue BaseClient::NotFoundError
         false
       rescue BaseClient::ApiError
