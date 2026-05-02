@@ -142,14 +142,17 @@ class ProjectApiKeysController < ApplicationController
     end
 
     # A previous reveal may have populated the per-project cache with a stale
-    # payload pointing at a now-superseded PAK. Drop that entry so a later
-    # auth-config GET cannot resurface the old token in place of the freshly
-    # issued one. Best-effort: if the cache deletion itself raises we still
-    # render in-band because the response carries the fresh PAK explicitly.
-    begin
-      ProjectApiKeys::RevealCache.delete(@project)
-    rescue StandardError => e
-      Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{e.class}: #{e.message}")
+    # payload pointing at a now-superseded PAK. Drop that entry first so a
+    # later auth-config GET cannot resurface the old token in place of the
+    # freshly issued one. If delete fails, attempt to overwrite the entry with
+    # the fresh payload — that still removes the stale value from any future
+    # read. If both calls fail, fail closed and tell the operator to revoke
+    # and reissue rather than leaving a stale plaintext readable from cache.
+    cache_reconciled = reconcile_pak_reveal_cache(key, token)
+    unless cache_reconciled
+      flash[:error] = "표시 캐시 정리에 실패했습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
+      redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+      return
     end
 
     payload = ProjectApiKeys::RevealCache
@@ -160,5 +163,23 @@ class ProjectApiKeysController < ApplicationController
     prepare_auth_config_show!(pak_reveal_payload: payload)
     disable_secret_response_cache!
     render template: "auth_configs/show", formats: [ :html ]
+  end
+
+  # Returns true when the per-project reveal cache no longer contains a stale
+  # entry. Tries delete first; on failure attempts to overwrite the entry with
+  # the fresh payload so a later read at minimum sees the just-issued token,
+  # never an older one. Returns false only when both reconciliation attempts
+  # fail and the controller must fail closed.
+  def reconcile_pak_reveal_cache(key, token)
+    ProjectApiKeys::RevealCache.delete(@project)
+    true
+  rescue StandardError => delete_error
+    Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{delete_error.class}: #{delete_error.message}")
+    begin
+      ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
+    rescue StandardError => write_error
+      Rails.logger.error("Project API Key reveal cache reconcile-write failed for project #{@project.id}: #{write_error.class}: #{write_error.message}")
+      false
+    end
   end
 end

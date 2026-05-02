@@ -156,6 +156,22 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(cached_after.dig("secrets", "project_api_key", "value")).to be_nil
     end
 
+    it "fails closed when both reveal cache delete and reconcile-write fail" do
+      grant_project_role("write")
+      create(:project_auth_config, project: project, auth_type: "oidc")
+      allow(ProjectApiKeys::RevealCache).to receive(:write).and_raise("cache backend down")
+      allow(ProjectApiKeys::RevealCache).to receive(:delete).and_raise("cache backend down")
+      allow(Rails.logger).to receive(:error)
+
+      post path, params: { project_api_key: { name: "fail-closed" } }, headers: html_headers
+
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+      issued = project.project_api_keys.find_by!(name: "fail-closed")
+      expect(issued.revoked_at).to be_nil
+      follow_redirect!
+      expect(response.body).to include("표시 캐시 정리에 실패")
+    end
+
     it "fails closed when the request format is non-HTML and the reveal cache fails" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
