@@ -58,16 +58,41 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
     # write past commit, so we deliberately stay outside any transaction here
     # and rely on synchronous enqueue ordering: if the enqueue raises, the
     # lease stays held and an existing operator-driven retry path can still
-    # fire. The lease release runs only on a successful enqueue.
+    # fire. The lease release runs only on a successful enqueue. Also write
+    # an audit log row so operators can query for orgs stuck in this state
+    # rather than relying on Rails.logger noise alone.
+    blocked_summary = remaining_projects.map { |project| "#{project.slug}:#{project.status}" }.join(", ")
     Rails.logger.warn(
       "[OrganizationDestroyFinalizeJob] Organization #{organization.id} destroy is blocked; " \
-      "remaining projects: #{remaining_projects.map { |project| "#{project.slug}:#{project.status}" }.join(', ')}; " \
+      "remaining projects: #{blocked_summary}; " \
       "rescheduling in #{BLOCKED_RETRY_DELAY.inspect} and releasing reservation"
     )
+    record_blocked_audit!(organization, current_user_sub, blocked_summary)
     self.class.set(wait: BLOCKED_RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
     organization.with_lock do
       organization.update!(destroy_finalizer_reserved_until: nil)
     end
+  end
+
+  def record_blocked_audit!(organization, current_user_sub, blocked_summary)
+    AuditLog.create!(
+      organization: organization,
+      user_sub: current_user_sub,
+      action: "organization.destroy.blocked",
+      resource_type: "Organization",
+      resource_id: organization.id.to_s,
+      details: {
+        remaining_projects: blocked_summary,
+        retry_in_seconds: BLOCKED_RETRY_DELAY.to_i
+      }
+    )
+  rescue StandardError => e
+    # Don't fail the finalizer rescheduling because the audit insert failed;
+    # the Rails.logger warn line above already records the same condition.
+    Rails.logger.error(
+      "[OrganizationDestroyFinalizeJob] failed to record blocked audit for organization " \
+      "#{organization.id}: #{e.class}: #{e.message}"
+    )
   end
 
   private

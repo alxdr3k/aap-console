@@ -172,13 +172,15 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response.body).to include("표시 캐시 정리에 실패")
     end
 
-    it "does not clobber a newer concurrent reveal during the in-band fallback" do
+    it "renders the older request's PAK in-band when cache holds a newer concurrent reveal" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
 
       # Simulate a concurrent issuance whose cache.write succeeded with a PAK
       # id strictly higher than the request we're about to fall back. The
-      # falling-back request must not erase that newer reveal.
+      # falling-back request must (a) leave the newer reveal intact, and
+      # (b) display its OWN PAK plaintext in-band so the operator does not
+      # see the other request's secret instead of theirs.
       newer_id = 999_999
       cache.write(
         ProjectApiKeys::RevealCache.send(:cache_key, project),
@@ -195,13 +197,18 @@ RSpec.describe "ProjectApiKeys", type: :request do
           }
         }
       )
-      allow(cache).to receive(:write).and_return(false)
 
       post path, params: { project_api_key: { name: "older-loser" } }, headers: html_headers
 
       issued = project.project_api_keys.find_by!(name: "older-loser")
       expect(issued.id).to be < newer_id
       expect(issued.revoked_at).to be_nil
+
+      # In-band rendering of the older request's PAK plaintext.
+      expect(response).to have_http_status(:ok)
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.body).to include("older-loser")
+      expect(response.body).not_to include("pak-newer-secret")
 
       # The cache must continue to surface the newer PAK reveal.
       cached = ProjectApiKeys::RevealCache.read(project)
