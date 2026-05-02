@@ -69,7 +69,7 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
         stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
                                  client: { "id" => auth_config.keycloak_client_uuid,
                                            "clientId" => "aap-some-other-client" })
-        expect(Rails.logger).to receive(:warn).with(/clientId.*differs/)
+        expect(Rails.logger).to receive(:warn).with(/identity diverges/)
         expect(build_step(result_snapshot: snap).already_completed?).to be(true)
       end
     end
@@ -198,6 +198,37 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(result[:status]).to eq(:completed)
       expect(step_record.reload).to be_skipped
       expect(Provisioning::SecretCache.read(job).dig("secrets", "client_secret", "value")).to eq("oidc-secret")
+    end
+
+    it "skips the secret cache refresh when the live client identity diverges from the snapshot" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+      allow(Rails.logger).to receive(:warn)
+
+      uuid = "uuid-divergent"
+      auth_config.update!(keycloak_client_uuid: uuid)
+      stub_keycloak_get_client(uuid: uuid,
+                               client: { "id" => uuid, "clientId" => "aap-some-other-client" })
+
+      step_record = create(
+        :provisioning_step,
+        :keycloak_client_create,
+        provisioning_job: job,
+        result_snapshot: {
+          "keycloak_client_uuid" => uuid,
+          "keycloak_client_id" => auth_config.keycloak_client_id
+        }
+      )
+
+      runner = Provisioning::StepRunner.new(step: step_record, provisioning_job: job, params: {})
+      result = runner.execute
+
+      expect(result[:status]).to eq(:completed)
+      expect(step_record.reload).to be_skipped
+      # Identity divergence must NOT mint a wrong client's secret into the cache;
+      # any stale entry should be cleared instead.
+      expect(Provisioning::SecretCache.read(job)).to eq({})
+      expect(WebMock).not_to have_requested(:get, %r{/clients/#{uuid}/client-secret})
     end
 
     it "does not fail provisioning when secret caching cannot fetch the client secret" do

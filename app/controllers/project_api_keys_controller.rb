@@ -166,20 +166,40 @@ class ProjectApiKeysController < ApplicationController
   end
 
   # Returns true when the per-project reveal cache no longer contains a stale
-  # entry. Tries delete first; on failure attempts to overwrite the entry with
-  # the fresh payload so a later read at minimum sees the just-issued token,
-  # never an older one. Returns false only when both reconciliation attempts
-  # fail and the controller must fail closed.
+  # entry. The contract: after this method returns true, a later GET that
+  # consults the reveal cache must not surface a different token than the
+  # freshly issued one. Tries delete first, then verifies via read because
+  # some cache adapters signal delete failure with a falsy return rather
+  # than raising. If a stale entry survives, attempts to overwrite with the
+  # fresh payload. Returns false only when reconciliation cannot guarantee
+  # the cache no longer holds a stale token.
   def reconcile_pak_reveal_cache(key, token)
-    ProjectApiKeys::RevealCache.delete(@project)
-    true
-  rescue StandardError => delete_error
-    Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{delete_error.class}: #{delete_error.message}")
+    delete_succeeded = begin
+      ProjectApiKeys::RevealCache.delete(@project)
+      true
+    rescue StandardError => delete_error
+      Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{delete_error.class}: #{delete_error.message}")
+      false
+    end
+
+    cache_clean = delete_succeeded && pak_reveal_cache_empty?
+    return true if cache_clean
+
     begin
-      ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
+      written = ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
+      return true if written
+      Rails.logger.error("Project API Key reveal cache reconcile-write returned a falsy result for project #{@project.id}")
+      false
     rescue StandardError => write_error
       Rails.logger.error("Project API Key reveal cache reconcile-write failed for project #{@project.id}: #{write_error.class}: #{write_error.message}")
       false
     end
+  end
+
+  def pak_reveal_cache_empty?
+    ProjectApiKeys::RevealCache.read(@project).dig("secrets", "project_api_key").blank?
+  rescue StandardError => e
+    Rails.logger.error("Project API Key reveal cache read-back failed for project #{@project.id}: #{e.class}: #{e.message}")
+    false
   end
 end
