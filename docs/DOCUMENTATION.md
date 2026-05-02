@@ -39,6 +39,7 @@ current state를 분리한다.
 | Roadmap taxonomy or slice status changes | `docs/04_IMPLEMENTATION_PLAN.md` 갱신 |
 | Active milestone / track / phase / slice changes | `docs/context/current-state.md` 갱신 |
 | Gate definition or acceptance status changes | `docs/06_ACCEPTANCE_TESTS.md` 갱신 |
+| User feedback reveals a defect, UX regression, or acceptance failure | `docs/04_IMPLEMENTATION_PLAN.md`에서 triage; gate 또는 regression evidence가 바뀌면 `docs/06_ACCEPTANCE_TESTS.md`와 `docs/current/TESTING.md` 갱신 |
 | Runtime behavior changes | `docs/current/RUNTIME.md` 갱신 |
 | Module/file layout changes | `docs/current/CODE_MAP.md` 갱신 |
 | DB/schema/data model changes | `docs/current/DATA_MODEL.md` 갱신 |

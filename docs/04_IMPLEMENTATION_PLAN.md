@@ -14,7 +14,7 @@ slice, gate, evidence, next work만 남긴다.
 | Milestone | 제품 / 사용자 관점의 delivery gate | `P0-M3` | 사용자가 얻는 상태 기준 |
 | Track | 기술 영역 또는 큰 구현 흐름 | `PROV` | `CORE`, `PROV`, `OPS` 등 |
 | Phase | Track 안의 구현 단계 | `PROV-3A` | 같은 track 안에서 순서가 있는 단계 |
-| Slice / Task | 커밋 가능한 구현 단위 | `PROV-3A.1` | PR / commit / issue와 연결 가능한 크기 |
+| Slice | 커밋 가능한 구현/검증 단위 | `PROV-3A.1` | PR / commit / issue와 연결 가능한 크기 |
 | Gate | 검증 / acceptance 기준 | `AC-009` / `TEST-020` | `06_ACCEPTANCE_TESTS.md` 또는 spec 위치 |
 | Evidence | 완료를 뒷받침하는 근거 | code, tests, docs | 본문 복제 대신 링크 / ID |
 
@@ -25,6 +25,16 @@ slice, gate, evidence, next work만 남긴다.
 - `docs/current/`는 구현된 상태를 빠르게 찾는 navigation layer다.
 - 미래 roadmap, phase inventory, 상세 backlog를 `docs/current/`에 복제하지 않는다.
 - Runtime, schema, operation, test command가 바뀌면 해당 `docs/current/` 문서를 같이 갱신한다.
+
+## Unplanned feedback
+
+User feedback from real usage is triaged before it enters the roadmap.
+
+- Clear defects, UX regressions, or acceptance failures may become small hotfix slices.
+- Broader product or architecture changes go through Q / DEC / PRD / roadmap updates.
+- Keep detailed feedback threads in the issue tracker. Record only the actionable
+  slice, gate, evidence, and next step here.
+- Bug fixes should leave regression evidence when practical.
 
 ## Status Vocabulary
 
