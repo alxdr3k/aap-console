@@ -51,29 +51,22 @@ module Provisioning
         client = KeycloakClient.new.get_client(uuid: uuid)
 
         # Treat any successful 200 against the UUID-targeted GET as
-        # authoritative completion: by design a UUID-targeted lookup that
-        # returns 200 means a client at that UUID exists. Returning false on
-        # representation drift (missing `id`, malformed body, omitted clientId)
-        # would push the orchestrator back into `execute`, which unconditionally
-        # POSTs a new client and either mints a duplicate or hard-fails on
-        # 409. Log any payload divergence so an operator can investigate.
-        if client.is_a?(Hash)
-          if client["id"].present? && client["id"] != uuid
-            Rails.logger.warn(
-              "[Provisioning::Steps::KeycloakClientCreate] live id " \
-              "#{client["id"].inspect} differs from snapshot uuid #{uuid}; " \
-              "treating step as complete to avoid duplicate creation"
-            )
-          end
-          if auth_config.keycloak_client_id.present? &&
-             client["clientId"].present? &&
-             client["clientId"] != auth_config.keycloak_client_id
-            Rails.logger.warn(
-              "[Provisioning::Steps::KeycloakClientCreate] live clientId " \
-              "#{client["clientId"]} differs from snapshot " \
-              "#{auth_config.keycloak_client_id} for uuid=#{uuid}; treating step as complete"
-            )
-          end
+        # authoritative completion. Returning false on representation drift
+        # (missing `id`, malformed body, omitted clientId) would push the
+        # orchestrator back into `execute`, which unconditionally POSTs a new
+        # client and either mints a duplicate or hard-fails on 409. Track
+        # whether the live identity matches our snapshot — `after_skip` uses
+        # this to decide if the secret cache refresh is safe.
+        @client_identity_diverged = client_identity_diverged?(client, uuid, auth_config.keycloak_client_id)
+        if @client_identity_diverged
+          Rails.logger.warn(
+            "[Provisioning::Steps::KeycloakClientCreate] live client identity " \
+            "diverges from snapshot (uuid=#{uuid}, " \
+            "live_id=#{client.is_a?(Hash) ? client["id"].inspect : 'n/a'}, " \
+            "live_clientId=#{client.is_a?(Hash) ? client["clientId"].inspect : 'n/a'}, " \
+            "expected_clientId=#{auth_config.keycloak_client_id.inspect}); treating step " \
+            "as complete but skipping secret cache refresh"
+          )
         end
         true
       rescue BaseClient::NotFoundError
@@ -85,6 +78,14 @@ module Provisioning
       def after_skip
         auth_config = project.project_auth_config
         return unless auth_config&.auth_type == "oidc"
+
+        # Identity diverged from the snapshot — refreshing the secret cache
+        # would expose a different client's secret. Drop any stale entry and
+        # let the operator surface the divergence via the warning log.
+        if @client_identity_diverged
+          Provisioning::SecretCache.delete(step_record.provisioning_job_id)
+          return
+        end
 
         client_uuid = step_record.result_snapshot&.dig("keycloak_client_uuid") || auth_config.keycloak_client_uuid
         return if client_uuid.blank?
@@ -128,6 +129,17 @@ module Provisioning
           # Extract UUID from Location header (Keycloak 201 response)
           nil
         end
+      end
+
+      def client_identity_diverged?(client, expected_uuid, expected_client_id)
+        return false unless client.is_a?(Hash)
+
+        live_id = client["id"]
+        live_client_id = client["clientId"]
+        return true if live_id.present? && live_id != expected_uuid
+        return true if expected_client_id.present? && live_client_id.present? && live_client_id != expected_client_id
+
+        false
       end
 
       def cache_client_secret!(keycloak, client_uuid, auth_type)

@@ -17,7 +17,14 @@ module AuthConfigs
       cache_failed = false
       begin
         SecretRevealCache.delete(@project)
-        SecretRevealCache.write(@project, key: "client_secret", label: "Client Secret", value: secret)
+        # Treat both raised exceptions and a falsy return as failure. Many
+        # cache adapters signal write failure by returning nil/false rather
+        # than raising; without this check the rotated secret would be
+        # silently lost the next time `read` returns an empty payload.
+        if SecretRevealCache.write(@project, key: "client_secret", label: "Client Secret", value: secret).blank?
+          Rails.logger.error("Auth config secret cache write returned a falsy result for project #{@project.id}")
+          cache_failed = true
+        end
       rescue StandardError => e
         # The upstream secret has already been rotated and the previous secret is
         # gone forever. Capture the fresh value in the result so the caller can
