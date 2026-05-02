@@ -43,14 +43,16 @@ module Provisioning
         auth_config = project.project_auth_config
         return false unless auth_config&.keycloak_client_id
 
-        # KeycloakClient#get_client_by_client_id takes a positional client_id
-        # and either returns a single Hash or raises NotFoundError. Passing
-        # a keyword arg lands as a Hash in the positional slot, and treating
-        # the return value as an array was broken on both counts.
-        # Confirm the live UUID matches the persisted snapshot — a recreated
-        # client with the same client_id would otherwise look like a no-op skip.
-        client = KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
-        client.is_a?(Hash) && client["id"] == uuid
+        # Look up the client by UUID directly. The list endpoint
+        # `get_client_by_client_id` is a clientId search that only returns the
+        # first match and depends on Keycloak's ordering — we already have the
+        # UUID from the snapshot, so use the stable path-based GET. A recreated
+        # client with the same clientId but a different UUID will surface as
+        # NotFoundError on this call and force the step to run again.
+        client = KeycloakClient.new.get_client(uuid: uuid)
+        client.is_a?(Hash) &&
+          client["id"] == uuid &&
+          client["clientId"] == auth_config.keycloak_client_id
       rescue BaseClient::NotFoundError
         false
       rescue BaseClient::ApiError
