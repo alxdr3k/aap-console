@@ -64,22 +64,22 @@ class MembersController < ApplicationController
           }
         )
       end
-
-      respond_to do |format|
-        format.json { render json: serialize_membership(membership.reload), status: :created }
-        format.html do
-          flash[:success] = "멤버가 추가되었습니다."
-          redirect_to organization_members_path(@organization.slug), status: :see_other
-        end
-      end
     rescue ActiveRecord::RecordInvalid => e
       compensate_keycloak_user(created_keycloak_user_sub)
       keycloak_compensated = true
-      render_member_errors(e.record.errors.full_messages, :unprocessable_entity)
+      return render_member_errors(e.record.errors.full_messages, :unprocessable_entity)
     rescue StandardError
       compensate_keycloak_user(created_keycloak_user_sub)
       keycloak_compensated = true
       raise
+    end
+
+    respond_to do |format|
+      format.json { render json: serialize_membership(membership.reload), status: :created }
+      format.html do
+        flash[:success] = "멤버가 추가되었습니다."
+        redirect_to organization_members_path(@organization.slug), status: :see_other
+      end
     end
   rescue BaseClient::NotFoundError
     render_member_errors([ "User not found" ], :unprocessable_entity)
