@@ -27,31 +27,8 @@ class ProjectApiKeysController < ApplicationController
       token = result.data.fetch(:token)
 
       if browser_request?
-        cache_persisted = begin
-          ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
-        rescue StandardError => e
-          Rails.logger.error("Project API Key reveal cache write failed for project #{@project.id}: #{e.class}: #{e.message}")
-          false
-        end
-
-        if cache_persisted
-          flash[:success] = "PAK가 발급되었습니다."
-          redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
-        elsif plain_html_request?
-          # Cache could not persist the PAK plaintext. Render the auth config
-          # page in-band with the freshly issued PAK so the operator can copy
-          # it once; the key remains active in the DB so the operator stays in
-          # control of revoke vs retry. Restrict to pure HTML so a Turbo Stream
-          # or other negotiated format cannot receive a secret-bearing body
-          # outside the no-store page lifecycle.
-          render_pak_in_band_fallback(key, token)
-        else
-          # Non-HTML browser format (turbo_stream). Fail closed and let the
-          # operator revoke + reissue rather than streaming the plaintext
-          # through a path we cannot fully gate as no-store.
-          flash[:error] = "표시 캐시 저장에 실패했습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
-          redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
-        end
+        cache_state = stage_pak_reveal_cache(key, token)
+        handle_pak_cache_state(cache_state, key, token)
       else
         render json: serialize_key(key).merge(token: token), status: :created
       end
@@ -133,24 +110,81 @@ class ProjectApiKeysController < ApplicationController
     request.format.symbol == :html && !default_json_request?
   end
 
+  # Serialize all per-project reveal cache mutations (the primary write AND
+  # any fallback reconcile) under the same project row lock. Without this,
+  # the lock-protected fallback could still race with an unlocked successful
+  # write from a concurrent request and clobber the newer reveal. Returns one
+  # of: :persisted (cache holds our key), :superseded_by_newer (cache holds a
+  # newer concurrent reveal — leave it), :empty_render_in_band (cache is
+  # empty, render the secret in-band so the operator can copy it once), or
+  # :fail_closed (cache state is unknown/stale and we cannot guarantee a
+  # safe read on the next GET).
+  def stage_pak_reveal_cache(key, token)
+    @project.with_lock do
+      current = read_pak_reveal_payload_safely
+
+      if current.is_a?(Hash) && current["project_api_key_id"].to_i > key.id.to_i
+        Rails.logger.info(
+          "[ProjectApiKeysController] cache holds newer PAK reveal " \
+          "(id=#{current["project_api_key_id"]}) than current issuance (id=#{key.id}); leaving newer reveal in place"
+        )
+        next :superseded_by_newer
+      end
+
+      begin
+        next :persisted if ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
+      rescue StandardError => write_error
+        Rails.logger.error("Project API Key reveal cache write failed for project #{@project.id}: #{write_error.class}: #{write_error.message}")
+      end
+
+      delete_succeeded = begin
+        ProjectApiKeys::RevealCache.delete(@project)
+        true
+      rescue StandardError => delete_error
+        Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{delete_error.class}: #{delete_error.message}")
+        false
+      end
+
+      next :empty_render_in_band if delete_succeeded && pak_reveal_cache_truly_empty?
+
+      retry_written = begin
+        ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
+      rescue StandardError => retry_error
+        Rails.logger.error("Project API Key reveal cache reconcile-write failed for project #{@project.id}: #{retry_error.class}: #{retry_error.message}")
+        false
+      end
+
+      next :persisted if retry_written && pak_reveal_cache_matches?(key)
+
+      :fail_closed
+    end
+  end
+
+  def handle_pak_cache_state(state, key, token)
+    case state
+    when :persisted, :superseded_by_newer
+      flash[:success] = "PAK가 발급되었습니다."
+      redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+    when :empty_render_in_band
+      if plain_html_request?
+        render_pak_in_band_fallback(key, token)
+      else
+        # Non-HTML browser format (turbo_stream). Fail closed and let the
+        # operator revoke + reissue rather than streaming the plaintext
+        # through a path we cannot fully gate as no-store.
+        flash[:error] = "표시 캐시 저장에 실패했습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
+        redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+      end
+    when :fail_closed
+      flash[:error] = "표시 캐시 정리에 실패했습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
+      redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+    end
+  end
+
   def render_pak_in_band_fallback(key, token)
     @auth_config = @project.project_auth_config
     unless @auth_config
       flash[:error] = "인증 설정이 없어 PAK를 표시할 수 없습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
-      redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
-      return
-    end
-
-    # A previous reveal may have populated the per-project cache with a stale
-    # payload pointing at a now-superseded PAK. Drop that entry first so a
-    # later auth-config GET cannot resurface the old token in place of the
-    # freshly issued one. If delete fails, attempt to overwrite the entry with
-    # the fresh payload — that still removes the stale value from any future
-    # read. If both calls fail, fail closed and tell the operator to revoke
-    # and reissue rather than leaving a stale plaintext readable from cache.
-    cache_reconciled = reconcile_pak_reveal_cache(key, token)
-    unless cache_reconciled
-      flash[:error] = "표시 캐시 정리에 실패했습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
       redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       return
     end
@@ -163,58 +197,6 @@ class ProjectApiKeysController < ApplicationController
     prepare_auth_config_show!(pak_reveal_payload: payload)
     disable_secret_response_cache!
     render template: "auth_configs/show", formats: [ :html ]
-  end
-
-  # Returns true when the per-project reveal cache no longer holds a stale
-  # token. The contract: after this method returns true, a later GET must not
-  # surface an OLDER PAK than the one in the in-band response. The method
-  # treats three cache states as acceptable: (a) the cache holds no secret
-  # entries, (b) the cache holds the freshly issued PAK and only that PAK,
-  # or (c) the cache already holds a NEWER PAK reveal from a concurrent
-  # issuance — clobbering that with our older token would surface the wrong
-  # secret to the other operator. The whole reconciliation runs inside a
-  # project row lock so concurrent fallback paths cannot interleave.
-  def reconcile_pak_reveal_cache(key, token)
-    @project.with_lock do
-      current = read_pak_reveal_payload_safely
-
-      # Compare-and-swap guard: if a concurrent issue request already cached
-      # a newer reveal, leave it alone. Our in-band response still shows
-      # the operator the PAK they issued; later GETs should reflect the
-      # most recent successfully cached reveal.
-      if current.is_a?(Hash) && current["project_api_key_id"].to_i > key.id.to_i
-        Rails.logger.info(
-          "[ProjectApiKeysController] reconcile skipped: cache holds newer PAK reveal " \
-          "(id=#{current["project_api_key_id"]}) than current issuance (id=#{key.id})"
-        )
-        return true
-      end
-
-      delete_succeeded = begin
-        ProjectApiKeys::RevealCache.delete(@project)
-        true
-      rescue StandardError => delete_error
-        Rails.logger.error("Project API Key reveal cache delete failed for project #{@project.id}: #{delete_error.class}: #{delete_error.message}")
-        false
-      end
-
-      return true if delete_succeeded && pak_reveal_cache_truly_empty?
-
-      # Cache may still hold a stale or malformed entry. Overwrite with the
-      # fresh payload and verify the read-back now matches the issued PAK.
-      written = begin
-        ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
-      rescue StandardError => write_error
-        Rails.logger.error("Project API Key reveal cache reconcile-write failed for project #{@project.id}: #{write_error.class}: #{write_error.message}")
-        false
-      end
-      unless written
-        Rails.logger.error("Project API Key reveal cache reconcile-write returned a falsy result for project #{@project.id}")
-        return false
-      end
-
-      pak_reveal_cache_matches?(key)
-    end
   end
 
   def read_pak_reveal_payload_safely
