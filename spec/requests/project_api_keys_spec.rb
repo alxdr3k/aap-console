@@ -196,7 +196,9 @@ RSpec.describe "ProjectApiKeys", type: :request do
 
       issued = project.project_api_keys.find_by!(name: "overwrite-malformed")
       expect(issued.revoked_at).to be_nil
-      expect(response).to have_http_status(:ok)
+      # Reconcile-write succeeded on the retry, so the cache now holds the
+      # fresh PAK and the controller redirects to auth_config show.
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
       cached_after = ProjectApiKeys::RevealCache.read(project)
       expect(cached_after.dig("secrets", "project_api_key", "project_api_key_id")).to eq(issued.id)
       expect(cached_after.dig("secrets", "stale_blob")).to be_nil
