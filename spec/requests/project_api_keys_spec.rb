@@ -172,6 +172,36 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response.body).to include("표시 캐시 정리에 실패")
     end
 
+    it "overwrites a malformed stale cache entry that hides from a naive blank? check" do
+      grant_project_role("write")
+      create(:project_auth_config, project: project, auth_type: "oidc")
+      # Simulate a stale cache that survives delete (false return) and whose
+      # payload is shaped so `dig("secrets", "project_api_key")` returns nil
+      # while a non-empty `secrets` hash still lives under the cache key.
+      malformed = {
+        "organization_id" => project.organization_id,
+        "project_id" => project.id,
+        "secrets" => { "stale_blob" => "leftover" }
+      }
+      cache.write(ProjectApiKeys::RevealCache.send(:cache_key, project), malformed)
+      allow(ProjectApiKeys::RevealCache).to receive(:delete).and_return(false)
+      original_write = ProjectApiKeys::RevealCache.method(:write)
+      attempt = 0
+      allow(ProjectApiKeys::RevealCache).to receive(:write) do |*args, **kwargs|
+        attempt += 1
+        attempt == 1 ? false : original_write.call(*args, **kwargs)
+      end
+
+      post path, params: { project_api_key: { name: "overwrite-malformed" } }, headers: html_headers
+
+      issued = project.project_api_keys.find_by!(name: "overwrite-malformed")
+      expect(issued.revoked_at).to be_nil
+      expect(response).to have_http_status(:ok)
+      cached_after = ProjectApiKeys::RevealCache.read(project)
+      expect(cached_after.dig("secrets", "project_api_key", "project_api_key_id")).to eq(issued.id)
+      expect(cached_after.dig("secrets", "stale_blob")).to be_nil
+    end
+
     it "fails closed when the request format is non-HTML and the reveal cache fails" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
