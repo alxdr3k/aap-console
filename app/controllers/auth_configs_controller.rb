@@ -1,6 +1,4 @@
 class AuthConfigsController < ApplicationController
-  include AuthConfigShowState
-
   before_action :set_organization
   before_action :set_project
   before_action :set_auth_config
@@ -11,7 +9,7 @@ class AuthConfigsController < ApplicationController
     return render_auth_config_not_found unless @auth_config
     return render json: @auth_config if json_request?
 
-    prepare_auth_config_show!
+    prepare_show
     disable_secret_response_cache! if @secret_entries.present? || @project_api_key_reveal.present?
 
     respond_to do |format|
@@ -35,7 +33,7 @@ class AuthConfigsController < ApplicationController
         return render json: { errors: uri_errors }, status: :unprocessable_entity if json_request?
 
         @errors = uri_errors
-        prepare_auth_config_show!(form_values: auth_params)
+        prepare_show(form_values: auth_params)
         return render :show, status: :unprocessable_entity
       end
     end
@@ -66,7 +64,7 @@ class AuthConfigsController < ApplicationController
       return render json: { error: result.error }, status: :unprocessable_entity if json_request?
 
       @errors = [ result.error ]
-      prepare_auth_config_show!(form_values: permitted_auth_params)
+      prepare_show(form_values: permitted_auth_params)
       render :show, status: :unprocessable_entity
     end
   end
@@ -86,28 +84,23 @@ class AuthConfigsController < ApplicationController
       if json_request?
         disable_secret_response_cache!
         render json: payload, status: :created
-      elsif plain_html_request? || request.format.turbo_stream?
-        # Render in-band for all browser formats (plain HTML and Turbo).
-        # The service never writes to the shared reveal cache, so no cache
-        # consumption step is needed here.
-        # Trade-off: skips PRG pattern. The button uses data-turbo=false
-        # (native confirm) and no-store prevents cache restore. A redirect
-        # would require shared cache (the security regression this avoids)
-        # or session secret storage (forbidden by policy).
-        flash.now[:success] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
-        prepare_auth_config_show!(reveal_payload: payload)
+      elsif cache_failed
+        # Cache was unable to persist the rotated secret. Render the page in-band
+        # with the fresh secret so the operator can copy it once; redirecting
+        # would discard the value because the show action reads from the cache.
+        flash.now[:warning] = "Client Secret이 재발급되었지만 표시 캐시 저장에 실패했습니다. 이 화면을 떠나기 전에 즉시 복사하세요."
+        prepare_show(reveal_payload: payload)
         disable_secret_response_cache!
-        render :show, formats: [ :html ]
+        render :show
       else
-        # Non-browser, non-JSON fallback.
-        flash[:error] = "Client Secret이 재발급되었지만 표시할 수 없습니다. 잠시 후 다시 재발급하세요."
+        flash[:warning] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end
     else
       return render json: { errors: [ result.error ] }, status: :unprocessable_entity if json_request?
 
       @errors = [ result.error ]
-      prepare_auth_config_show!
+      prepare_show
       render :show, status: :unprocessable_entity
     end
   end
@@ -150,21 +143,66 @@ class AuthConfigsController < ApplicationController
 
     normalized = {}
     if permitted.key?(:redirect_uris)
-      normalized[:redirect_uris] = normalize_auth_config_uri_values(permitted[:redirect_uris])
+      normalized[:redirect_uris] = normalize_uri_values(permitted[:redirect_uris])
     end
     if permitted.key?(:post_logout_redirect_uris)
-      normalized[:post_logout_redirect_uris] = normalize_auth_config_uri_values(permitted[:post_logout_redirect_uris])
+      normalized[:post_logout_redirect_uris] = normalize_uri_values(permitted[:post_logout_redirect_uris])
     end
     normalized
   end
 
-  def render_auth_config_not_found
-    return render json: { error: "Not found" }, status: :not_found if json_request?
-
-    respond_to do |format|
-      format.html { render "projects/not_found", status: :not_found }
-      format.json { render json: { error: "Not found" }, status: :not_found }
+  def prepare_show(form_values: nil, reveal_payload: nil)
+    base_values = {
+      redirect_uris: @auth_config&.redirect_uris,
+      post_logout_redirect_uris: @auth_config&.post_logout_redirect_uris
+    }
+    values = base_values.merge(form_values || {})
+    if @auth_config&.auth_type == "saml" && @auth_config.keycloak_client_uuid.present?
+      @saml_idp_metadata_url = saml_idp_metadata_url
     end
+
+    @errors ||= []
+    @can_write_project = current_authorization.can?(:write_project, @project)
+    @active_provisioning_job = @project.provisioning_jobs
+                                      .where(status: ProvisioningJob::ACTIVE_STATUSES)
+                                      .order(created_at: :desc)
+                                      .first
+    @redirect_uris = form_rows(values[:redirect_uris])
+    @post_logout_redirect_uris = form_rows(values[:post_logout_redirect_uris])
+    @secret_payload = if reveal_payload && @can_write_project
+                       reveal_payload
+    elsif @can_write_project
+                       AuthConfigs::SecretRevealCache.read(@project)
+    else
+                       {}
+    end
+    @secret_entries = @secret_payload.fetch("secrets", {})
+    @secret_reveal_storage_key = [
+      "auth-config-secret",
+      @project.id,
+      @secret_payload["generated_at"].presence || "current"
+    ].join(":")
+    @project_api_keys = @project.project_api_keys.order(created_at: :desc)
+    @project_api_key_reveal_payload = @can_write_project ? ProjectApiKeys::RevealCache.read(@project) : {}
+    @project_api_key_reveal = @project_api_key_reveal_payload.dig("secrets", "project_api_key") || {}
+    @project_api_key_reveal_storage_key = [
+      "project-api-key",
+      @project.id,
+      @project_api_key_reveal_payload["generated_at"].presence || "current"
+    ].join(":")
+    @last_secret_regenerated_at = @project.audit_logs
+                                          .where(action: "auth_config.secret_regenerated")
+                                          .order(created_at: :desc)
+                                          .pick(:created_at)
+  end
+
+  def form_rows(values)
+    rows = normalize_uri_values(values)
+    rows.presence || [ "" ]
+  end
+
+  def normalize_uri_values(values)
+    Array(values).map(&:to_s).map(&:strip).reject(&:blank?)
   end
 
   def pkce_redirect_uri_errors(uris)
@@ -186,15 +224,28 @@ class AuthConfigsController < ApplicationController
     end
   end
 
-  def json_request?
-    request.format.json? || default_json_request?
+  def saml_idp_metadata_url
+    base = ENV.fetch("KEYCLOAK_URL", "")
+    realm = ENV.fetch("KEYCLOAK_REALM", "aap")
+    "#{base}/realms/#{realm}/protocol/saml/descriptor"
   end
 
-  def plain_html_request?
-    # Note: Mime[:turbo_stream]#html? returns true because the turbo_stream
-    # mime type ends with `.html`. Compare the format symbol so the in-band
-    # rotated-secret render stays scoped to genuinely plain text/html
-    # responses only.
-    request.format.symbol == :html && !default_json_request?
+  def render_auth_config_not_found
+    return render json: { error: "Not found" }, status: :not_found if json_request?
+
+    respond_to do |format|
+      format.html { render "projects/not_found", status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
+  end
+
+  def disable_secret_response_cache!
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+  end
+
+  def json_request?
+    request.format.json? || default_json_request?
   end
 end

@@ -75,11 +75,15 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(audit.details.to_s).not_to include(token)
     end
 
-    it "renders browser issue requests in-band with the reveal panel" do
+    it "redirects browser issue requests back to auth config with a reveal panel" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
 
       post path, params: { project_api_key: { name: "browser-ci" } }, headers: html_headers
+
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+
+      follow_redirect!
 
       expect(response).to have_http_status(:ok)
       expect(response.headers["Cache-Control"]).to eq("no-store")
@@ -88,57 +92,64 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response.body).to include("pak-")
     end
 
-    it "renders Turbo PAK issue requests in-band to prevent shared-cache reveal races" do
+    it "treats Turbo browser issue requests as the auth config redirect flow" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
 
       post path, params: { project_api_key: { name: "turbo-ci" } }, headers: turbo_headers
 
-      expect(response).to have_http_status(:ok)
-      expect(response.headers["Cache-Control"]).to eq("no-store")
-      expect(response.body).to include("turbo-ci")
-      expect(response.body).to include("일회성 PAK")
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
     end
 
-    it "never writes the PAK token to the shared reveal cache (one-time reveal)" do
+    it "auto-revokes the issued PAK when shared reveal cache persistence fails" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
+      allow(cache).to receive(:write).and_return(false)
 
-      post path, params: { project_api_key: { name: "in-band-ci" } }, headers: html_headers
+      expect {
+        post path, params: { project_api_key: { name: "session-ci" } }, headers: html_headers
+      }.to change { AuditLog.where(action: "project_api_key.revoke").count }.by(1)
+
+      issued = project.project_api_keys.find_by!(name: "session-ci")
+      expect(issued.revoked_at).to be_present
+
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+      follow_redirect!
 
       expect(response).to have_http_status(:ok)
-      expect(response.headers["Cache-Control"]).to eq("no-store")
-      expect(response.body).to include("in-band-ci")
-      expect(response.body).to include("pak-")
-      # The shared cache must be empty so a concurrent GET /auth_config
-      # by another operator cannot observe this one-time token.
-      expect(ProjectApiKeys::RevealCache.read(project).dig("secrets", "project_api_key")).to be_nil
+      # PAK plaintext must never reach the rendered page when cache write fails.
+      expect(response.body).not_to include("일회성 PAK")
+      expect(response.body).to include("폐기")
     end
 
-    it "clears any stale reveal cache entry before in-band rendering" do
+    it "auto-revokes the issued PAK when the reveal cache raises during persistence" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
-      stale_key = create(:project_api_key, project: project, name: "stale-reveal")
-      ProjectApiKeys::RevealCache.write(project, project_api_key: stale_key, token: "pak-stale-secret")
+      allow(ProjectApiKeys::RevealCache).to receive(:write).and_raise("cache backend down")
+      allow(Rails.logger).to receive(:error)
 
-      post path, params: { project_api_key: { name: "fresh-key" } }, headers: html_headers
+      expect {
+        post path, params: { project_api_key: { name: "raise-ci" } }, headers: html_headers
+      }.to change { AuditLog.where(action: "project_api_key.revoke").count }.by(1)
 
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include("fresh-key")
-      expect(response.body).not_to include("pak-stale-secret")
-      expect(ProjectApiKeys::RevealCache.read(project).dig("secrets", "project_api_key")).to be_nil
+      issued = project.project_api_keys.find_by!(name: "raise-ci")
+      expect(issued.revoked_at).to be_present
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
     end
 
-    it "does not persist the plaintext PAK in the browser session cookie" do
+    it "does not persist the plaintext PAK in the browser session cookie when the cache fails" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
+      allow(cache).to receive(:write).and_return(false)
 
       post path, params: { project_api_key: { name: "no-cookie" } }, headers: html_headers
 
       cookie_jar = response.cookies
       session_cookie = cookie_jar["_aap_console_session"] || cookie_jar.values.compact.find { |value| value.is_a?(String) }
       expect(session_cookie.to_s).not_to include("project_api_key_reveal_fallbacks")
+      expect(session_cookie.to_s).not_to match(/pak-[A-Za-z0-9_-]+/)
     end
+
 
     it "rejects duplicate names within the same project" do
       grant_project_role("write")
@@ -198,24 +209,22 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
     end
 
-    it "consumes the reveal cache after in-band render (one-time reveal contract)" do
+    it "keeps the current reveal payload when revoking a different key" do
       create(:project_auth_config, project: project, auth_type: "oidc")
       stale_key = create(:project_api_key, project: project, name: "stale-ci")
 
       post path, params: { project_api_key: { name: "fresh-ci" } }, headers: html_headers
-      expect(response).to have_http_status(:ok)
+      follow_redirect!
       expect(response.body).to include("fresh-ci")
       expect(response.body).to include("일회성 PAK")
-      # Cache is consumed after in-band render; revoking another key
-      # does not surface the already-consumed token to another operator.
-      expect(ProjectApiKeys::RevealCache.read(project).dig("secrets", "project_api_key")).to be_nil
 
       delete "#{path}/#{stale_key.id}", headers: html_headers
       follow_redirect!
 
       expect(response).to have_http_status(:ok)
-      # No PAK reveal panel — the one-time token was already consumed above.
-      expect(response.body).not_to include("일회성 PAK")
+      expect(response.body).to include("fresh-ci")
+      expect(response.body).to include("일회성 PAK")
+      expect(response.body).to include("pak-")
     end
 
     it "does not write duplicate revoke audit events for an already revoked PAK" do

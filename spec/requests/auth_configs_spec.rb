@@ -296,17 +296,25 @@ RSpec.describe "AuthConfigs", type: :request do
       cache.clear
     end
 
-    it "regenerates the secret and renders the reveal panel in-band" do
+    it "regenerates the secret and redirects back to the auth config page" do
       post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
            headers: html_headers
+
+      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+      expect(AuthConfigs::SecretRevealCache.read(project).dig("secrets", "client_secret", "value")).to eq("new-client-secret")
+    end
+
+    it "renders the reveal panel with no-store headers after redirect" do
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: html_headers
+
+      follow_redirect!
 
       expect(response).to have_http_status(:ok)
       expect(response.headers["Cache-Control"]).to eq("no-store")
       expect(response.body).to include("일회성 인증 정보")
+      expect(response.body).to include("10분 TTL")
       expect(response.body).to include("new-client-secret")
-      # One-time reveal: cache is consumed after in-band render so subsequent
-      # GET /auth_config cannot surface this secret to other operators.
-      expect(AuthConfigs::SecretRevealCache.read(project).dig("secrets")).to be_blank
     end
 
     it "returns JSON for explicit JSON clients" do
@@ -321,10 +329,12 @@ RSpec.describe "AuthConfigs", type: :request do
     it "changes the reveal confirmation storage key for each regenerated secret" do
       post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
            headers: html_headers
+      follow_redirect!
       first_key = response.body[/data-secret-reveal-storage-key-value="([^"]+)"/, 1]
 
       post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
            headers: html_headers
+      follow_redirect!
       second_key = response.body[/data-secret-reveal-storage-key-value="([^"]+)"/, 1]
 
       expect(first_key).to be_present
@@ -332,18 +342,23 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(second_key).not_to eq(first_key)
     end
 
-    it "renders the rotated secret in-band for Turbo form submissions" do
-      turbo_headers = { "ACCEPT" => "text/vnd.turbo-stream.html, text/html" }
+    it "renders the rotated secret in-band (no redirect) when the reveal cache write fails" do
+      allow(AuthConfigs::SecretRevealCache).to receive(:write).and_raise("cache boom")
+      allow(Rails.logger).to receive(:error)
 
       post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
-           headers: turbo_headers
+           headers: html_headers
 
       expect(response).to have_http_status(:ok)
       expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.body).to include("표시 캐시 저장에 실패")
       expect(response.body).to include("new-client-secret")
     end
 
-    it "returns the rotated secret for JSON callers" do
+    it "returns the rotated secret with a cache_failed flag for JSON callers when the reveal cache write fails" do
+      allow(AuthConfigs::SecretRevealCache).to receive(:write).and_raise("cache boom")
+      allow(Rails.logger).to receive(:error)
+
       post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
            headers: json_headers
 
@@ -351,7 +366,7 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(response.headers["Cache-Control"]).to eq("no-store")
       body = response.parsed_body
       expect(body.dig("secrets", "client_secret", "value")).to eq("new-client-secret")
-      expect(body["cache_failed"]).to be_nil
+      expect(body["cache_failed"]).to be(true)
       expect(body["expires_at"]).to eq(body["generated_at"])
     end
   end
