@@ -65,7 +65,7 @@ RSpec.describe "Projects", type: :request do
 
     it "creates a project and redirects to provisioning job" do
       post "/organizations/#{org.slug}/projects",
-           params: { project: { name: "My Project", description: "desc", auth_type: "oidc" } },
+           params: { project: { name: "My Project", description: "desc", auth_type: "oidc", models: [ "azure-gpt4" ], s3_retention_days: 90 } },
            headers: wildcard_headers
       expect(response).to have_http_status(:see_other)
       project = Project.last
@@ -130,6 +130,24 @@ RSpec.describe "Projects", type: :request do
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.body).to include("모델을 하나 이상 선택하세요.")
+    end
+
+    it "rejects unknown models for non-HTML requests" do
+      post "/organizations/#{org.slug}/projects",
+           params: { project: { name: "P", auth_type: "oidc", models: [ "gpt-5-unknown" ], s3_retention_days: 90 } },
+           headers: wildcard_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["errors"]).to include(match(/허용되지 않은 모델/))
+    end
+
+    it "rejects unknown guardrails for non-HTML requests" do
+      post "/organizations/#{org.slug}/projects",
+           params: { project: { name: "P", auth_type: "oidc", models: [ "azure-gpt4" ], guardrails: [ "evil-filter" ], s3_retention_days: 90 } },
+           headers: wildcard_headers
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["errors"]).to include(match(/허용되지 않은 가드레일/))
     end
 
     it "returns 403 for non-admin" do

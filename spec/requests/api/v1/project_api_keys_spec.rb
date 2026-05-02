@@ -66,6 +66,41 @@ RSpec.describe "Api::V1::ProjectApiKeys", type: :request do
       expect(JSON.parse(response.body)).to include("valid" => false)
     end
 
+    it "accepts tokens for update_pending projects" do
+      project.update!(status: :update_pending)
+
+      expect {
+        post "/api/v1/project_api_keys/verify",
+             params: { token: token },
+             headers: { "Authorization" => "Bearer test-inbound-key" }
+      }.to change { project_api_key.reload.last_used_at }.from(nil)
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)).to include("valid" => true)
+    end
+
+    it "rejects tokens for provisioning projects" do
+      project.update!(status: :provisioning)
+
+      post "/api/v1/project_api_keys/verify",
+           params: { token: token },
+           headers: { "Authorization" => "Bearer test-inbound-key" }
+
+      expect(response).to have_http_status(:not_found)
+      expect(JSON.parse(response.body)).to include("valid" => false)
+    end
+
+    it "rejects tokens for deleted projects" do
+      project.update!(status: :deleted)
+
+      post "/api/v1/project_api_keys/verify",
+           params: { token: token },
+           headers: { "Authorization" => "Bearer test-inbound-key" }
+
+      expect(response).to have_http_status(:not_found)
+      expect(JSON.parse(response.body)).to include("valid" => false)
+    end
+
     it "returns 401 without the inbound API key" do
       post "/api/v1/project_api_keys/verify", params: { token: token }
 

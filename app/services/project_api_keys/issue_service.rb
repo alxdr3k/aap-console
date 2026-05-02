@@ -13,24 +13,30 @@ module ProjectApiKeys
     def call
       attempts = 0
 
+      project_api_key = nil
+
       begin
         attempts += 1
         token = generate_token
-        project_api_key = project.project_api_keys.create!(
-          name: name,
-          token_digest: ProjectApiKey.digest_token(token),
-          token_prefix: token.first(ProjectApiKey::TOKEN_PREFIX_LENGTH)
-        )
+        ActiveRecord::Base.transaction do
+          project_api_key = project.project_api_keys.create!(
+            name: name,
+            token_digest: ProjectApiKey.digest_token(token),
+            token_prefix: token.first(ProjectApiKey::TOKEN_PREFIX_LENGTH)
+          )
+          audit!("project_api_key.create", project_api_key)
+        end
       rescue ActiveRecord::RecordNotUnique
+        project_api_key = nil
         retry if attempts < MAX_ATTEMPTS
         return Result.failure("Token collision; retry later")
       rescue ActiveRecord::RecordInvalid => e
+        project_api_key = nil
         retry if token_digest_collision?(e.record) && attempts < MAX_ATTEMPTS
 
         return Result.failure(e.record.errors.full_messages.to_sentence)
       end
 
-      audit!("project_api_key.create", project_api_key)
       Result.success(project_api_key: project_api_key, token: token)
     end
 

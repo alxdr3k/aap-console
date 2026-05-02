@@ -207,8 +207,4 @@ class ConfigVersionsController < ApplicationController
 
     payload
   end
-
-  def json_request?
-    request.format.json? || default_json_request?
-  end
 end

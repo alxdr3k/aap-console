@@ -124,7 +124,17 @@ class LitellmConfigsController < ApplicationController
 
   def litellm_config_errors(config)
     errors = []
-    errors << "모델을 하나 이상 선택하세요." if config.key?(:models) && config[:models].blank?
+
+    if config.key?(:models)
+      errors << "모델을 하나 이상 선택하세요." if config[:models].blank?
+      unknown_models = Array(config[:models]).compact_blank - AVAILABLE_MODELS
+      errors << "허용되지 않은 모델: #{unknown_models.join(', ')}" if unknown_models.any?
+    end
+
+    if config.key?(:guardrails)
+      unknown_guardrails = Array(config[:guardrails]).compact_blank - AVAILABLE_GUARDRAILS
+      errors << "허용되지 않은 가드레일: #{unknown_guardrails.join(', ')}" if unknown_guardrails.any?
+    end
 
     if config.key?(:s3_retention_days)
       retention_days = config[:s3_retention_days].to_i
@@ -138,9 +148,5 @@ class LitellmConfigsController < ApplicationController
 
   def normalize_list(values)
     Array(values).map(&:to_s).map(&:strip).reject(&:blank?)
-  end
-
-  def json_request?
-    request.format.json? || default_json_request?
   end
 end

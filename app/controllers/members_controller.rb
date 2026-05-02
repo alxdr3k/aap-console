@@ -31,6 +31,7 @@ class MembersController < ApplicationController
   def create
     attrs = member_params
     created_keycloak_user_sub = nil
+    keycloak_compensated = false
     user_sub = resolve_member_user_sub(attrs) { |created_sub| created_keycloak_user_sub = created_sub }
     role = attrs[:role]
 
@@ -73,14 +74,19 @@ class MembersController < ApplicationController
       end
     rescue ActiveRecord::RecordInvalid => e
       compensate_keycloak_user(created_keycloak_user_sub)
+      keycloak_compensated = true
       render_member_errors(e.record.errors.full_messages, :unprocessable_entity)
+    rescue StandardError
+      compensate_keycloak_user(created_keycloak_user_sub)
+      keycloak_compensated = true
+      raise
     end
   rescue BaseClient::NotFoundError
     render_member_errors([ "User not found" ], :unprocessable_entity)
   rescue BaseClient::ApiError
     render_member_error("Keycloak user lookup failed", :service_unavailable)
   rescue ActiveRecord::RecordNotFound
-    compensate_keycloak_user(created_keycloak_user_sub)
+    compensate_keycloak_user(created_keycloak_user_sub) unless keycloak_compensated
     render_member_error("Project not found", :not_found)
   end
 
