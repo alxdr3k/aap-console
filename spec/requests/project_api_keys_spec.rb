@@ -137,6 +137,25 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response.body).to include("raise-ci")
     end
 
+    it "drops a stale cached reveal payload before rendering the in-band fallback" do
+      grant_project_role("write")
+      create(:project_auth_config, project: project, auth_type: "oidc")
+      stale_key = create(:project_api_key, project: project, name: "stale-reveal")
+      ProjectApiKeys::RevealCache.write(project, project_api_key: stale_key, token: "pak-stale-secret")
+      allow(cache).to receive(:write).and_return(false)
+
+      post path, params: { project_api_key: { name: "fresh-key" } }, headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("fresh-key")
+      expect(response.body).not_to include("pak-stale-secret")
+
+      # The stale cache must not survive the fallback; a follow-up GET should
+      # not resurface the previous token in place of the freshly issued one.
+      cached_after = ProjectApiKeys::RevealCache.read(project)
+      expect(cached_after.dig("secrets", "project_api_key", "value")).to be_nil
+    end
+
     it "fails closed when the request format is non-HTML and the reveal cache fails" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
