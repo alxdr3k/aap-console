@@ -48,7 +48,13 @@ class ProjectApiKeysController < ApplicationController
       current_user_sub: Current.user_sub
     ).call
 
-    ProjectApiKeys::RevealCache.delete_if_matches(@project, project_api_key_id: @project_api_key.id)
+    # Serialize the read-then-delete with the create path's locked cache
+    # writers so a revoke cannot interleave with a concurrent issue's
+    # successful write and erase a newer reveal that the create path just
+    # cached for another operator.
+    @project.with_lock do
+      ProjectApiKeys::RevealCache.delete_if_matches(@project, project_api_key_id: @project_api_key.id)
+    end
 
     if browser_request?
       flash[:success] = "PAK를 폐기했습니다."
@@ -162,9 +168,20 @@ class ProjectApiKeysController < ApplicationController
 
   def handle_pak_cache_state(state, key, token)
     case state
-    when :persisted, :superseded_by_newer
+    when :persisted
       flash[:success] = "PAK가 발급되었습니다."
       redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+    when :superseded_by_newer
+      # The cache holds another (newer) request's reveal. Redirecting would
+      # surface that other PAK to the current operator instead of theirs;
+      # render in-band on plain HTML so the operator can copy their own
+      # token, and leave the newer cached reveal untouched for its owner.
+      if plain_html_request?
+        render_pak_in_band_fallback(key, token)
+      else
+        flash[:error] = "동시에 다른 PAK가 발급되어 표시 캐시에 자리가 없습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
+        redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+      end
     when :empty_render_in_band
       if plain_html_request?
         render_pak_in_band_fallback(key, token)

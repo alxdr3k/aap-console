@@ -67,11 +67,15 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
       expect {
         described_class.perform_now(organization.id, current_user_sub: user_sub)
       }.to have_enqueued_job(described_class)
+        .and change { AuditLog.where(action: "organization.destroy.blocked").count }.by(1)
 
       # Releasing the reservation allows operator-driven recovery paths to
       # call enqueue_once immediately rather than waiting for the lease.
       expect(organization.reload.destroy_finalizer_reserved_until).to be_nil
       expect(Rails.logger).to have_received(:warn).with(/blocked-project:provision_failed/)
+      audit = AuditLog.where(action: "organization.destroy.blocked").last
+      expect(audit.organization).to eq(organization)
+      expect(audit.details["remaining_projects"]).to include("blocked-project:provision_failed")
     end
 
     it "reschedules with a backoff and releases the reservation when a deleting project has no active delete job" do

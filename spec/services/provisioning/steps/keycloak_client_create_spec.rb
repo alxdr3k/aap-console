@@ -65,12 +65,17 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
       let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
 
-      it "treats the UUID match as authoritative and logs the divergence" do
+      it "treats the UUID match as authoritative, logs, and writes a divergence audit" do
         stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
                                  client: { "id" => auth_config.keycloak_client_uuid,
                                            "clientId" => "aap-some-other-client" })
         expect(Rails.logger).to receive(:warn).with(/identity diverges/)
-        expect(build_step(result_snapshot: snap).already_completed?).to be(true)
+        expect {
+          expect(build_step(result_snapshot: snap).already_completed?).to be(true)
+        }.to change { AuditLog.where(action: "auth_config.keycloak_client_diverged").count }.by(1)
+        audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
+        expect(audit.details["live_client_id"]).to eq("aap-some-other-client")
+        expect(audit.details["expected_client_id"]).to eq(auth_config.keycloak_client_id)
       end
     end
 

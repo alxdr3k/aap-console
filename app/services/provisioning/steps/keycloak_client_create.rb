@@ -67,6 +67,7 @@ module Provisioning
             "expected_clientId=#{auth_config.keycloak_client_id.inspect}); treating step " \
             "as complete but skipping secret cache refresh"
           )
+          record_identity_diverged_audit!(client, uuid, auth_config.keycloak_client_id)
         end
         true
       rescue BaseClient::NotFoundError
@@ -129,6 +130,35 @@ module Provisioning
           # Extract UUID from Location header (Keycloak 201 response)
           nil
         end
+      end
+
+      def record_identity_diverged_audit!(client, expected_uuid, expected_client_id)
+        AuditLog.create!(
+          organization: project.organization,
+          project: project,
+          # System-detected divergence has no acting user; mark the actor
+          # explicitly so audit queries can distinguish it from operator
+          # actions.
+          user_sub: "system:keycloak-client-create",
+          action: "auth_config.keycloak_client_diverged",
+          resource_type: "ProjectAuthConfig",
+          resource_id: project.project_auth_config&.id&.to_s,
+          details: {
+            expected_uuid: expected_uuid,
+            expected_client_id: expected_client_id,
+            live_id: client.is_a?(Hash) ? client["id"] : nil,
+            live_client_id: client.is_a?(Hash) ? client["clientId"] : nil,
+            provisioning_job_id: step_record.provisioning_job_id,
+            provisioning_step_id: step_record.id
+          }
+        )
+      rescue StandardError => e
+        # Don't fail the step on an audit insert failure; the warn log above
+        # already captures the divergence.
+        Rails.logger.error(
+          "[Provisioning::Steps::KeycloakClientCreate] failed to record identity " \
+          "divergence audit for project #{project.id}: #{e.class}: #{e.message}"
+        )
       end
 
       def client_identity_diverged?(client, expected_uuid, expected_client_id)
