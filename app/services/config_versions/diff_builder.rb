@@ -36,7 +36,7 @@ module ConfigVersions
       snapshot.deep_stringify_keys
     end
 
-    MAX_DIFF_LINES = 5_000
+    MAX_DIFF_LINES = 500
 
     def diff_lines(before_lines, after_lines)
       if before_lines.length > MAX_DIFF_LINES || after_lines.length > MAX_DIFF_LINES
