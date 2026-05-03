@@ -88,24 +88,15 @@ class AuthConfigsController < ApplicationController
         render json: payload, status: :created
       elsif plain_html_request? || request.format.turbo_stream?
         # Render in-band for all browser formats (plain HTML and Turbo).
-        # A redirect would let a concurrent rotation overwrite the shared
-        # cache between our write and the GET, showing the wrong secret.
-        # Forcing :html format returns a full-page response that Turbo
-        # handles as a navigation (body replacement).
-        if cache_failed
-          flash.now[:warning] = "Client Secret이 재발급되었지만 표시 캐시 저장에 실패했습니다. 이 화면을 떠나기 전에 즉시 복사하세요."
-        else
-          flash.now[:success] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
-        end
+        # The service never writes to the shared reveal cache, so no cache
+        # consumption step is needed here.
+        flash.now[:success] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
         prepare_auth_config_show!(reveal_payload: payload)
-        # Consume the reveal cache entry so subsequent GET /auth_config requests
-        # cannot surface this one-time secret to other project operators within TTL.
-        AuthConfigs::SecretRevealCache.delete(@project) rescue nil
         disable_secret_response_cache!
         render :show, formats: [ :html ]
       else
         # Non-browser, non-JSON fallback.
-        flash[:error] = "Client Secret이 재발급되었지만 표시 캐시 저장에 실패했습니다. 잠시 후 다시 재발급하세요."
+        flash[:error] = "Client Secret이 재발급되었지만 표시할 수 없습니다. 잠시 후 다시 재발급하세요."
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end
     else
