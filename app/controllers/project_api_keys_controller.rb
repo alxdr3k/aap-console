@@ -30,6 +30,7 @@ class ProjectApiKeysController < ApplicationController
         if cache_persisted
           flash[:success] = "PAK가 발급되었습니다."
         else
+          ProjectApiKeys::RevealCache.delete(@project)
           flash[:warning] = "PAK가 발급되었지만 캐시 저장에 실패해 토큰을 표시할 수 없습니다. 해당 PAK를 취소하고 재발급하세요."
         end
 
