@@ -15,11 +15,6 @@ class KeycloakClient < BaseClient
 
   # User management
 
-  # UUID v4 format that Keycloak issues for all user identifiers.
-  # Used to reject path-traversal attempts at controller entry points
-  # before values reach this client.
-  USER_SUB_FORMAT = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
-
   def search_users(query:)
     response = get(users_path, params: { search: query }, headers: auth_headers)
     response.body

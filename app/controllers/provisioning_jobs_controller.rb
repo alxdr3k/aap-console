@@ -173,9 +173,4 @@ class ProvisioningJobsController < ApplicationController
       render_forbidden and return
     end
   end
-
-  def role_sufficient?(actual_role, required_role)
-    hierarchy = { read: 1, write: 2, admin: 3 }
-    hierarchy.fetch(actual_role.to_sym, 0) >= hierarchy.fetch(required_role.to_sym, 0)
-  end
 end

@@ -39,6 +39,11 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
     end
   end
 
+  # Reads org and projects WITHOUT a row lock by design.
+  # Duplicate enqueues are prevented by the destroy_finalizer_reserved_until
+  # lease taken in enqueue_once / reschedule! (both use with_lock).
+  # reschedule! and release_reservation! take row locks because they mutate
+  # the lease column; the reads here are intentionally optimistic.
   def perform(organization_id, current_user_sub:)
     organization = Organization.find_by(id: organization_id)
     return unless organization
