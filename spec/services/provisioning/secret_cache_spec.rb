@@ -38,7 +38,7 @@ RSpec.describe Provisioning::SecretCache do
 
   it "ignores cache entries whose project metadata does not match the job" do
     cache.write(
-      described_class.cache_key(job.id),
+      "provisioning_job_secrets_#{job.id}",
       {
         "organization_id" => project.organization_id,
         "project_id" => -1,

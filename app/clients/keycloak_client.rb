@@ -15,13 +15,18 @@ class KeycloakClient < BaseClient
 
   # User management
 
+  # UUID v4 format that Keycloak issues for all user identifiers.
+  # Used to reject path-traversal attempts at controller entry points
+  # before values reach this client.
+  USER_SUB_FORMAT = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
+
   def search_users(query:)
     response = get(users_path, params: { search: query }, headers: auth_headers)
     response.body
   end
 
   def get_user(user_sub:)
-    response = get("#{users_path}/#{user_sub}", headers: auth_headers)
+    response = get("#{users_path}/#{CGI.escape(user_sub.to_s)}", headers: auth_headers)
     response.body
   end
 
@@ -67,7 +72,7 @@ class KeycloakClient < BaseClient
   end
 
   def delete_user(user_sub:)
-    delete("#{users_path}/#{user_sub}", headers: auth_headers)
+    delete("#{users_path}/#{CGI.escape(user_sub.to_s)}", headers: auth_headers)
   end
 
   # Client management (only `aap-` prefixed clients)

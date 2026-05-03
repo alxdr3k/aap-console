@@ -1,6 +1,7 @@
 require "rails_helper"
 
 RSpec.describe AuthConfigs::SecretRevealCache do
+  include ActiveSupport::Testing::TimeHelpers
   let(:organization) { create(:organization) }
   let(:project) { create(:project, :active, organization: organization) }
   let(:cache) { ActiveSupport::Cache::MemoryStore.new }
@@ -40,5 +41,13 @@ RSpec.describe AuthConfigs::SecretRevealCache do
     described_class.delete(project)
 
     expect(described_class.read(project)["secrets"]).to eq({})
+  end
+
+  it "expires the cached payload after the reveal TTL" do
+    described_class.write(project, key: "client_secret", label: "Client Secret", value: "kc-secret")
+
+    travel described_class::TTL + 1.second do
+      expect(described_class.read(project)["secrets"]).to eq({})
+    end
   end
 end

@@ -207,7 +207,10 @@ class AuthConfigsController < ApplicationController
     return clear_session_project_api_key_reveal_payload unless payload["project_id"] == @project.id
 
     expires_at = Time.zone.iso8601(payload["expires_at"])
-    return payload if expires_at.future?
+    if expires_at.future?
+      fallbacks.delete(@project.id.to_s)
+      return payload
+    end
   rescue ArgumentError
     clear_session_project_api_key_reveal_payload
   else

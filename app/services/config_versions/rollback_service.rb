@@ -14,10 +14,13 @@ module ConfigVersions
       return conflict if active_job_exists?
 
       response = revert_config_server!
-      rollback_version = record_rollback_version!(response["version"])
       diagnostics = success_diagnostics
+      rollback_version = nil
 
-      audit!("config.rollback.completed", diagnostics: diagnostics, rollback_version_id: rollback_version.version_id)
+      ActiveRecord::Base.transaction do
+        rollback_version = record_rollback_version!(response["version"])
+        audit!("config.rollback.completed", diagnostics: diagnostics, rollback_version_id: rollback_version.version_id)
+      end
 
       Result.success(ResultData.new(rollback_version: rollback_version, diagnostics: diagnostics))
     rescue BaseClient::ApiError => e
