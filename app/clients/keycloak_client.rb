@@ -121,21 +121,25 @@ class KeycloakClient < BaseClient
   def update_client(uuid:, attributes:)
     raise ArgumentError, "uuid is required" if uuid.blank?
 
+    assert_aap_client!(uuid)
     put("#{clients_path}/#{uuid}", body: attributes, headers: auth_headers)
   end
 
   def delete_client(uuid:)
     raise ArgumentError, "uuid is required" if uuid.blank?
 
+    assert_aap_client!(uuid)
     delete("#{clients_path}/#{uuid}", headers: auth_headers)
   end
 
   def get_client_secret(uuid:)
+    assert_aap_client!(uuid)
     response = get("#{clients_path}/#{uuid}/client-secret", headers: auth_headers)
     response.body["value"]
   end
 
   def regenerate_client_secret(uuid:)
+    assert_aap_client!(uuid)
     response = post("#{clients_path}/#{uuid}/client-secret", headers: auth_headers)
     response.body["value"]
   end
@@ -145,6 +149,16 @@ class KeycloakClient < BaseClient
   end
 
   private
+
+  def assert_aap_client!(uuid)
+    client = get_client_by_uuid(uuid)
+    raise ArgumentError, "client #{uuid} is not an aap- client" unless client["clientId"].to_s.start_with?("aap-")
+  end
+
+  def get_client_by_uuid(uuid)
+    response = get("#{clients_path}/#{uuid}", headers: auth_headers)
+    response.body
+  end
 
   def users_path
     "/admin/realms/#{@realm}/users"

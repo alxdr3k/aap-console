@@ -24,7 +24,7 @@ module KeycloakMock
   end
 
   def stub_keycloak_get_client_secret(uuid:, secret: "test-client-secret")
-    stub_keycloak_token
+    stub_keycloak_get_client_by_uuid(uuid: uuid)
     stub_request(:get, "#{BASE}/clients/#{uuid}/client-secret")
       .to_return(
         status: 200,
@@ -34,8 +34,18 @@ module KeycloakMock
     secret
   end
 
-  def stub_keycloak_delete_client(uuid:)
+  def stub_keycloak_get_client_by_uuid(uuid:, client_id: "aap-test-client")
     stub_keycloak_token
+    stub_request(:get, "#{BASE}/clients/#{uuid}")
+      .to_return(
+        status: 200,
+        body: { id: uuid, clientId: client_id }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+  end
+
+  def stub_keycloak_delete_client(uuid:)
+    stub_keycloak_get_client_by_uuid(uuid: uuid)
     stub_request(:delete, "#{BASE}/clients/#{uuid}")
       .to_return(status: 204)
   end
@@ -90,13 +100,13 @@ module KeycloakMock
   end
 
   def stub_keycloak_update_client(uuid:)
-    stub_keycloak_token
+    stub_keycloak_get_client_by_uuid(uuid: uuid)
     stub_request(:put, "#{BASE}/clients/#{uuid}")
       .to_return(status: 204)
   end
 
   def stub_keycloak_regenerate_client_secret(uuid:, secret: "new-client-secret")
-    stub_keycloak_token
+    stub_keycloak_get_client_by_uuid(uuid: uuid)
     stub_request(:post, "#{BASE}/clients/#{uuid}/client-secret")
       .to_return(
         status: 200,

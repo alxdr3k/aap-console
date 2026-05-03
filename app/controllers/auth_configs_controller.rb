@@ -188,40 +188,9 @@ class AuthConfigsController < ApplicationController
   end
 
   def project_api_key_reveal_payload
-    session_payload = session_project_api_key_reveal_payload
-    return session_payload if session_payload.present?
-
     cache_payload = ProjectApiKeys::RevealCache.read(@project)
     return cache_payload if cache_payload.dig("secrets", "project_api_key").present?
 
-    {}
-  end
-
-  def session_project_api_key_reveal_payload
-    fallbacks = session[:project_api_key_reveal_fallbacks]
-    return {} unless fallbacks.is_a?(Hash)
-
-    payload = fallbacks[@project.id.to_s]
-    return {} unless payload.is_a?(Hash)
-    return clear_session_project_api_key_reveal_payload unless payload["organization_id"] == @project.organization_id
-    return clear_session_project_api_key_reveal_payload unless payload["project_id"] == @project.id
-
-    expires_at = Time.zone.iso8601(payload["expires_at"])
-    if expires_at.future?
-      fallbacks.delete(@project.id.to_s)
-      return payload
-    end
-  rescue ArgumentError
-    clear_session_project_api_key_reveal_payload
-  else
-    clear_session_project_api_key_reveal_payload
-  end
-
-  def clear_session_project_api_key_reveal_payload
-    fallbacks = session[:project_api_key_reveal_fallbacks]
-    return {} unless fallbacks.is_a?(Hash)
-
-    fallbacks.delete(@project.id.to_s)
     {}
   end
 end

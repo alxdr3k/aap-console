@@ -25,12 +25,8 @@ class ProjectApiKeysController < ApplicationController
       token = result.data.fetch(:token)
 
       if browser_request?
-        reveal_payload = ProjectApiKeys::RevealCache.reveal_payload(@project, project_api_key: key, token: token)
-        cache_persisted = ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
-        persist_reveal_fallback!(reveal_payload) unless cache_persisted
-        clear_reveal_fallback! if cache_persisted
+        ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token)
         flash[:success] = "PAK가 발급되었습니다."
-        flash[:warning] = "공유 캐시 저장에 실패해 이 브라우저 세션에서만 다시 볼 수 있습니다." unless cache_persisted
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       else
         render json: serialize_key(key).merge(token: token), status: :created
@@ -52,7 +48,6 @@ class ProjectApiKeysController < ApplicationController
     ).call
 
     ProjectApiKeys::RevealCache.delete_if_matches(@project, project_api_key_id: @project_api_key.id)
-    clear_reveal_fallback!(project_api_key_id: @project_api_key.id)
 
     if browser_request?
       flash[:success] = "PAK를 폐기했습니다."
@@ -105,23 +100,5 @@ class ProjectApiKeysController < ApplicationController
 
   def browser_request?
     (request.format.html? || request.format.turbo_stream?) && !default_json_request?
-  end
-
-  def persist_reveal_fallback!(payload)
-    session[:project_api_key_reveal_fallbacks] ||= {}
-    session[:project_api_key_reveal_fallbacks][@project.id.to_s] = payload
-  end
-
-  def clear_reveal_fallback!(project_api_key_id: nil)
-    fallbacks = session[:project_api_key_reveal_fallbacks]
-    return unless fallbacks.is_a?(Hash)
-
-    payload = fallbacks[@project.id.to_s]
-    return unless payload.is_a?(Hash)
-
-    revealed_key_id = payload.dig("secrets", "project_api_key", "project_api_key_id")
-    return if project_api_key_id.present? && revealed_key_id.to_i != project_api_key_id.to_i
-
-    fallbacks.delete(@project.id.to_s)
   end
 end

@@ -70,6 +70,8 @@ module Projects
       Result.success(project)
     rescue ActiveRecord::RecordInvalid => e
       Result.failure(e.message)
+    rescue ActiveRecord::RecordNotUnique
+      Result.failure("Another provisioning job is in progress")
     end
   end
 end
