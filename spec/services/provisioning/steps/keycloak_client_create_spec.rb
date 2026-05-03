@@ -102,6 +102,9 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
         expect(result[:status]).to eq(:completed)
         expect(auth_config.reload.keycloak_client_uuid).to eq("uuid-new")
         expect(Provisioning::SecretCache.read(job).dig("secrets", "client_secret", "value")).to eq("live-secret")
+        # Step snapshot must be updated so rollback targets the live UUID and
+        # does not leave the repaired Keycloak client orphaned.
+        expect(step_record.reload.result_snapshot["keycloak_client_uuid"]).to eq("uuid-new")
       end
     end
 

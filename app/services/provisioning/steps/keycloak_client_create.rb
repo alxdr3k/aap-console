@@ -126,6 +126,18 @@ module Provisioning
           auth_config.update!(keycloak_client_uuid: repair_uuid)
         end
 
+        # Also update the step snapshot so rollback targets the live UUID.
+        # Without this, rollback uses the stale/missing UUID, which is a no-op,
+        # while the live client (with the correct clientId) stays orphaned.
+        if @live_uuid_from_fallback.present? &&
+           step_record.result_snapshot&.dig("keycloak_client_uuid") != @live_uuid_from_fallback
+          step_record.update!(
+            result_snapshot: (step_record.result_snapshot || {}).merge(
+              "keycloak_client_uuid" => @live_uuid_from_fallback
+            )
+          )
+        end
+
         return unless auth_config.auth_type == "oidc"
 
         # Identity diverged from the snapshot — refreshing the secret cache
