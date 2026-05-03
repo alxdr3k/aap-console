@@ -299,6 +299,89 @@
         <p class="muted-text">Keycloak 클라이언트 프로비저닝이 완료되면 메타데이터 URL이 표시됩니다.</p>
       <% end %>
     </section>
+  <% elsif @auth_config.auth_type == "oauth" %>
+    <% if @can_write_project %>
+      <section class="panel">
+        <header class="panel__header">
+          <h2 class="panel__title">OAuth / PKCE 설정</h2>
+        </header>
+
+        <dl class="details-list">
+          <div>
+            <dt>Client 유형</dt>
+            <dd>Public Client (client_secret 없음)</dd>
+          </div>
+          <div>
+            <dt>PKCE</dt>
+            <dd>S256</dd>
+          </div>
+        </dl>
+
+        <%= form_with url: organization_project_auth_config_path(@organization.slug, @project.slug),
+                      scope: :auth_config,
+                      method: :patch,
+                      class: "form form--inline-panel" do %>
+          <div class="field-group" data-controller="uri-list">
+            <div class="field">
+              <label for="redirect-uri-0">Redirect URIs</label>
+              <small class="field__hint">HTTPS 필수 (localhost 제외). fragment(#) 불가.</small>
+            </div>
+            <input type="hidden" name="auth_config[redirect_uris][]" value="">
+            <div class="uri-list" data-uri-list-target="list">
+              <% @redirect_uris.each_with_index do |value, index| %>
+                <div class="uri-list__row">
+                  <input id="<%= "redirect-uri-#{index}" %>"
+                         type="url"
+                         name="auth_config[redirect_uris][]"
+                         value="<%= value %>"
+                         placeholder="https://app.example.com/callback">
+                  <button type="button" class="button button--secondary" data-action="uri-list#remove">제거</button>
+                </div>
+              <% end %>
+            </div>
+            <template data-uri-list-target="template">
+              <div class="uri-list__row">
+                <input type="url"
+                       name="auth_config[redirect_uris][]"
+                       value=""
+                       placeholder="https://app.example.com/callback">
+                <button type="button" class="button button--secondary" data-action="uri-list#remove">제거</button>
+              </div>
+            </template>
+            <div class="form-actions form-actions--compact">
+              <button type="button" class="button button--secondary" data-action="uri-list#add">URI 추가</button>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <%= link_to "취소", organization_project_auth_config_path(@organization.slug, @project.slug), class: "button button--ghost" %>
+            <button type="submit" class="button" <%= "disabled" if @active_provisioning_job %>>저장</button>
+          </div>
+        <% end %>
+      </section>
+    <% else %>
+      <section class="panel">
+        <header class="panel__header">
+          <h2 class="panel__title">OAuth / PKCE 설정</h2>
+          <span class="badge badge--muted">read only</span>
+        </header>
+
+        <dl class="details-list">
+          <div>
+            <dt>Client 유형</dt>
+            <dd>Public Client (client_secret 없음)</dd>
+          </div>
+          <div>
+            <dt>PKCE</dt>
+            <dd>S256</dd>
+          </div>
+          <div>
+            <dt>Redirect URIs</dt>
+            <dd><%= project_list_value(@redirect_uris) %></dd>
+          </div>
+        </dl>
+      </section>
+    <% end %>
   <% else %>
     <section class="panel panel--disabled">
       <header class="panel__header">
@@ -373,13 +456,4 @@
     <% end %>
   </section>
 
-  <section class="panel panel--disabled">
-    <header class="panel__header">
-      <h2 class="panel__title">추가 인증 기능</h2>
-      <span class="badge badge--muted">준비 중</span>
-    </header>
-    <ul class="muted-list">
-      <li>OAuth/PKCE public client 설정</li>
-    </ul>
-  </section>
 </section>

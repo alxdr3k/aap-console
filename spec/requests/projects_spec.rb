@@ -121,6 +121,23 @@ RSpec.describe "Projects", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
 
+    it "creates an OAuth/PKCE project and redirects to provisioning" do
+      post "/organizations/#{org.slug}/projects",
+           params: { project: { name: "OAuth App", auth_type: "oauth", models: [ "azure-gpt4" ], s3_retention_days: 90 } },
+           headers: wildcard_headers
+      expect(response).to have_http_status(:see_other)
+      project = Project.last
+      expect(project.project_auth_config.auth_type).to eq("oauth")
+    end
+
+    it "rejects disallowed auth_type (saml is not enabled in UI yet)" do
+      post "/organizations/#{org.slug}/projects",
+           params: { project: { name: "P", auth_type: "saml", models: [ "azure-gpt4" ], s3_retention_days: 90 } },
+           headers: wildcard_headers
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["errors"]).to include(match(/허용되지 않은 인증 방식/))
+    end
+
     it "renders browser validation errors without creating a project" do
       expect {
         post "/organizations/#{org.slug}/projects",
