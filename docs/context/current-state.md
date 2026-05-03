@@ -74,9 +74,15 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 ## Current Priorities
 
-1. `AUTH-6A.1` / `AUTH-6A.2` 구현 — contract 확정 완료, ready 상태 (DEC-005).
-2. `OPS-7A.*` (P1-M2) ready 조건 추적.
-3. `AUTH-6B.1`~`AUTH-6B.5` 설계 상세화 — AUTH-6A 완료 후 착수.
+1. `OPS-7A.*` (P1-M2) ready 조건 확인 — 배포/운영/Litestream 복구 절차 문서화.
+2. `AUTH-6B.1` 착수 여부 결정 — AUTH-6A 완료됨, `project_auth_configs` 마이그레이션 모델 설계 검토.
+3. `PLAY-8A.*` (P2-M1) — P1-M2 OPS 안정화 이후.
+
+## Next Review Candidates
+
+- `OPS-7A.1` (planned): Production deploy command, smoke checklist, rollback documented. P1-M2 착수 결정 필요.
+- `AUTH-6B.1` (planned): `project_auth_configs` role/state 컬럼 + partial index + backfill. AUTH-6A 완료됨; AUTH-6B 착수 여부 사용자 결정 필요.
+- `PLAY-8A.1` (planned): Playground routes/controller. P1-M2 (OPS) 완료 후 착수.
 
 ## Current Risks / Unknowns
 
@@ -84,6 +90,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - Deployment command, rollback procedure, and Litestream restore are not accepted until `OPS-7A.1` / `OPS-7A.2`.
 - Full Keycloak/Langfuse config rollback is diagnostics-only until `OPS-7A.5`.
 - `AUTH-6B` session 처리: 자연 만료 채택 (ADR-007). 미결 사항 없음.
+- `AUTH-6B` 착수 여부: AUTH-6A 완료됨. AUTH-6B.1 착수를 위한 사용자 결정 필요.
 
 ## Current Validation
 
