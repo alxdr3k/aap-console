@@ -170,16 +170,28 @@ class ProjectApiKeysController < ApplicationController
   def handle_pak_cache_state(state, key, token)
     case state
     when :persisted
-      flash[:success] = "PAK가 발급되었습니다."
-      redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
-    when :superseded_by_newer
-      # The cache holds another (newer) request's reveal. Redirecting would
-      # surface that other PAK to the current operator instead of theirs;
-      # render in-band on plain HTML so the operator can copy their own
-      # token, and leave the newer cached reveal untouched for its owner.
       if plain_html_request?
+        # Render in-band rather than redirecting through the shared reveal cache.
+        # A concurrent issue can overwrite the cache between our write and the
+        # redirect GET, causing the wrong operator's plaintext PAK to be shown.
+        render_pak_in_band(key, token)
+      else
+        flash[:success] = "PAK가 발급되었습니다."
+        redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+      end
+    when :superseded_by_newer
+      if plain_html_request?
+        # Render our own PAK in-band; leave the newer cached reveal untouched.
         render_pak_in_band_fallback(key, token)
       else
+        # For non-plain-HTML paths (Turbo), purge the cached reveal before
+        # redirecting so auth_configs#show cannot surface another operator's
+        # plaintext PAK to this request.
+        begin
+          ProjectApiKeys::RevealCache.delete(@project)
+        rescue StandardError => e
+          Rails.logger.error("PAK reveal cache purge failed before superseded redirect project=#{@project.id}: #{e.class}: #{e.message}")
+        end
         flash[:error] = "동시에 다른 PAK가 발급되어 표시 캐시에 자리가 없습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end
@@ -197,6 +209,24 @@ class ProjectApiKeysController < ApplicationController
       flash[:error] = "표시 캐시 정리에 실패했습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
       redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
     end
+  end
+
+  def render_pak_in_band(key, token)
+    @auth_config = @project.project_auth_config
+    unless @auth_config
+      flash[:error] = "인증 설정이 없어 PAK를 표시할 수 없습니다. 발급된 PAK는 목록에서 폐기 후 다시 발급해주세요."
+      redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+      return
+    end
+
+    payload = ProjectApiKeys::RevealCache
+      .reveal_payload(@project, project_api_key: key, token: token)
+      .merge("expires_at" => Time.current.iso8601(6))
+
+    flash.now[:success] = "PAK가 발급되었습니다."
+    prepare_auth_config_show!(pak_reveal_payload: payload)
+    disable_secret_response_cache!
+    render template: "auth_configs/show", formats: [ :html ]
   end
 
   def render_pak_in_band_fallback(key, token)
