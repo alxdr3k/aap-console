@@ -90,6 +90,10 @@ class AuthConfigsController < ApplicationController
         # Render in-band for all browser formats (plain HTML and Turbo).
         # The service never writes to the shared reveal cache, so no cache
         # consumption step is needed here.
+        # Trade-off: skips PRG pattern. The button uses data-turbo=false
+        # (native confirm) and no-store prevents cache restore. A redirect
+        # would require shared cache (the security regression this avoids)
+        # or session secret storage (forbidden by policy).
         flash.now[:success] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
         prepare_auth_config_show!(reveal_payload: payload)
         disable_secret_response_cache!
