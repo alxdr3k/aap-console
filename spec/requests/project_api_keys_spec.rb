@@ -334,7 +334,7 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
     end
 
-    it "keeps the current reveal payload when revoking a different key" do
+    it "consumes the reveal cache after in-band render (one-time reveal contract)" do
       create(:project_auth_config, project: project, auth_type: "oidc")
       stale_key = create(:project_api_key, project: project, name: "stale-ci")
 
@@ -342,14 +342,16 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("fresh-ci")
       expect(response.body).to include("일회성 PAK")
+      # Cache is consumed after in-band render; revoking another key
+      # does not surface the already-consumed token to another operator.
+      expect(ProjectApiKeys::RevealCache.read(project).dig("secrets", "project_api_key")).to be_nil
 
       delete "#{path}/#{stale_key.id}", headers: html_headers
       follow_redirect!
 
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include("fresh-ci")
-      expect(response.body).to include("일회성 PAK")
-      expect(response.body).to include("pak-")
+      # No PAK reveal panel — the one-time token was already consumed above.
+      expect(response.body).not_to include("일회성 PAK")
     end
 
     it "does not write duplicate revoke audit events for an already revoked PAK" do

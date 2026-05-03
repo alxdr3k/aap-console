@@ -98,6 +98,9 @@ class AuthConfigsController < ApplicationController
           flash.now[:success] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
         end
         prepare_auth_config_show!(reveal_payload: payload)
+        # Consume the reveal cache entry so subsequent GET /auth_config requests
+        # cannot surface this one-time secret to other project operators within TTL.
+        AuthConfigs::SecretRevealCache.delete(@project) rescue nil
         disable_secret_response_cache!
         render :show, formats: [ :html ]
       else
