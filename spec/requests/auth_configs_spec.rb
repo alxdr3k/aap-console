@@ -52,14 +52,56 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(response.body).to include("staging-ci")
     end
 
-    it "shows disabled non-oidc editing copy until AUTH-6A" do
-      project.project_auth_config.update!(auth_type: "saml")
+    context "when auth_type is saml and client is provisioned" do
+      before do
+        stub_const("ENV", ENV.to_h.merge("KEYCLOAK_URL" => "https://keycloak.example.com", "KEYCLOAK_REALM" => "aap"))
+        project.project_auth_config.update!(
+          auth_type: "saml",
+          keycloak_client_id: "aap-#{org.slug}-#{project.slug}-saml"
+        )
+      end
+
+      it "renders SAML panel with SP Entity ID and IdP metadata URL copy button" do
+        get "/organizations/#{org.slug}/projects/#{project.slug}/auth_config", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("SAML 설정")
+        expect(response.body).to include("SP Entity ID")
+        expect(response.body).to include("aap-#{org.slug}-#{project.slug}-saml")
+        expect(response.body).to include("IdP 메타데이터 URL")
+        expect(response.body).to include("https://keycloak.example.com/realms/aap/protocol/saml/descriptor")
+        expect(response.body).not_to include("AUTH-6A 예정")
+        expect(response.body).not_to include("Client Secret 재발급")
+      end
+    end
+
+    context "when auth_type is saml and keycloak_client_uuid is absent (unprovisioned)" do
+      before do
+        project.project_auth_config.update!(
+          auth_type: "saml",
+          keycloak_client_uuid: nil
+        )
+      end
+
+      it "renders SAML panel with provisioning pending message instead of URL" do
+        get "/organizations/#{org.slug}/projects/#{project.slug}/auth_config", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("SAML 설정")
+        expect(response.body).to include("프로비저닝이 완료되면")
+        expect(response.body).not_to include("IdP 메타데이터 URL")
+      end
+    end
+
+    it "shows disabled panel for oauth auth_type (AUTH-6A.2 pending)" do
+      project.project_auth_config.update!(auth_type: "oauth")
 
       get "/organizations/#{org.slug}/projects/#{project.slug}/auth_config", headers: html_headers
 
       expect(response).to have_http_status(:ok)
-      expect(response.body).to include("AUTH-6A 예정")
+      expect(response.body).to include("OAUTH 설정")
       expect(response.body).to include("준비 중")
+      expect(response.body).not_to include("AUTH-6A 예정")
     end
   end
 
