@@ -1,3 +1,4 @@
+@AGENTS.md
 @AGENTS.policy.md
 # AAP Console — Project Charter for Claude Code
 
