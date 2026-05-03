@@ -59,7 +59,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 ## Planned
 
 - `P0-M5`: core server-rendered UI, provisioning detail, and secret reveal.
-- `P1-M1`: SAML/OAuth/PAK product UI. `AUTH-6A.1` landed; `AUTH-6A.2` is **ready**.
+- `P1-M1`: SAML/OAuth/PAK product UI. `AUTH-6A.1` landed; `AUTH-6A.2` landed. P1-M1 complete.
 - `P1-M2`: production deploy/rollback/Litestream restore evidence and audit archive.
 - `P1-M3`: auth_type seamless migration (AUTH-6B dual-client flow). Planned after AUTH-6A.
 - `P2-M1`: Playground. Deferred until after OPS stabilization (P1-M2).
