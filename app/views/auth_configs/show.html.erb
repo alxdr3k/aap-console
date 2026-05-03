@@ -279,6 +279,10 @@
       <% if @saml_idp_metadata_url.present? %>
         <dl class="details-list">
           <div>
+            <dt>SP Entity ID</dt>
+            <dd><code class="code-token"><%= @auth_config.keycloak_client_id %></code></dd>
+          </div>
+          <div>
             <dt>IdP 메타데이터 URL</dt>
             <dd data-controller="secret-reveal">
               <code class="code-token"><%= @saml_idp_metadata_url %></code>

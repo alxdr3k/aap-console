@@ -61,11 +61,13 @@ RSpec.describe "AuthConfigs", type: :request do
         )
       end
 
-      it "renders SAML panel with IdP metadata URL copy button" do
+      it "renders SAML panel with SP Entity ID and IdP metadata URL copy button" do
         get "/organizations/#{org.slug}/projects/#{project.slug}/auth_config", headers: html_headers
 
         expect(response).to have_http_status(:ok)
         expect(response.body).to include("SAML 설정")
+        expect(response.body).to include("SP Entity ID")
+        expect(response.body).to include("aap-#{org.slug}-#{project.slug}-saml")
         expect(response.body).to include("IdP 메타데이터 URL")
         expect(response.body).to include("https://keycloak.example.com/realms/aap/protocol/saml/descriptor")
         expect(response.body).not_to include("AUTH-6A 예정")
