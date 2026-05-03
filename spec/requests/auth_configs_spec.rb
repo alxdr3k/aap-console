@@ -199,6 +199,15 @@ RSpec.describe "AuthConfigs", type: :request do
         expect(response).to have_http_status(:accepted)
       end
 
+      it "accepts http://[::1] IPv6 loopback redirect URIs for OAuth" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+                params: { auth_config: { redirect_uris: [ "http://[::1]:3000/callback" ] } },
+                headers: wildcard_headers
+        }.to change(ProvisioningJob, :count).by(1)
+        expect(response).to have_http_status(:accepted)
+      end
+
       it "rejects http (non-localhost) redirect URIs for OAuth" do
         patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
               params: { auth_config: { redirect_uris: [ "http://app.example.com/callback" ] } },
