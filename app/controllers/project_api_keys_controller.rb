@@ -169,10 +169,11 @@ class ProjectApiKeysController < ApplicationController
   def handle_pak_cache_state(state, key, token)
     case state
     when :persisted
-      if plain_html_request?
-        # Render in-band rather than redirecting through the shared reveal cache.
-        # A concurrent issue can overwrite the cache between our write and the
-        # redirect GET, causing the wrong operator's plaintext PAK to be shown.
+      if browser_request?
+        # Render in-band for all browser formats (plain HTML and Turbo).
+        # A concurrent issue can overwrite the shared reveal cache between
+        # our write and the redirect GET, causing another operator's plaintext
+        # PAK to appear. In-band rendering binds the token to this response.
         render_pak_in_band(key, token)
       else
         flash[:success] = "PAK가 발급되었습니다."

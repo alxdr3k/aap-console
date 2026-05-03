@@ -88,13 +88,16 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response.body).to include("pak-")
     end
 
-    it "treats Turbo browser issue requests as the auth config redirect flow" do
+    it "renders Turbo PAK issue requests in-band to prevent shared-cache reveal races" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
 
       post path, params: { project_api_key: { name: "turbo-ci" } }, headers: turbo_headers
 
-      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+      expect(response).to have_http_status(:ok)
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.body).to include("turbo-ci")
+      expect(response.body).to include("일회성 PAK")
     end
 
     it "renders the PAK in-band when shared reveal cache persistence fails on plain HTML" do
