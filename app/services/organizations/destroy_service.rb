@@ -29,7 +29,11 @@ module Organizations
       end
 
       if @organization.langfuse_org_id.present?
-        @langfuse_client.delete_organization(id: @organization.langfuse_org_id)
+        begin
+          @langfuse_client.delete_organization(id: @organization.langfuse_org_id)
+        rescue BaseClient::NotFoundError
+          # Already removed from Langfuse — treat as success and proceed with DB destroy.
+        end
       end
 
       AuditLog.create!(

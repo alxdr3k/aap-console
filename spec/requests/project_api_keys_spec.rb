@@ -101,36 +101,19 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
     end
 
-    it "falls back to the browser session when shared reveal cache persistence fails" do
+    it "shows the issued PAK token on the auth config page after redirect" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
-      allow(cache).to receive(:write).and_return(false)
 
-      post path, params: { project_api_key: { name: "session-ci" } }, headers: html_headers
+      post path, params: { project_api_key: { name: "ci-key" } }, headers: html_headers
 
       expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
-
       follow_redirect!
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("일회성 PAK")
-      expect(response.body).to include("session-ci")
+      expect(response.body).to include("ci-key")
       expect(response.body).to include("pak-")
-    end
-
-    it "prefers the browser-session fallback over a stale shared reveal payload" do
-      grant_project_role("write")
-      create(:project_auth_config, project: project, auth_type: "oidc")
-      stale_key = create(:project_api_key, project: project, name: "stale-reveal")
-      ProjectApiKeys::RevealCache.write(project, project_api_key: stale_key, token: "pak-old-secret-token")
-      allow(cache).to receive(:write).and_return(false)
-
-      post path, params: { project_api_key: { name: "fresh-fallback" } }, headers: html_headers
-      follow_redirect!
-
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include("fresh-fallback")
-      expect(response.body).not_to include("pak-old-secret-token")
     end
 
     it "rejects duplicate names within the same project" do
