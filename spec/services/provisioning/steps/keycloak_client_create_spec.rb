@@ -62,6 +62,34 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
         )
         expect(build_step(result_snapshot: snap).already_completed?).to be(true)
       end
+
+      it "repairs the local UUID mirror to the live UUID via the runner skip path" do
+        cache = ActiveSupport::Cache::MemoryStore.new
+        allow(Rails).to receive(:cache).and_return(cache)
+
+        auth_config.update!(keycloak_client_uuid: "uuid-old")
+        stub_keycloak_get_client(uuid: "uuid-old", status: 404)
+        stub_keycloak_get_clients(
+          client_id: auth_config.keycloak_client_id,
+          clients: [ { "id" => "uuid-new", "clientId" => auth_config.keycloak_client_id } ]
+        )
+        stub_keycloak_get_client_secret(uuid: "uuid-new", secret: "live-secret",
+                                        client_id: auth_config.keycloak_client_id)
+
+        step_record = create(
+          :provisioning_step,
+          :keycloak_client_create,
+          provisioning_job: job,
+          result_snapshot: { "keycloak_client_uuid" => "uuid-old", "keycloak_client_id" => auth_config.keycloak_client_id }
+        )
+
+        runner = Provisioning::StepRunner.new(step: step_record, provisioning_job: job, params: {})
+        result = runner.execute
+
+        expect(result[:status]).to eq(:completed)
+        expect(auth_config.reload.keycloak_client_uuid).to eq("uuid-new")
+        expect(Provisioning::SecretCache.read(job).dig("secrets", "client_secret", "value")).to eq("live-secret")
+      end
     end
 
     context "when the live clientId differs from the snapshot's auth config client_id" do
