@@ -86,11 +86,12 @@ class AuthConfigsController < ApplicationController
       if json_request?
         disable_secret_response_cache!
         render json: payload, status: :created
-      elsif plain_html_request?
-        # Always render in-band with the freshly rotated secret rather than
-        # redirecting through the shared per-project reveal cache. A redirect
-        # would let a concurrent rotation overwrite the cache between our
-        # write and the subsequent GET, causing the wrong secret to be shown.
+      elsif plain_html_request? || request.format.turbo_stream?
+        # Render in-band for all browser formats (plain HTML and Turbo).
+        # A redirect would let a concurrent rotation overwrite the shared
+        # cache between our write and the GET, showing the wrong secret.
+        # Forcing :html format returns a full-page response that Turbo
+        # handles as a navigation (body replacement).
         if cache_failed
           flash.now[:warning] = "Client Secret이 재발급되었지만 표시 캐시 저장에 실패했습니다. 이 화면을 떠나기 전에 즉시 복사하세요."
         else
@@ -100,8 +101,7 @@ class AuthConfigsController < ApplicationController
         disable_secret_response_cache!
         render :show, formats: [ :html ]
       else
-        # Non-HTML browser format (e.g. text/vnd.turbo-stream.html). Fail closed
-        # rather than streaming the rotated secret through a non-no-store path.
+        # Non-browser, non-JSON fallback.
         flash[:error] = "Client Secret이 재발급되었지만 표시 캐시 저장에 실패했습니다. 잠시 후 다시 재발급하세요."
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end

@@ -343,6 +343,31 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(response.body).to include("new-client-secret")
     end
 
+    it "renders the rotated secret in-band for Turbo form submissions" do
+      turbo_headers = { "ACCEPT" => "text/vnd.turbo-stream.html, text/html" }
+
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: turbo_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.body).to include("new-client-secret")
+    end
+
+    it "renders the rotated secret in-band for Turbo when cache write fails" do
+      allow(AuthConfigs::SecretRevealCache).to receive(:write).and_raise("cache boom")
+      allow(Rails.logger).to receive(:error)
+      turbo_headers = { "ACCEPT" => "text/vnd.turbo-stream.html, text/html" }
+
+      post "/organizations/#{org.slug}/projects/#{project.slug}/auth_config/regenerate_secret",
+           headers: turbo_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+      expect(response.body).to include("new-client-secret")
+      expect(response.body).to include("표시 캐시 저장에 실패")
+    end
+
     it "returns the rotated secret with a cache_failed flag for JSON callers when the reveal cache write fails" do
       allow(AuthConfigs::SecretRevealCache).to receive(:write).and_raise("cache boom")
       allow(Rails.logger).to receive(:error)
