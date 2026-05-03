@@ -78,7 +78,20 @@ module Provisioning
 
       def after_skip
         auth_config = project.project_auth_config
-        return unless auth_config&.auth_type == "oidc"
+        return unless auth_config
+
+        snapshot_uuid = step_record.result_snapshot&.dig("keycloak_client_uuid")
+
+        # Repair the local UUID mirror when execute() previously succeeded in
+        # creating the Keycloak client (snapshot persisted) but crashed before
+        # auth_config.update! committed the UUID locally. Without this, the
+        # auth UI, secret regeneration, and downstream delete step remain
+        # gated off even though the external client exists.
+        if snapshot_uuid.present? && auth_config.keycloak_client_uuid.blank? && !@client_identity_diverged
+          auth_config.update!(keycloak_client_uuid: snapshot_uuid)
+        end
+
+        return unless auth_config.auth_type == "oidc"
 
         # Identity diverged from the snapshot — refreshing the secret cache
         # would expose a different client's secret. Drop any stale entry and
@@ -88,7 +101,7 @@ module Provisioning
           return
         end
 
-        client_uuid = step_record.result_snapshot&.dig("keycloak_client_uuid") || auth_config.keycloak_client_uuid
+        client_uuid = snapshot_uuid || auth_config.keycloak_client_uuid
         return if client_uuid.blank?
 
         cache_client_secret!(KeycloakClient.new, client_uuid, auth_config.auth_type)

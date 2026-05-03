@@ -203,6 +203,9 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(result[:status]).to eq(:completed)
       expect(step_record.reload).to be_skipped
       expect(Provisioning::SecretCache.read(job).dig("secrets", "client_secret", "value")).to eq("oidc-secret")
+      # The local UUID mirror must be repaired so auth UI, secret regeneration,
+      # and the downstream delete step can all function correctly.
+      expect(auth_config.reload.keycloak_client_uuid).to eq(uuid)
     end
 
     it "skips the secret cache refresh when the live client identity diverges from the snapshot" do
