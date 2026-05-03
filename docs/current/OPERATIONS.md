@@ -21,7 +21,7 @@ bin/jobs
 Equivalent worker command:
 
 ```bash
-bundle exec solid_queue:start
+bundle exec rake solid_queue:start
 ```
 
 ## Environment Variables
@@ -71,7 +71,7 @@ bin/rails db:test:prepare
 - Main job: `app/jobs/provisioning_execute_job.rb`.
 - Retention cleanup job: `app/jobs/provisioning_jobs_cleanup_job.rb`; production recurring key `provisioning_jobs_cleanup` runs daily.
 - App registry retry job: `app/jobs/app_registry_webhook_job.rb` exists, but the current provisioning steps call the app-registry webhook inline.
-- Local worker: `bin/jobs` 또는 `bundle exec solid_queue:start`. `bin/dev`는 worker를 시작하지 않는다.
+- Local worker: `bin/jobs` 또는 `bundle exec rake solid_queue:start`. `bin/dev`는 worker를 시작하지 않는다.
 - Production Kamal config sets `SOLID_QUEUE_IN_PUMA=true`, so the web Puma process runs the SolidQueue supervisor unless deployment config changes.
 
 ## Deployment

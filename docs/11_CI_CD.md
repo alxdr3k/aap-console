@@ -198,8 +198,8 @@ Document failure modes before the first serious incident.
 1. Decide which commands must exist before the first PR: install, lint,
    typecheck, unit test, build, migration check, eval, or smoke.
 2. Put the real commands in `docs/current/TESTING.md`.
-3. Copy `.github/workflows/ci.yml.example` to `.github/workflows/ci.yml` and
-   replace the placeholder setup and command steps.
+3. Copy `.github/workflows/ci.yml` (or use it as a starting template) and
+   replace the setup and command steps to match the project's stack.
 4. Use `docs/templates/CI_CD_TEMPLATE.md` as a worksheet if CI/CD ownership,
    environments, gates, or migration steps need a single planning packet.
 5. Decide whether CD exists now. If not, write "No deployment pipeline

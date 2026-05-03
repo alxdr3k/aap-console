@@ -31,10 +31,10 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
       let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
 
-      it "returns true using a positional client_id call" do
-        stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
-                                  clients: [ { "id" => auth_config.keycloak_client_uuid,
-                                               "clientId" => auth_config.keycloak_client_id } ])
+      it "returns true via a direct UUID lookup that matches the snapshot" do
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
+                                 client: { "id" => auth_config.keycloak_client_uuid,
+                                           "clientId" => auth_config.keycloak_client_id })
         expect(build_step(result_snapshot: snap).already_completed?).to be(true)
       end
     end
@@ -44,8 +44,60 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
 
       it "returns false so the create step runs again" do
-        stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id, clients: [])
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid, status: 404)
         expect(build_step(result_snapshot: snap).already_completed?).to be(false)
+      end
+    end
+
+    context "when the snapshot UUID is stale (client recreated under same client_id)" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:snap) { { "keycloak_client_uuid" => "uuid-snapshot" } }
+
+      it "returns false because the stale UUID no longer resolves" do
+        # Direct UUID GET returns 404 because the snapshot UUID has been removed
+        # (a new client with the same clientId now lives under a different UUID).
+        stub_keycloak_get_client(uuid: "uuid-snapshot", status: 404)
+        expect(build_step(result_snapshot: snap).already_completed?).to be(false)
+      end
+    end
+
+    context "when the live clientId differs from the snapshot's auth config client_id" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
+
+      it "treats the UUID match as authoritative, logs, and writes a divergence audit" do
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
+                                 client: { "id" => auth_config.keycloak_client_uuid,
+                                           "clientId" => "aap-some-other-client" })
+        expect(Rails.logger).to receive(:warn).with(/identity diverges/)
+        expect {
+          expect(build_step(result_snapshot: snap).already_completed?).to be(true)
+        }.to change { AuditLog.where(action: "auth_config.keycloak_client_diverged").count }.by(1)
+        audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
+        expect(audit.details["live_client_id"]).to eq("aap-some-other-client")
+        expect(audit.details["expected_client_id"]).to eq(auth_config.keycloak_client_id)
+      end
+    end
+
+    context "when the live client representation omits clientId" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
+
+      it "still treats the UUID match as authoritative without logging a divergence" do
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
+                                 client: { "id" => auth_config.keycloak_client_uuid })
+        expect(build_step(result_snapshot: snap).already_completed?).to be(true)
+      end
+    end
+
+    context "when the live representation omits id entirely (schema drift)" do
+      let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
+      let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
+
+      it "still treats the UUID-targeted 200 as authoritative completion" do
+        stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid,
+                                 client: { "clientId" => auth_config.keycloak_client_id })
+        expect(build_step(result_snapshot: snap).already_completed?).to be(true)
       end
     end
   end
@@ -103,9 +155,10 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
 
       uuid = "uuid-existing"
       auth_config.update!(keycloak_client_uuid: uuid)
-      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
-                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
-      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
+      stub_keycloak_get_client(uuid: uuid,
+                               client: { "id" => uuid, "clientId" => auth_config.keycloak_client_id })
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret",
+                                      client_id: auth_config.keycloak_client_id)
 
       step_record = create(
         :provisioning_step,
@@ -131,9 +184,10 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
 
       uuid = "uuid-from-snapshot"
       auth_config.update!(keycloak_client_uuid: nil)
-      stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
-                                clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
-      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
+      stub_keycloak_get_client(uuid: uuid,
+                               client: { "id" => uuid, "clientId" => auth_config.keycloak_client_id })
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret",
+                                      client_id: auth_config.keycloak_client_id)
 
       step_record = create(
         :provisioning_step,
@@ -151,6 +205,37 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(result[:status]).to eq(:completed)
       expect(step_record.reload).to be_skipped
       expect(Provisioning::SecretCache.read(job).dig("secrets", "client_secret", "value")).to eq("oidc-secret")
+    end
+
+    it "skips the secret cache refresh when the live client identity diverges from the snapshot" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+      allow(Rails.logger).to receive(:warn)
+
+      uuid = "uuid-divergent"
+      auth_config.update!(keycloak_client_uuid: uuid)
+      stub_keycloak_get_client(uuid: uuid,
+                               client: { "id" => uuid, "clientId" => "aap-some-other-client" })
+
+      step_record = create(
+        :provisioning_step,
+        :keycloak_client_create,
+        provisioning_job: job,
+        result_snapshot: {
+          "keycloak_client_uuid" => uuid,
+          "keycloak_client_id" => auth_config.keycloak_client_id
+        }
+      )
+
+      runner = Provisioning::StepRunner.new(step: step_record, provisioning_job: job, params: {})
+      result = runner.execute
+
+      expect(result[:status]).to eq(:completed)
+      expect(step_record.reload).to be_skipped
+      # Identity divergence must NOT mint a wrong client's secret into the cache;
+      # any stale entry should be cleared instead.
+      expect(Provisioning::SecretCache.read(job)).to eq({})
+      expect(WebMock).not_to have_requested(:get, %r{/clients/#{uuid}/client-secret})
     end
 
     it "does not fail provisioning when secret caching cannot fetch the client secret" do

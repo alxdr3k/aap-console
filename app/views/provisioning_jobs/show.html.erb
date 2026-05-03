@@ -1,4 +1,9 @@
 <% content_for :title, "#{provisioning_operation_title(@job)} | AAP Console" %>
+<% content_for :head do %>
+  <%# Secrets may be rendered into this page; opt out of Turbo's page cache so
+      back/forward navigation cannot restore a stale secret-bearing DOM. %>
+  <meta name="turbo-cache-control" content="no-cache">
+<% end %>
 
 <section class="page"
          data-controller="provisioning"

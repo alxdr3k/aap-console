@@ -23,8 +23,8 @@ module KeycloakMock
     uuid
   end
 
-  def stub_keycloak_get_client_secret(uuid:, secret: "test-client-secret")
-    stub_keycloak_get_client_by_uuid(uuid: uuid)
+  def stub_keycloak_get_client_secret(uuid:, secret: "test-client-secret", client_id: "aap-test-client")
+    stub_keycloak_get_client_by_uuid(uuid: uuid, client_id: client_id)
     stub_request(:get, "#{BASE}/clients/#{uuid}/client-secret")
       .to_return(
         status: 200,
@@ -57,6 +57,21 @@ module KeycloakMock
       .to_return(
         status: 200,
         body: clients.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+  end
+
+  def stub_keycloak_get_client(uuid:, client: nil, status: 200)
+    stub_keycloak_token
+    body = if status == 200
+             client || { id: uuid, clientId: "aap-test-client" }
+    else
+             { error: "Not found" }
+    end
+    stub_request(:get, "#{BASE}/clients/#{uuid}")
+      .to_return(
+        status: status,
+        body: body.to_json,
         headers: { "Content-Type" => "application/json" }
       )
   end

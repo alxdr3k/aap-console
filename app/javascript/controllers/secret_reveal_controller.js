@@ -4,7 +4,10 @@ export default class extends Controller {
   static values = { storageKey: String }
 
   connect() {
-    if (this.confirmed()) this.element.hidden = true
+    if (this.confirmed()) {
+      this.scrubSecrets()
+      this.element.hidden = true
+    }
   }
 
   toggle(event) {
@@ -39,7 +42,18 @@ export default class extends Controller {
 
   confirm() {
     this.setConfirmed()
+    this.scrubSecrets()
     this.element.hidden = true
+  }
+
+  scrubSecrets() {
+    this.element.querySelectorAll("[data-secret-reveal-secret-param]").forEach((button) => {
+      delete button.dataset.secretRevealSecretParam
+    })
+    this.element.querySelectorAll("code[data-masked]").forEach((field) => {
+      field.textContent = ""
+      field.dataset.masked = "true"
+    })
   }
 
   confirmed() {

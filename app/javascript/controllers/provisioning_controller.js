@@ -237,6 +237,8 @@ export default class extends Controller {
       // Session storage can be disabled; confirmation still applies to this page.
     }
 
+    // Drop the closure-held secret values by scrubbing the rendered rows.
+    if (this.hasSecretListTarget) this.secretListTarget.replaceChildren()
     if (this.hasSecretsTarget) this.secretsTarget.hidden = true
     this.unlockTargetLink()
   }

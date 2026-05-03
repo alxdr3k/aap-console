@@ -12,7 +12,12 @@ module AuthConfigs
         payload["generated_at"] ||= Time.current.iso8601(6)
         payload["expires_at"] = TTL.from_now.iso8601(6)
 
-        Rails.cache.write(cache_key(project), payload, expires_in: TTL)
+        # Return nil when the underlying cache adapter signals failure with a
+        # falsy return value. Callers must treat this as a write failure and
+        # fall back to the in-band reveal path; otherwise a rotated secret
+        # would be silently lost the next time `read` returns an empty payload.
+        return nil unless Rails.cache.write(cache_key(project), payload, expires_in: TTL)
+
         payload
       end
 
