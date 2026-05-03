@@ -304,7 +304,9 @@ RSpec.describe "AuthConfigs", type: :request do
       expect(response.headers["Cache-Control"]).to eq("no-store")
       expect(response.body).to include("일회성 인증 정보")
       expect(response.body).to include("new-client-secret")
-      expect(AuthConfigs::SecretRevealCache.read(project).dig("secrets", "client_secret", "value")).to eq("new-client-secret")
+      # One-time reveal: cache is consumed after in-band render so subsequent
+      # GET /auth_config cannot surface this secret to other operators.
+      expect(AuthConfigs::SecretRevealCache.read(project).dig("secrets")).to be_blank
     end
 
     it "returns JSON for explicit JSON clients" do

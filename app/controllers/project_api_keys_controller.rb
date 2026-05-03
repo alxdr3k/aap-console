@@ -226,6 +226,9 @@ class ProjectApiKeysController < ApplicationController
 
     flash.now[:success] = "PAK가 발급되었습니다."
     prepare_auth_config_show!(pak_reveal_payload: payload)
+    # Consume the reveal cache entry so subsequent GET /auth_config requests
+    # cannot surface this one-time token to other project operators within TTL.
+    ProjectApiKeys::RevealCache.delete(@project)
     disable_secret_response_cache!
     render template: "auth_configs/show", formats: [ :html ]
   end
