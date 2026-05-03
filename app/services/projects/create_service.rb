@@ -70,8 +70,6 @@ module Projects
       Result.success(project)
     rescue ActiveRecord::RecordInvalid => e
       Result.failure(e.message)
-    rescue ActiveRecord::RecordNotUnique
-      Result.failure("A conflicting operation is already in progress")
     end
   end
 end
