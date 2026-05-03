@@ -72,4 +72,10 @@ module AuthConfigShowState
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
   end
+
+  def saml_idp_metadata_url
+    base = ENV.fetch("KEYCLOAK_URL", "")
+    realm = ENV.fetch("KEYCLOAK_REALM", "aap")
+    "#{base}/realms/#{realm}/protocol/saml/descriptor"
+  end
 end

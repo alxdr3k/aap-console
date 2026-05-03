@@ -189,12 +189,6 @@ class AuthConfigsController < ApplicationController
     end
   end
 
-  def saml_idp_metadata_url
-    base = ENV.fetch("KEYCLOAK_URL", "")
-    realm = ENV.fetch("KEYCLOAK_REALM", "aap")
-    "#{base}/realms/#{realm}/protocol/saml/descriptor"
-  end
-
   def json_request?
     request.format.json? || default_json_request?
   end
