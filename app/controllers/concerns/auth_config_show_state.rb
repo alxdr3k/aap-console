@@ -28,9 +28,14 @@ module AuthConfigShowState
     elsif @can_write_project
                         # Client-secret rotation is now in-band; the shared reveal cache
                         # is no longer written by the rotation flow. Purge any legacy/stale
-                        # entry silently without displaying it, matching the PAK show path.
-                        stale = AuthConfigs::SecretRevealCache.read(@project)
-                        AuthConfigs::SecretRevealCache.delete(@project) if stale.dig("secrets").present? rescue nil
+                        # entry silently without displaying it. Wrap the entire read/delete
+                        # in rescue so a degraded cache backend does not block GET /auth_config.
+                        begin
+                          stale = AuthConfigs::SecretRevealCache.read(@project)
+                          AuthConfigs::SecretRevealCache.delete(@project) if stale.dig("secrets").present?
+                        rescue StandardError => e
+                          Rails.logger.error("SecretRevealCache purge failed for project #{@project.id}: #{e.class}: #{e.message}")
+                        end
                         {}
     else
                         {}
@@ -49,8 +54,14 @@ module AuthConfigShowState
                                         # Browser PAK issuance no longer writes to the shared
                                         # reveal cache; the token is delivered in-band. Purge
                                         # any legacy/stale entry silently without displaying it.
-                                        stale = ProjectApiKeys::RevealCache.read(@project)
-                                        ProjectApiKeys::RevealCache.delete(@project) if stale.dig("secrets", "project_api_key").present? rescue nil
+                                        # Wrap in rescue so a degraded cache backend does not
+                                        # block GET /auth_config.
+                                        begin
+                                          stale = ProjectApiKeys::RevealCache.read(@project)
+                                          ProjectApiKeys::RevealCache.delete(@project) if stale.dig("secrets", "project_api_key").present?
+                                        rescue StandardError => e
+                                          Rails.logger.error("RevealCache purge failed for project #{@project.id}: #{e.class}: #{e.message}")
+                                        end
                                         {}
     else
                                         {}
