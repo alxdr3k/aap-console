@@ -67,10 +67,6 @@ class MemberProjectPermissionsController < ApplicationController
 
   private
 
-  def prefer_json_for_default_requests
-    request.format = :json if default_json_request?
-  end
-
   def permission_params
     @permission_params ||= begin
       permission = parameter_hash(params.require(:project_permission))

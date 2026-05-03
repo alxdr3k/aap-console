@@ -87,12 +87,25 @@ class ConfigVersionsController < ApplicationController
 
   def authorize_config_version_read!
     return if @config_version.nil?
-    authorize_project!(@config_version.project)
+    return if current_authorization.can?(:read_project, @config_version.project)
+
+    render_config_version_not_found
   end
 
   def authorize_config_version_write!
     return if @config_version.nil?
-    authorize_project!(@config_version.project, minimum_role: :write)
+    return if current_authorization.can?(:write_project, @config_version.project)
+
+    render_config_version_not_found
+  end
+
+  def render_config_version_not_found
+    return render json: { error: "Not found" }, status: :not_found if json_request?
+
+    respond_to do |format|
+      format.html { render "projects/not_found", status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
   end
 
   def rollback_payload(data)

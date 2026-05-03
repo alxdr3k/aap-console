@@ -152,10 +152,6 @@ class MembersController < ApplicationController
 
   private
 
-  def prefer_json_for_default_requests
-    request.format = :json if default_json_request?
-  end
-
   def keycloak_client
     @keycloak_client ||= KeycloakClient.new
   end

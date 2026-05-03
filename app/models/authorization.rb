@@ -59,6 +59,8 @@ class Authorization
     when :write_project
       role = project_role(resource)
       role.present? && ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[:write]
+    else
+      raise ArgumentError, "Unknown authorization action: #{action.inspect}"
     end
   end
 end

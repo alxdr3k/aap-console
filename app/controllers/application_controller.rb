@@ -76,7 +76,11 @@ class ApplicationController < ActionController::Base
     request.format.json? || default_json_request?
   end
 
-  private
+  def prefer_json_for_default_requests
+    request.format = :json if default_json_request?
+  end
+
+  protected
 
   ROLE_HIERARCHY = { read: 1, write: 2, admin: 3 }.freeze
 

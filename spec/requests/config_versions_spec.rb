@@ -93,12 +93,12 @@ RSpec.describe "ConfigVersions", type: :request do
       expect(response.body).to include("+++ v1")
     end
 
-    it "returns 403 when no project permission" do
+    it "returns 404 when no project permission (prevents cross-tenant ID enumeration)" do
       other_project = create(:project, :active, organization: org)
       other_cv = create(:config_version, project: other_project, version_id: "v2",
                         change_type: "create", changed_by_sub: user_sub)
       get "/config_versions/#{other_cv.id}"
-      expect(response).to have_http_status(:forbidden)
+      expect(response).to have_http_status(:not_found)
     end
   end
 
@@ -259,7 +259,7 @@ RSpec.describe "ConfigVersions", type: :request do
       expect(response.body).not_to include("v-rollback-2")
     end
 
-    it "returns 403 for read-only member" do
+    it "returns 404 for read-only member on another project (prevents ID enumeration)" do
       other_project = create(:project, :active, organization: org)
       other_cv = create(:config_version, project: other_project, version_id: "v2",
                         change_type: "create", changed_by_sub: user_sub)
@@ -267,7 +267,7 @@ RSpec.describe "ConfigVersions", type: :request do
       create(:project_permission, org_membership: read_membership, project: other_project, role: "read")
       login_as("reader")
       post "/config_versions/#{other_cv.id}/rollback", headers: wildcard_headers
-      expect(response).to have_http_status(:forbidden)
+      expect(response).to have_http_status(:not_found)
     end
   end
 end
