@@ -27,8 +27,11 @@ class ProjectApiKeysController < ApplicationController
       token = result.data.fetch(:token)
 
       if browser_request?
-        cache_state = stage_pak_reveal_cache(key, token)
-        handle_pak_cache_state(cache_state, key, token)
+        # Render in-band directly without writing to the shared reveal cache.
+        # Writing to cache creates a window where a concurrent authorized
+        # operator can load auth_config/show and receive this request's
+        # one-time plaintext PAK before the cache entry is consumed.
+        render_pak_in_band(key, token)
       else
         render json: serialize_key(key).merge(token: token), status: :created
       end
@@ -48,10 +51,7 @@ class ProjectApiKeysController < ApplicationController
       current_user_sub: Current.user_sub
     ).call
 
-    # Serialize the read-then-delete with the create path's locked cache
-    # writers so a revoke cannot interleave with a concurrent issue's
-    # successful write and erase a newer reveal that the create path just
-    # cached for another operator.
+    # Clear any stale reveal entry for this specific key under the project lock.
     @project.with_lock do
       ProjectApiKeys::RevealCache.delete_if_matches(@project, project_api_key_id: @project_api_key.id)
     end
