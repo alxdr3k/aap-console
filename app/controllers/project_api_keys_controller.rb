@@ -31,6 +31,12 @@ class ProjectApiKeysController < ApplicationController
         # Writing to cache creates a window where a concurrent authorized
         # operator can load auth_config/show and receive this request's
         # one-time plaintext PAK before the cache entry is consumed.
+        #
+        # Trade-off: this skips the PRG (Post/Redirect/Get) pattern. The form
+        # uses data-turbo=false so the browser shows "Resubmit?" on refresh;
+        # the no-store response header also prevents back-forward cache restore.
+        # A redirect-based reveal would require either shared cache (the security
+        # regression this avoids) or session secret storage (forbidden by policy).
         render_pak_in_band(key, token)
       else
         render json: serialize_key(key).merge(token: token), status: :created
