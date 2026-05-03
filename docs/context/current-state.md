@@ -83,7 +83,7 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 - `Q-003`: super-admin dashboard scope.
 - Deployment command, rollback procedure, and Litestream restore are not accepted until `OPS-7A.1` / `OPS-7A.2`.
 - Full Keycloak/Langfuse config rollback is diagnostics-only until `OPS-7A.5`.
-- `AUTH-6B` 마이그레이션 기간 중 active session 처리 정책 미결 (proactive Keycloak logout-all vs 자연 만료). 구현 전 결정 필요.
+- `AUTH-6B` session 처리: 자연 만료 채택 (ADR-007). 미결 사항 없음.
 
 ## Current Validation
 
