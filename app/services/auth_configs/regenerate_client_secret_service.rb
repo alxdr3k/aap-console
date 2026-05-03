@@ -14,24 +14,14 @@ module AuthConfigs
 
       secret = KeycloakClient.new.regenerate_client_secret(uuid: auth_config.keycloak_client_uuid)
 
-      cache_failed = false
+      # All callers (browser HTML, Turbo, JSON) now render the secret from
+      # in_memory_reveal_payload — no redirect through the shared cache exists.
+      # Skip the write entirely so the rotated secret never enters the
+      # per-project cache; only clear any stale entry from a previous rotation.
       begin
         SecretRevealCache.delete(@project)
-        # Treat both raised exceptions and a falsy return as failure. Many
-        # cache adapters signal write failure by returning nil/false rather
-        # than raising; without this check the rotated secret would be
-        # silently lost the next time `read` returns an empty payload.
-        if SecretRevealCache.write(@project, key: "client_secret", label: "Client Secret", value: secret).blank?
-          Rails.logger.error("Auth config secret cache write returned a falsy result for project #{@project.id}")
-          cache_failed = true
-        end
       rescue StandardError => e
-        # The upstream secret has already been rotated and the previous secret is
-        # gone forever. Capture the fresh value in the result so the caller can
-        # render it once in this same response cycle — never persist the value
-        # outside the cache TTL or this in-memory result.
-        Rails.logger.error("Auth config secret cache write failed for project #{@project.id}: #{e.class}: #{e.message}")
-        cache_failed = true
+        Rails.logger.error("Auth config secret cache clear failed for project #{@project.id}: #{e.class}: #{e.message}")
       end
 
       AuditLog.create!(
@@ -43,19 +33,14 @@ module AuthConfigs
         resource_id: auth_config.id.to_s,
         details: {
           auth_type: auth_config.auth_type,
-          keycloak_client_uuid: auth_config.keycloak_client_uuid,
-          cache_failed: cache_failed
+          keycloak_client_uuid: auth_config.keycloak_client_uuid
         }
       )
 
-      # Always build the response from the freshly rotated secret rather than
-      # reading back from the shared per-project cache. A concurrent rotation
-      # can overwrite the cache between our write and our read, causing this
-      # response to carry a different rotation's secret.
       Result.success(
         secret_revealed: true,
-        cache_failed: cache_failed,
-        reveal_payload: in_memory_reveal_payload(secret, cache_failed: cache_failed)
+        cache_failed: false,
+        reveal_payload: in_memory_reveal_payload(secret)
       )
     rescue BaseClient::ApiError => e
       Result.failure("Client Secret 재발급에 실패했습니다: #{e.message}")
@@ -67,7 +52,7 @@ module AuthConfigs
       @project.provisioning_jobs.where(status: ProvisioningJob::ACTIVE_STATUSES).exists?
     end
 
-    def in_memory_reveal_payload(secret, cache_failed: false)
+    def in_memory_reveal_payload(secret)
       now = Time.current.iso8601(6)
       {
         "organization_id" => @project.organization_id,
@@ -76,7 +61,6 @@ module AuthConfigs
           "client_secret" => { "label" => "Client Secret", "value" => secret }
         },
         "generated_at" => now,
-        "cache_failed" => cache_failed,
         "expires_at" => now
       }
     end
