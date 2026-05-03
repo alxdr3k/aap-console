@@ -225,9 +225,13 @@ class ProjectApiKeysController < ApplicationController
 
     flash.now[:success] = "PAK가 발급되었습니다."
     prepare_auth_config_show!(pak_reveal_payload: payload)
-    # Consume the reveal cache entry so subsequent GET /auth_config requests
-    # cannot surface this one-time token to other project operators within TTL.
-    ProjectApiKeys::RevealCache.delete(@project)
+    # Best-effort stale-entry cleanup. A cache backend outage must not
+    # prevent rendering the one-time token after the PAK is already committed.
+    begin
+      ProjectApiKeys::RevealCache.delete(@project)
+    rescue StandardError => e
+      Rails.logger.error("PAK reveal cache clear failed after in-band render for project #{@project.id}: #{e.class}: #{e.message}")
+    end
     disable_secret_response_cache!
     render template: "auth_configs/show", formats: [ :html ]
   end
