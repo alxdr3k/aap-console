@@ -30,11 +30,11 @@ You clean up documentation bloat without editing files. You produce a report the
 ## 정리 대상
 
 ### 삭제 권장
-- docs/PRD.md:234-245 — 대화 맥락 ("이전에 ...")
-- docs/HLD.md:567-590 — PRD §5.4와 중복 (권위 파일: PRD)
+- docs/01_PRD.md:234-245 — 대화 맥락 ("이전에 ...")
+- docs/02_HLD.md:567-590 — PRD §5.4와 중복 (권위 파일: PRD)
 
 ### 축소 권장
-- docs/adr-002-...:80-120 — HLD 영역 침범 (구현 상세)
+- docs/adr/adr-002-...:80-120 — HLD 영역 침범 (구현 상세)
 
 ### 정리 불필요
 docs/ui-spec.md — 이슈 없음

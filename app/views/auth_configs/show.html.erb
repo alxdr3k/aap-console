@@ -1,0 +1,459 @@
+<% content_for :title, "인증 설정 | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">
+    Console &gt;
+    <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
+    <%= link_to @project.name, organization_project_path(@organization.slug, @project.slug) %> &gt;
+    인증 설정
+  </div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">인증 설정</h1>
+      <p class="page-description"><%= @project.name %>의 인증 구성을 확인하고 설정을 관리합니다.</p>
+    </div>
+
+    <div class="page-actions">
+      <% if @can_write_project && @auth_config.auth_type == "oidc" %>
+        <% if @active_provisioning_job %>
+          <span class="button button--disabled" title="진행 중인 작업이 완료된 후 재발급할 수 있습니다.">Client Secret 재발급 대기</span>
+        <% elsif @auth_config.keycloak_client_uuid.present? %>
+          <%= button_to "Client Secret 재발급",
+                        regenerate_secret_organization_project_auth_config_path(@organization.slug, @project.slug),
+                        method: :post,
+                        class: "button",
+                        data: { turbo_confirm: "Client Secret을 재발급할까요? 기존 Secret은 즉시 무효화됩니다." } %>
+        <% else %>
+          <span class="button button--disabled" title="Keycloak client가 아직 준비되지 않았습니다.">Client Secret 재발급 불가</span>
+        <% end %>
+      <% elsif !@can_write_project %>
+        <span class="badge badge--muted">write 권한 필요</span>
+      <% end %>
+
+      <%= link_to "Project 상세", organization_project_path(@organization.slug, @project.slug), class: "button button--secondary" %>
+    </div>
+  </header>
+
+  <% if @errors.present? %>
+    <ul class="error-list">
+      <% @errors.each do |error| %>
+        <li><%= error %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <% if @active_provisioning_job %>
+    <div class="status-banner status-banner--warning">
+      <strong>진행 중인 프로비저닝 작업이 있습니다.</strong>
+      <span>현재 작업이 완료된 후 인증 설정 변경과 Client Secret 재발급을 진행하세요.</span>
+      <div class="status-banner__actions">
+        <%= link_to "진행 상황 보기", provisioning_job_path(@active_provisioning_job), class: "button button--secondary" %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @secret_entries.present? %>
+    <section class="panel"
+             data-controller="secret-reveal"
+             data-secret-reveal-storage-key-value="<%= @secret_reveal_storage_key %>">
+      <header class="panel__header">
+        <h2 class="panel__title">일회성 인증 정보</h2>
+        <span class="badge badge--warning">10분 TTL</span>
+      </header>
+
+      <div class="status-banner status-banner--warning">
+        <strong>이 값은 단기 캐시에만 보관됩니다.</strong>
+        <span>표시하거나 복사한 뒤 안전한 저장소에 보관하세요.</span>
+      </div>
+
+      <dl class="details-list secret-list">
+        <% @secret_entries.each_with_index do |(key, secret), index| %>
+          <% field_id = "auth-secret-#{key}-#{index}" %>
+          <div>
+            <dt><%= secret["label"] || key.to_s.humanize %></dt>
+            <dd class="secret-value">
+              <code id="<%= field_id %>" data-masked="true"><%= "•" * 16 %></code>
+              <button type="button"
+                      class="button button--secondary"
+                      data-action="secret-reveal#toggle"
+                      data-secret-reveal-target-id-param="<%= field_id %>"
+                      data-secret-reveal-secret-param="<%= secret["value"] %>">
+                표시
+              </button>
+              <button type="button"
+                      class="button button--secondary"
+                      data-action="secret-reveal#copy"
+                      data-secret-reveal-secret-param="<%= secret["value"] %>">
+                복사
+              </button>
+            </dd>
+          </div>
+        <% end %>
+      </dl>
+
+      <div class="form-actions">
+        <button type="button" class="button" data-action="secret-reveal#confirm">
+          확인 - 안전하게 저장했습니다
+        </button>
+      </div>
+    </section>
+  <% end %>
+
+  <% if @project_api_key_reveal.present? %>
+    <section class="panel"
+             data-controller="secret-reveal"
+             data-secret-reveal-storage-key-value="<%= @project_api_key_reveal_storage_key %>">
+      <header class="panel__header">
+        <h2 class="panel__title">일회성 PAK</h2>
+        <span class="badge badge--warning">10분 TTL</span>
+      </header>
+
+      <div class="status-banner status-banner--warning">
+        <strong>발급된 PAK 평문은 지금만 다시 볼 수 있습니다.</strong>
+        <span>복사한 뒤 안전한 저장소에 보관하세요.</span>
+      </div>
+
+      <dl class="details-list secret-list">
+        <div>
+          <dt>이름</dt>
+          <dd><%= @project_api_key_reveal["name"] %></dd>
+        </div>
+        <div>
+          <dt>Prefix</dt>
+          <dd><code><%= @project_api_key_reveal["token_prefix"] %></code></dd>
+        </div>
+        <div>
+          <% field_id = "project-api-key-secret" %>
+          <dt>Token</dt>
+          <dd class="secret-value">
+            <code id="<%= field_id %>" data-masked="true"><%= "•" * 24 %></code>
+            <button type="button"
+                    class="button button--secondary"
+                    data-action="secret-reveal#toggle"
+                    data-secret-reveal-target-id-param="<%= field_id %>"
+                    data-secret-reveal-secret-param="<%= @project_api_key_reveal["value"] %>">
+              표시
+            </button>
+            <button type="button"
+                    class="button button--secondary"
+                    data-action="secret-reveal#copy"
+                    data-secret-reveal-secret-param="<%= @project_api_key_reveal["value"] %>">
+              복사
+            </button>
+          </dd>
+        </div>
+      </dl>
+
+      <div class="form-actions">
+        <button type="button" class="button" data-action="secret-reveal#confirm">
+          확인 - 안전하게 저장했습니다
+        </button>
+      </div>
+    </section>
+  <% end %>
+
+  <section class="summary-grid summary-grid--four">
+    <div class="summary-item">
+      <span class="summary-item__label">Auth Type</span>
+      <strong class="summary-item__value"><%= @auth_config.auth_type %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Client ID</span>
+      <strong class="summary-item__value summary-item__value--code"><%= @auth_config.keycloak_client_id || "-" %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Client UUID</span>
+      <strong class="summary-item__value summary-item__value--code"><%= @auth_config.keycloak_client_uuid || "-" %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">마지막 재발급</span>
+      <strong class="summary-item__value summary-item__value--time"><%= short_datetime(@last_secret_regenerated_at) %></strong>
+    </div>
+  </section>
+
+  <% if @auth_config.auth_type == "oidc" %>
+    <% if @can_write_project %>
+      <section class="panel">
+        <header class="panel__header">
+          <h2 class="panel__title">OIDC 설정</h2>
+        </header>
+
+        <%= form_with url: organization_project_auth_config_path(@organization.slug, @project.slug),
+                      scope: :auth_config,
+                      method: :patch,
+                      class: "form form--inline-panel" do %>
+          <div class="field-group" data-controller="uri-list">
+            <div class="field">
+              <label for="redirect-uri-0">Redirect URIs</label>
+            </div>
+            <input type="hidden" name="auth_config[redirect_uris][]" value="">
+            <div class="uri-list" data-uri-list-target="list">
+              <% @redirect_uris.each_with_index do |value, index| %>
+                <div class="uri-list__row">
+                  <input id="<%= "redirect-uri-#{index}" %>"
+                         type="url"
+                         name="auth_config[redirect_uris][]"
+                         value="<%= value %>"
+                         placeholder="https://app.example.com/callback">
+                  <button type="button" class="button button--secondary" data-action="uri-list#remove">제거</button>
+                </div>
+              <% end %>
+            </div>
+            <template data-uri-list-target="template">
+              <div class="uri-list__row">
+                <input type="url"
+                       name="auth_config[redirect_uris][]"
+                       value=""
+                       placeholder="https://app.example.com/callback">
+                <button type="button" class="button button--secondary" data-action="uri-list#remove">제거</button>
+              </div>
+            </template>
+            <div class="form-actions form-actions--compact">
+              <button type="button" class="button button--secondary" data-action="uri-list#add">URI 추가</button>
+            </div>
+          </div>
+
+          <div class="field-group" data-controller="uri-list">
+            <div class="field">
+              <label for="post-logout-uri-0">Post Logout Redirect URIs</label>
+            </div>
+            <input type="hidden" name="auth_config[post_logout_redirect_uris][]" value="">
+            <div class="uri-list" data-uri-list-target="list">
+              <% @post_logout_redirect_uris.each_with_index do |value, index| %>
+                <div class="uri-list__row">
+                  <input id="<%= "post-logout-uri-#{index}" %>"
+                         type="url"
+                         name="auth_config[post_logout_redirect_uris][]"
+                         value="<%= value %>"
+                         placeholder="https://app.example.com">
+                  <button type="button" class="button button--secondary" data-action="uri-list#remove">제거</button>
+                </div>
+              <% end %>
+            </div>
+            <template data-uri-list-target="template">
+              <div class="uri-list__row">
+                <input type="url"
+                       name="auth_config[post_logout_redirect_uris][]"
+                       value=""
+                       placeholder="https://app.example.com">
+                <button type="button" class="button button--secondary" data-action="uri-list#remove">제거</button>
+              </div>
+            </template>
+            <div class="form-actions form-actions--compact">
+              <button type="button" class="button button--secondary" data-action="uri-list#add">URI 추가</button>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <%= link_to "취소", organization_project_auth_config_path(@organization.slug, @project.slug), class: "button button--ghost" %>
+            <button type="submit" class="button" <%= "disabled" if @active_provisioning_job %>>저장</button>
+          </div>
+        <% end %>
+      </section>
+    <% else %>
+      <section class="panel">
+        <header class="panel__header">
+          <h2 class="panel__title">OIDC 설정</h2>
+          <span class="badge badge--muted">read only</span>
+        </header>
+
+        <dl class="details-list">
+          <div>
+            <dt>Redirect URIs</dt>
+            <dd><%= project_list_value(@redirect_uris) %></dd>
+          </div>
+          <div>
+            <dt>Post Logout Redirect URIs</dt>
+            <dd><%= project_list_value(@post_logout_redirect_uris) %></dd>
+          </div>
+        </dl>
+      </section>
+    <% end %>
+  <% elsif @auth_config.auth_type == "saml" %>
+    <section class="panel">
+      <header class="panel__header">
+        <h2 class="panel__title">SAML 설정</h2>
+        <span class="badge badge--muted">read only</span>
+      </header>
+      <% if @saml_idp_metadata_url.present? %>
+        <dl class="details-list">
+          <div>
+            <dt>SP Entity ID</dt>
+            <dd><code class="code-token"><%= @auth_config.keycloak_client_id %></code></dd>
+          </div>
+          <div>
+            <dt>IdP 메타데이터 URL</dt>
+            <dd data-controller="secret-reveal">
+              <code class="code-token"><%= @saml_idp_metadata_url %></code>
+              <button type="button"
+                      class="button button--secondary"
+                      data-action="secret-reveal#copy"
+                      data-secret-reveal-secret-param="<%= @saml_idp_metadata_url %>">
+                복사
+              </button>
+            </dd>
+          </div>
+        </dl>
+      <% else %>
+        <p class="muted-text">Keycloak 클라이언트 프로비저닝이 완료되면 메타데이터 URL이 표시됩니다.</p>
+      <% end %>
+    </section>
+  <% elsif @auth_config.auth_type == "oauth" %>
+    <% if @can_write_project %>
+      <section class="panel">
+        <header class="panel__header">
+          <h2 class="panel__title">OAuth / PKCE 설정</h2>
+        </header>
+
+        <dl class="details-list">
+          <div>
+            <dt>Client 유형</dt>
+            <dd>Public Client (client_secret 없음)</dd>
+          </div>
+          <div>
+            <dt>PKCE</dt>
+            <dd>S256</dd>
+          </div>
+        </dl>
+
+        <%= form_with url: organization_project_auth_config_path(@organization.slug, @project.slug),
+                      scope: :auth_config,
+                      method: :patch,
+                      class: "form form--inline-panel" do %>
+          <div class="field-group" data-controller="uri-list">
+            <div class="field">
+              <label for="redirect-uri-0">Redirect URIs</label>
+              <small class="field__hint">HTTPS 필수 (localhost 제외). fragment(#) 불가.</small>
+            </div>
+            <input type="hidden" name="auth_config[redirect_uris][]" value="">
+            <div class="uri-list" data-uri-list-target="list">
+              <% @redirect_uris.each_with_index do |value, index| %>
+                <div class="uri-list__row">
+                  <input id="<%= "redirect-uri-#{index}" %>"
+                         type="url"
+                         name="auth_config[redirect_uris][]"
+                         value="<%= value %>"
+                         placeholder="https://app.example.com/callback">
+                  <button type="button" class="button button--secondary" data-action="uri-list#remove">제거</button>
+                </div>
+              <% end %>
+            </div>
+            <template data-uri-list-target="template">
+              <div class="uri-list__row">
+                <input type="url"
+                       name="auth_config[redirect_uris][]"
+                       value=""
+                       placeholder="https://app.example.com/callback">
+                <button type="button" class="button button--secondary" data-action="uri-list#remove">제거</button>
+              </div>
+            </template>
+            <div class="form-actions form-actions--compact">
+              <button type="button" class="button button--secondary" data-action="uri-list#add">URI 추가</button>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <%= link_to "취소", organization_project_auth_config_path(@organization.slug, @project.slug), class: "button button--ghost" %>
+            <button type="submit" class="button" <%= "disabled" if @active_provisioning_job %>>저장</button>
+          </div>
+        <% end %>
+      </section>
+    <% else %>
+      <section class="panel">
+        <header class="panel__header">
+          <h2 class="panel__title">OAuth / PKCE 설정</h2>
+          <span class="badge badge--muted">read only</span>
+        </header>
+
+        <dl class="details-list">
+          <div>
+            <dt>Client 유형</dt>
+            <dd>Public Client (client_secret 없음)</dd>
+          </div>
+          <div>
+            <dt>PKCE</dt>
+            <dd>S256</dd>
+          </div>
+          <div>
+            <dt>Redirect URIs</dt>
+            <dd><%= project_list_value(@redirect_uris) %></dd>
+          </div>
+        </dl>
+      </section>
+    <% end %>
+  <% else %>
+    <section class="panel panel--disabled">
+      <header class="panel__header">
+        <h2 class="panel__title"><%= @auth_config.auth_type.upcase %> 설정</h2>
+        <span class="badge badge--muted">준비 중</span>
+      </header>
+      <p class="muted-text">이 인증 방식의 상세 편집 UI는 아직 준비 중입니다.</p>
+    </section>
+  <% end %>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">Project API Keys</h2>
+      <% unless @can_write_project %>
+        <span class="badge badge--muted">read only</span>
+      <% end %>
+    </header>
+
+    <% if @can_write_project %>
+      <%= form_with url: organization_project_project_api_keys_path(@organization.slug, @project.slug),
+                    scope: :project_api_key,
+                    method: :post,
+                    class: "form form--inline-panel" do |form| %>
+        <div class="form-grid form-grid--two">
+          <div class="field">
+            <%= form.label :name, "새 PAK 이름" %>
+            <%= form.text_field :name, required: true, placeholder: "staging-ci" %>
+          </div>
+        </div>
+        <div class="form-actions">
+          <%= form.submit "새 PAK 발급", class: "button" %>
+        </div>
+      <% end %>
+    <% end %>
+
+    <% if @project_api_keys.any? %>
+      <div class="resource-list">
+        <% @project_api_keys.each do |project_api_key| %>
+          <div class="resource-row">
+            <div>
+              <h3 class="resource-row__title"><%= project_api_key.name %></h3>
+              <p class="resource-row__description">
+                <span class="code-token"><%= project_api_key.token_prefix %></span>
+                · 생성 <%= short_datetime(project_api_key.created_at) %>
+                · 마지막 사용 <%= short_datetime(project_api_key.last_used_at) %>
+              </p>
+              <div class="resource-row__meta">
+                <span class="<%= project_api_key.revoked? ? "badge badge--muted" : "badge" %>">
+                  <%= project_api_key.revoked? ? "revoked" : "active" %>
+                </span>
+              </div>
+            </div>
+
+            <div class="page-actions">
+              <% if @can_write_project %>
+                <% if project_api_key.revoked? %>
+                  <span class="button button--disabled">폐기됨</span>
+                <% else %>
+                  <%= button_to "폐기",
+                                organization_project_project_api_key_path(@organization.slug, @project.slug, project_api_key),
+                                method: :delete,
+                                class: "button button--ghost",
+                                data: { turbo_confirm: "#{project_api_key.name} PAK를 폐기할까요?" } %>
+                <% end %>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="muted-text">발급된 PAK가 없습니다.</p>
+    <% end %>
+  </section>
+
+</section>

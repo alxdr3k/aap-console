@@ -21,6 +21,7 @@ module Provisioning
         # Phase 2: mirror the UUID onto the auth_config row for read paths.
         # Skipped for PAK because no Keycloak client was created (uuid is nil).
         auth_config.update!(keycloak_client_uuid: client_uuid) if client_uuid
+        cache_client_secret!(keycloak, client_uuid, auth_type) if client_uuid
 
         snapshot
       end
@@ -52,6 +53,16 @@ module Provisioning
         false
       rescue BaseClient::ApiError
         false
+      end
+
+      def after_skip
+        auth_config = project.project_auth_config
+        return unless auth_config&.auth_type == "oidc"
+
+        client_uuid = step_record.result_snapshot&.dig("keycloak_client_uuid") || auth_config.keycloak_client_uuid
+        return if client_uuid.blank?
+
+        cache_client_secret!(KeycloakClient.new, client_uuid, auth_config.auth_type)
       end
 
       private
@@ -90,6 +101,24 @@ module Provisioning
           # Extract UUID from Location header (Keycloak 201 response)
           nil
         end
+      end
+
+      def cache_client_secret!(keycloak, client_uuid, auth_type)
+        return unless auth_type == "oidc"
+
+        Provisioning::SecretCache.delete(step_record.provisioning_job_id)
+        Provisioning::SecretCache.write(
+          step_record.provisioning_job,
+          key: "client_secret",
+          label: "Client Secret",
+          value: keycloak.get_client_secret(uuid: client_uuid)
+        )
+      rescue StandardError => e
+        Rails.logger.warn(
+          "[Provisioning::Steps::KeycloakClientCreate] skipped secret cache " \
+          "job=#{step_record.provisioning_job_id} step=#{step_record.id} " \
+          "client_uuid=#{client_uuid} error=#{e.class}: #{e.message}"
+        )
       end
     end
   end

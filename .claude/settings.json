@@ -58,7 +58,8 @@
       "Bash(bin/rails db:rollback:*)",
       "Bash(bin/rails db:seed)",
       "Bash(bin/rails routes:*)",
-      "Bash(bin/rails runner:*)"
+      "Bash(bin/rails runner:*)",
+      "Bash(gh pr merge:*)"
     ],
     "ask": [],
     "deny": [
@@ -69,7 +70,6 @@
       "Bash(git push -f:*)",
       "Bash(git push *main*)",
       "Bash(git push *master*)",
-      "Bash(gh pr merge:*)",
       "Bash(gh repo delete:*)",
       "Bash(curl *keycloak*)",
       "Bash(curl *langfuse*)",

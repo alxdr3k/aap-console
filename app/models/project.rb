@@ -1,4 +1,7 @@
 class Project < ApplicationRecord
+  APP_ID_MAX_ATTEMPTS = 10
+  RESERVED_SLUGS = %w[new edit].freeze
+
   belongs_to :organization
   has_one :project_auth_config, dependent: :destroy
   has_many :project_api_keys, dependent: :destroy
@@ -18,14 +21,13 @@ class Project < ApplicationRecord
 
   validates :name, presence: true, length: { minimum: 2, maximum: 100 }
   validates :slug, presence: true, uniqueness: { scope: :organization_id }
+  validates :slug, exclusion: { in: RESERVED_SLUGS }, on: :create
   validates :app_id, presence: true, uniqueness: true
 
   before_validation :generate_app_id, on: :create, if: -> { app_id.blank? }
   before_validation :generate_slug, on: :create, if: -> { slug.blank? && name.present? }
 
   class AppIdGenerationError < StandardError; end
-
-  APP_ID_MAX_ATTEMPTS = 10
 
   private
 
@@ -45,10 +47,14 @@ class Project < ApplicationRecord
     base = name.downcase.gsub(/[^a-z0-9\s-]/, "").gsub(/\s+/, "-").gsub(/-+/, "-").strip.delete_prefix("-").delete_suffix("-")
     candidate = base
     counter = 2
-    while organization&.projects&.exists?(slug: candidate)
+    while slug_conflicts?(candidate)
       candidate = "#{base}-#{counter}"
       counter += 1
     end
     self.slug = candidate
+  end
+
+  def slug_conflicts?(candidate)
+    RESERVED_SLUGS.include?(candidate) || organization&.projects&.exists?(slug: candidate)
   end
 end

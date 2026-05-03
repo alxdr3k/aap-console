@@ -65,6 +65,16 @@ RSpec.describe Authorization do
   describe "#accessible_projects" do
     let!(:project2) { create(:project, :active, organization: organization) }
 
+    context "when user is super_admin" do
+      it "returns all non-deleted projects in the org" do
+        deleted_project = create(:project, :deleted, organization: organization)
+        auth = described_class.new(user_sub: "u1", realm_roles: [ "super_admin" ])
+
+        expect(auth.accessible_projects(organization)).to match_array([ project, project2 ])
+        expect(auth.accessible_projects(organization)).not_to include(deleted_project)
+      end
+    end
+
     context "when user is org admin" do
       it "returns all projects in the org" do
         create(:org_membership, organization: organization, user_sub: "u1", role: "admin")
@@ -90,6 +100,13 @@ RSpec.describe Authorization do
       create(:org_membership, organization: other_org, user_sub: "u2")
       auth = described_class.new(user_sub: "u1", realm_roles: [])
       expect(auth.organizations).to contain_exactly(organization)
+    end
+
+    it "returns all organizations for super_admin" do
+      other_org = create(:organization)
+      auth = described_class.new(user_sub: "u1", realm_roles: [ "super_admin" ])
+
+      expect(auth.organizations).to match_array([ organization, other_org ])
     end
   end
 end

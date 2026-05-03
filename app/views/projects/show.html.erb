@@ -1,0 +1,234 @@
+<% content_for :title, "#{@project.name} | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">
+    Console &gt;
+    <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
+    <%= link_to "Projects", organization_projects_path(@organization.slug) %> &gt;
+    <%= @project.name %>
+  </div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title"><%= @project.name %></h1>
+      <% if @project.description.present? %>
+        <p class="page-description"><%= @project.description %></p>
+      <% end %>
+    </div>
+
+    <div class="page-actions">
+      <% if current_authorization.can?(:manage_org, @organization) %>
+        <% if @active_provisioning_job %>
+          <span class="button button--disabled" title="진행 중인 작업이 완료된 후 삭제할 수 있습니다.">Project 삭제 대기</span>
+        <% else %>
+          <%= button_to "Project 삭제",
+                        organization_project_path(@organization.slug, @project.slug),
+                        method: :delete,
+                        class: "button button--ghost",
+                        data: { turbo_confirm: "Project 삭제 프로비저닝을 시작할까요?" } %>
+        <% end %>
+      <% end %>
+      <%= link_to "Project 목록", organization_projects_path(@organization.slug), class: "button button--secondary" %>
+    </div>
+  </header>
+
+  <% if @errors.present? %>
+    <ul class="error-list">
+      <% @errors.each do |error| %>
+        <li><%= error %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <% if @active_provisioning_job %>
+    <div class="status-banner status-banner--warning">
+      <strong>진행 중인 프로비저닝 작업이 있습니다.</strong>
+      <span>현재 작업이 완료된 후 Project 삭제나 외부 설정 변경을 진행하세요.</span>
+      <div class="status-banner__actions">
+        <%= link_to "진행 상황 보기", provisioning_job_path(@active_provisioning_job), class: "button button--secondary" %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @latest_provisioning_job&.completed_with_warnings? %>
+    <div class="status-banner status-banner--warning">
+      최근 프로비저닝이 경고와 함께 완료되었습니다. 프로비저닝 이력에서 상세 상태를 확인하세요.
+    </div>
+  <% end %>
+
+  <section class="summary-grid summary-grid--four">
+    <div class="summary-item">
+      <span class="summary-item__label">Status</span>
+      <strong class="summary-item__value">
+        <span class="<%= project_status_badge_class(@project) %>"><%= @project.status %></span>
+      </strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">App ID</span>
+      <strong class="summary-item__value summary-item__value--code"><%= @project.app_id %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Auth</span>
+      <strong class="summary-item__value"><%= @auth_config&.auth_type || "미설정" %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Latest Job</span>
+      <strong class="summary-item__value">
+        <% if @latest_provisioning_job %>
+          <span class="<%= provisioning_status_badge_class(@latest_provisioning_job) %>">
+            <%= @latest_provisioning_job.operation %> <%= @latest_provisioning_job.status %>
+          </span>
+        <% else %>
+          -
+        <% end %>
+      </strong>
+    </div>
+  </section>
+
+  <% if current_authorization.can?(:write_project, @project) %>
+    <section class="panel">
+      <header class="panel__header">
+        <h2 class="panel__title">기본 정보 편집</h2>
+      </header>
+
+      <%= form_with url: organization_project_path(@organization.slug, @project.slug),
+                    scope: :project,
+                    method: :patch,
+                    class: "form form--inline-panel" do |form| %>
+        <div class="form-grid form-grid--two">
+          <div class="field">
+            <%= form.label :name, "이름" %>
+            <%= form.text_field :name, value: @project.name, required: true %>
+          </div>
+          <div class="field">
+            <%= form.label :description, "설명" %>
+            <%= form.text_field :description, value: @project.description %>
+          </div>
+        </div>
+        <div class="form-actions">
+          <%= form.submit "저장", class: "button button--secondary" %>
+        </div>
+      <% end %>
+    </section>
+  <% end %>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">인증 설정</h2>
+      <%= link_to current_authorization.can?(:write_project, @project) ? "상세 편집" : "상세 보기",
+                  organization_project_auth_config_path(@organization.slug, @project.slug),
+                  class: "button button--secondary" %>
+    </header>
+
+    <% redirect_uris = @auth_config&.redirect_uris.presence || project_snapshot_list(@latest_config_snapshot, "redirect_uris") %>
+    <dl class="details-list">
+      <div>
+        <dt>방식</dt>
+        <dd><%= @auth_config&.auth_type || "미설정" %></dd>
+      </div>
+      <div>
+        <dt>Client ID</dt>
+        <dd><%= @auth_config&.keycloak_client_id || "아직 없음" %></dd>
+      </div>
+      <div>
+        <dt>Redirect URIs</dt>
+        <dd><%= project_list_value(redirect_uris) %></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">Langfuse</h2>
+      <span class="badge badge--muted">SDK Key 값 비공개</span>
+    </header>
+
+    <dl class="details-list">
+      <div>
+        <dt>Langfuse Project</dt>
+        <dd><%= @project.slug %></dd>
+      </div>
+      <div>
+        <dt>Tracing</dt>
+        <dd><%= @project.active? ? "연동됨" : "프로비저닝 완료 후 활성화" %></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">LiteLLM Config</h2>
+      <%= link_to current_authorization.can?(:write_project, @project) ? "설정 편집" : "상세 보기",
+                  organization_project_litellm_config_path(@organization.slug, @project.slug),
+                  class: "button button--secondary" %>
+    </header>
+
+    <dl class="details-list">
+      <div>
+        <dt>모델</dt>
+        <dd><%= project_snapshot_value(@latest_config_snapshot, "models") %></dd>
+      </div>
+      <div>
+        <dt>가드레일</dt>
+        <dd><%= project_snapshot_value(@latest_config_snapshot, "guardrails") %></dd>
+      </div>
+      <div>
+        <dt>S3 Retention</dt>
+        <dd><%= project_snapshot_value(@latest_config_snapshot, "s3_retention_days") %></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">변경 이력</h2>
+      <%= link_to "전체 이력 보기",
+                  organization_project_config_versions_path(@organization.slug, @project.slug),
+                  class: "button button--secondary" %>
+    </header>
+
+    <% if @config_versions.any? %>
+      <div class="history-list">
+        <% @config_versions.each do |version| %>
+          <div class="history-row">
+            <span><%= short_datetime(version.created_at) %></span>
+            <strong><%= version.change_type %></strong>
+            <span><%= version.change_summary.presence || version.version_id %></span>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="muted-text">Config 변경 이력이 없습니다.</p>
+    <% end %>
+  </section>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">프로비저닝 이력</h2>
+    </header>
+
+    <% if @provisioning_jobs.any? %>
+      <div class="history-list">
+        <% @provisioning_jobs.each do |job| %>
+          <div class="history-row history-row--with-action">
+            <span><%= short_datetime(job.created_at) %></span>
+            <strong><%= job.operation %></strong>
+            <span class="<%= provisioning_status_badge_class(job) %>"><%= job.status %></span>
+            <span><%= provisioning_duration(job) %></span>
+            <%= link_to "상세", provisioning_job_path(job), class: "button button--secondary" %>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="muted-text">프로비저닝 이력이 없습니다.</p>
+    <% end %>
+  </section>
+
+  <section class="panel panel--disabled">
+    <header class="panel__header">
+      <h2 class="panel__title">Playground</h2>
+      <span class="badge badge--muted">준비 중</span>
+    </header>
+    <p class="muted-text">아직 사용할 수 없습니다.</p>
+  </section>
+</section>

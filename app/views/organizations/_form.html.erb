@@ -1,0 +1,31 @@
+<%= form_with model: organization, url: form_url, method: form_method, class: "form" do |form| %>
+  <% if errors.present? %>
+    <ul class="error-list">
+      <% errors.each do |error| %>
+        <li><%= error %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <div class="field">
+    <%= form.label :name, "이름" %>
+    <%= form.text_field :name, required: true, autofocus: true %>
+  </div>
+
+  <div class="field">
+    <%= form.label :description, "설명" %>
+    <%= form.textarea :description %>
+  </div>
+
+  <% if local_assigns[:include_initial_admin] %>
+    <div class="field">
+      <%= form.label :initial_admin_user_sub, "초기 관리자 user_sub" %>
+      <%= form.text_field :initial_admin_user_sub %>
+    </div>
+  <% end %>
+
+  <div class="form-actions">
+    <%= link_to "취소", cancel_path, class: "button button--ghost" %>
+    <%= form.submit submit_label, class: "button" %>
+  </div>
+<% end %>

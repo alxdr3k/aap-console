@@ -9,6 +9,7 @@ RSpec.describe Projects::CreateService do
       description: "Our AI chatbot",
       auth_type: "oidc",
       models: [ "azure-gpt4" ],
+      guardrails: [ "content-filter" ],
       s3_retention_days: 90
     }
   end
@@ -32,6 +33,21 @@ RSpec.describe Projects::CreateService do
       expect {
         described_class.new(organization: organization, params: params, current_user_sub: user_sub).call
       }.to have_enqueued_job(ProvisioningExecuteJob)
+    end
+
+    it "forwards create config inputs to the provisioning execution job" do
+      expect {
+        described_class.new(organization: organization, params: params, current_user_sub: user_sub).call
+      }.to have_enqueued_job(ProvisioningExecuteJob).with(
+        kind_of(Integer),
+        hash_including(
+          auth_type: "oidc",
+          models: [ "azure-gpt4" ],
+          guardrails: [ "content-filter" ],
+          s3_retention_days: 90,
+          current_user_sub: user_sub
+        )
+      )
     end
 
     it "creates a ProvisioningJob record with create operation" do
@@ -99,6 +115,22 @@ RSpec.describe Projects::CreateService do
       ).call
       expect(result).to be_success
       expect(result.data.project_auth_config.keycloak_client_id).to be_nil
+    end
+
+    %w[saml oauth].each do |auth_type|
+      it "assigns a deterministic aap-prefixed keycloak_client_id for #{auth_type.upcase}" do
+        organization.update!(slug: "acme")
+        result = described_class.new(
+          organization: organization,
+          params: params.merge(auth_type: auth_type),
+          current_user_sub: user_sub
+        ).call
+
+        expect(result).to be_success
+        auth_config = result.data.project_auth_config
+        expect(auth_config.keycloak_client_id).to start_with("aap-acme-")
+        expect(auth_config.keycloak_client_id).to end_with("-#{auth_type}")
+      end
     end
 
     it "returns failure if another active job exists for the project" do

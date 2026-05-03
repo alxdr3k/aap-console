@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [ main ]
+    branches: [ main, dev ]
 
 jobs:
   scan_ruby:
@@ -68,4 +68,3 @@ jobs:
 
       - name: Run RSpec
         run: bin/rspec --format progress
-

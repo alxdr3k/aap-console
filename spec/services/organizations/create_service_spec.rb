@@ -2,6 +2,7 @@ require "rails_helper"
 
 RSpec.describe Organizations::CreateService do
   include LangfuseMock
+  include KeycloakMock
 
   let(:user_sub) { "user-sub-admin" }
   let(:params) { { name: "Acme Corp", description: "Test org" } }
@@ -26,6 +27,35 @@ RSpec.describe Organizations::CreateService do
       membership = org.org_memberships.find_by(user_sub: user_sub)
       expect(membership).to be_present
       expect(membership.role).to eq("admin")
+      expect(membership.joined_at).to be_present
+    end
+
+    it "creates a pending admin membership for a designated initial admin who is not the creator" do
+      stub_keycloak_get_user(user_sub: "selected-admin-sub")
+
+      result = described_class.new(
+        params: params.merge(initial_admin_user_sub: "selected-admin-sub"),
+        current_user_sub: user_sub
+      ).call
+      org = result.data
+      membership = org.org_memberships.find_by(user_sub: "selected-admin-sub")
+
+      expect(membership.role).to eq("admin")
+      expect(membership.joined_at).to be_nil
+      expect(org.org_memberships.find_by(user_sub: user_sub)).to be_nil
+    end
+
+    it "returns failure when initial_admin_user_sub does not exist in Keycloak" do
+      stub_keycloak_get_user(user_sub: "nonexistent-sub", status: 404)
+
+      result = described_class.new(
+        params: params.merge(initial_admin_user_sub: "nonexistent-sub"),
+        current_user_sub: user_sub
+      ).call
+
+      expect(result).to be_failure
+      expect(result.error).to include("not found")
+      expect(Organization.count).to eq(0)
     end
 
     it "stores the langfuse_org_id" do

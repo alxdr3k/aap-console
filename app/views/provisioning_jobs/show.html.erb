@@ -1,0 +1,130 @@
+<% content_for :title, "#{provisioning_operation_title(@job)} | AAP Console" %>
+
+<section class="page"
+         data-controller="provisioning"
+         data-provisioning-job-id-value="<%= @job.id %>"
+         data-provisioning-poll-url-value="<%= provisioning_job_path(@job, format: :json) %>"
+         data-provisioning-secrets-url-value="<%= secrets_provisioning_job_path(@job, format: :json) %>"
+         data-provisioning-status-value="<%= @job.status %>"
+         data-provisioning-step-url-template-value="<%= step_provisioning_job_path(@job, "__STEP_ID__") %>">
+  <div class="breadcrumbs">
+    Console &gt;
+    <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
+    <% if @job.operation == "delete" || @project.deleted? %>
+      <%= @project.name %> &gt;
+    <% else %>
+      <%= link_to @project.name, organization_project_path(@organization.slug, @project.slug) %> &gt;
+    <% end %>
+    프로비저닝
+  </div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title"><%= provisioning_operation_title(@job) %></h1>
+      <p class="page-description"><%= @project.name %>의 프로비저닝 상태입니다.</p>
+    </div>
+
+    <div class="page-actions">
+      <%= link_to provisioning_target_label(@job),
+                  provisioning_target_path(@job),
+                  class: "button",
+                  data: { provisioning_target: "targetLink" } %>
+      <%= link_to "Project 목록", organization_projects_path(@organization.slug), class: "button button--secondary" %>
+    </div>
+  </header>
+
+  <% if @job.error_message.present? %>
+    <div class="status-banner status-banner--danger">
+      <strong>오류</strong>
+      <span><%= @job.error_message %></span>
+    </div>
+  <% end %>
+
+  <% if @job.retryable? %>
+    <div class="status-banner status-banner--danger">
+      <strong>수동 조치 필요</strong>
+      <span>실패 원인을 확인한 뒤 같은 프로비저닝 Job을 다시 실행할 수 있습니다.</span>
+      <div class="status-banner__actions">
+        <% if current_authorization.can?(:write_project, @project) %>
+          <%= button_to "수동 재시도",
+                        retry_provisioning_job_path(@job),
+                        method: :post,
+                        class: "button",
+                        data: { turbo_confirm: "이 프로비저닝 Job을 다시 실행할까요?" } %>
+        <% else %>
+          <span class="badge badge--muted">write 권한 필요</span>
+        <% end %>
+        <%= link_to "Project 목록으로", organization_projects_path(@organization.slug), class: "button button--secondary" %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @job.warnings.present? %>
+    <div class="status-banner status-banner--warning">
+      <strong>경고</strong>
+      <span><%= Array(@job.warnings).join(", ") %></span>
+    </div>
+  <% end %>
+
+  <% unless @job.operation == "delete" %>
+    <section class="panel" data-provisioning-target="secrets" hidden>
+      <header class="panel__header">
+        <h2 class="panel__title">일회성 인증 정보</h2>
+        <span class="badge badge--warning">10분 TTL</span>
+      </header>
+
+      <div class="status-banner status-banner--warning">
+        <strong>이 값은 단기 캐시에만 보관됩니다.</strong>
+        <span>표시하거나 복사한 뒤 안전한 저장소에 보관하세요.</span>
+      </div>
+
+      <dl class="details-list secret-list" data-provisioning-target="secretList"></dl>
+
+      <div class="form-actions">
+        <button type="button"
+                class="button"
+                data-action="provisioning#confirmSecrets">
+          확인 - 안전하게 저장했습니다
+        </button>
+      </div>
+    </section>
+  <% end %>
+
+  <section class="summary-grid summary-grid--four">
+    <div class="summary-item">
+      <span class="summary-item__label">Status</span>
+      <strong class="summary-item__value">
+        <span class="<%= provisioning_status_badge_class(@job) %>" data-provisioning-target="status"><%= @job.status %></span>
+      </strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Operation</span>
+      <strong class="summary-item__value"><%= @job.operation %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Started</span>
+      <strong class="summary-item__value summary-item__value--time"><%= short_datetime(@job.started_at) %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Elapsed</span>
+      <strong class="summary-item__value summary-item__value--time"><%= provisioning_duration(@job) %></strong>
+    </div>
+  </section>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">Timeline</h2>
+      <span class="badge badge--muted" data-provisioning-target="connection">polling</span>
+    </header>
+
+    <% if @steps.any? %>
+      <ol class="timeline">
+        <% @steps.each do |step| %>
+          <%= render "step", step: step %>
+        <% end %>
+      </ol>
+    <% else %>
+      <p class="muted-text">아직 생성된 step이 없습니다.</p>
+    <% end %>
+  </section>
+</section>

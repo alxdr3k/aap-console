@@ -4,19 +4,31 @@ Rails.application.routes.draw do
   # Auth
   get  "auth/keycloak/callback", to: "sessions#create"
   get  "auth/failure",           to: "sessions#failure"
-  delete "auth/logout",          to: "sessions#destroy"
+  delete "auth/logout",          to: "sessions#destroy", as: :logout
 
   # User search (Keycloak proxy)
   get "users/search", to: "users#search"
 
   # Organizations and nested resources
   resources :organizations, param: :slug do
+    post "members/:user_sub/project_permissions",
+         to: "member_project_permissions#create",
+         as: :member_project_permissions
+    patch "members/:user_sub/project_permissions/:project_slug",
+          to: "member_project_permissions#update",
+          as: :member_project_permission
+    delete "members/:user_sub/project_permissions/:project_slug",
+           to: "member_project_permissions#destroy"
+
     resources :members, param: :user_sub, only: [ :index, :create, :update, :destroy ]
 
-    resources :projects, param: :slug do
-      resource  :auth_config,    only: [ :show, :update ]
-      resource  :litellm_config, only: [ :show, :update ]
+    resources :projects, param: :slug, only: [ :index, :new, :create, :show, :update, :destroy ] do
+      resource :auth_config, only: [ :show, :update ] do
+        post :regenerate_secret
+      end
+      resource :litellm_config, only: [ :show, :update ]
       resources :config_versions, only: [ :index ]
+      resources :project_api_keys, only: [ :index, :create, :destroy ]
     end
   end
 
@@ -25,6 +37,7 @@ Rails.application.routes.draw do
     member do
       post :retry
       get  :secrets
+      get "steps/:step_id", action: :step, as: :step
     end
   end
 
@@ -37,6 +50,7 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       resources :apps, only: [ :index ]
+      post "project_api_keys/verify", to: "project_api_keys#verify"
     end
   end
 

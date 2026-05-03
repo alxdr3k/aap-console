@@ -58,8 +58,7 @@ module Provisioning
     end
 
     def step_class_for(name)
-      class_name = name.split("_").map(&:capitalize).join
-      "Provisioning::Steps::#{class_name}".constantize
+      Provisioning::StepRunner::STEP_CLASSES.fetch(name) { raise ArgumentError, "Unknown provisioning step: #{name.inspect}" }
     end
   end
 end

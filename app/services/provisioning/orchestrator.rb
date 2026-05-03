@@ -186,23 +186,28 @@ module Provisioning
       )
     end
 
+    # Keys that must NOT be forwarded to the re-enqueued job. These hold
+    # plaintext secrets that were passed ephemerally between steps in-process.
+    # On resume, the originating step (e.g. LangfuseProjectCreate) re-mints
+    # the secret and injects a fresh value via :_ephemeral.
+    EPHEMERAL_KEYS = %i[langfuse_secret_key].freeze
+
     # Called when one or more steps return :deferred. The job is marked
     # :retrying and the ProvisioningExecuteJob is re-enqueued to run after
     # the longest deferred interval has elapsed. The worker thread exits
     # immediately so it can serve other provisioning jobs meanwhile.
     #
     # IMPORTANT: the original external params (models, redirect_uris, etc.)
-    # must be forwarded to the next enqueue. ProvisioningExecuteJob#perform
-    # rebuilds the Orchestrator from job args, so dropping them here would
-    # mean the retry attempt sees an empty params hash and turns an auth or
-    # LiteLLM update into a no-op.
+    # must be forwarded to the next enqueue. Ephemeral secret keys are
+    # intentionally stripped — the originating step re-mints them on resume,
+    # so storing them in SolidQueue arguments would violate Secret Zero-Store.
     def schedule_retry(wait_seconds)
       @provisioning_job.update!(status: :retrying)
       ProvisioningExecuteJob
         .set(wait: wait_seconds.seconds)
         .perform_later(
           @provisioning_job.id,
-          **@params.merge(current_user_sub: @current_user_sub)
+          **@params.except(*EPHEMERAL_KEYS).merge(current_user_sub: @current_user_sub)
         )
     end
   end

@@ -1,0 +1,21 @@
+<% content_for :title, "New Organization | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">Console &gt; Organizations &gt; 새 Organization</div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">새 Organization 생성</h1>
+      <p class="page-description">Organization 이름과 초기 관리자를 지정합니다.</p>
+    </div>
+  </header>
+
+  <%= render "form",
+             organization: @organization,
+             form_url: organizations_path,
+             form_method: :post,
+             cancel_path: organizations_path,
+             submit_label: "생성",
+             errors: @errors,
+             include_initial_admin: true %>
+</section>

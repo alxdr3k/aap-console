@@ -1,15 +1,20 @@
 class AuthConfigsController < ApplicationController
   before_action :set_organization
   before_action :set_project
+  before_action :set_auth_config
   before_action -> { authorize_project!(@project) }, only: [ :show ]
-  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :update ]
+  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :update, :regenerate_secret ]
 
   def show
-    config = @project.project_auth_config
-    if config
-      render json: config
-    else
-      render json: { error: "Not found" }, status: :not_found
+    return render_auth_config_not_found unless @auth_config
+    return render json: @auth_config if json_request?
+
+    prepare_show
+    disable_secret_response_cache! if @secret_entries.present? || @project_api_key_reveal.present?
+
+    respond_to do |format|
+      format.html
+      format.json { render json: @auth_config }
     end
   end
 
@@ -18,24 +23,74 @@ class AuthConfigsController < ApplicationController
   # provisioning job. Keycloak identifiers (client_id, client_uuid) are
   # server-owned and must not be writable by clients.
   def update
-    config = @project.project_auth_config
-    return render json: { error: "Not found" }, status: :not_found unless config
+    return render_auth_config_not_found unless @auth_config
+
+    auth_params = permitted_auth_params
+
+    if @auth_config.auth_type == "oauth"
+      uri_errors = pkce_redirect_uri_errors(auth_params[:redirect_uris] || [])
+      if uri_errors.any?
+        return render json: { errors: uri_errors }, status: :unprocessable_entity if json_request?
+
+        @errors = uri_errors
+        prepare_show(form_values: auth_params)
+        return render :show, status: :unprocessable_entity
+      end
+    end
 
     result = Projects::UpdateService.new(
       project: @project,
-      params: permitted_auth_params,
+      params: auth_params,
       current_user_sub: Current.user_sub
     ).call
 
     if result.success?
       provisioning_job = result.data[:provisioning_job]
-      if provisioning_job
-        render json: { provisioning_job_id: provisioning_job.id }, status: :accepted
+
+      if json_request?
+        if provisioning_job
+          render json: { provisioning_job_id: provisioning_job.id }, status: :accepted
+        else
+          render json: { message: "Auth config updated" }, status: :ok
+        end
+      elsif provisioning_job
+        flash[:success] = "인증 설정 변경 프로비저닝을 시작했습니다."
+        redirect_to provisioning_job_path(provisioning_job), status: :see_other
       else
-        render json: { message: "Auth config updated" }, status: :ok
+        flash[:success] = "인증 설정이 저장되었습니다."
+        redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       end
     else
-      render json: { error: result.error }, status: :unprocessable_entity
+      return render json: { error: result.error }, status: :unprocessable_entity if json_request?
+
+      @errors = [ result.error ]
+      prepare_show(form_values: permitted_auth_params)
+      render :show, status: :unprocessable_entity
+    end
+  end
+
+  def regenerate_secret
+    return render_auth_config_not_found unless @auth_config
+
+    result = AuthConfigs::RegenerateClientSecretService.new(
+      project: @project,
+      current_user_sub: Current.user_sub
+    ).call
+
+    if result.success?
+      if json_request?
+        disable_secret_response_cache!
+        render json: AuthConfigs::SecretRevealCache.read(@project), status: :created
+      else
+        flash[:warning] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
+        redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
+      end
+    else
+      return render json: { errors: [ result.error ] }, status: :unprocessable_entity if json_request?
+
+      @errors = [ result.error ]
+      prepare_show
+      render :show, status: :unprocessable_entity
     end
   end
 
@@ -44,13 +99,27 @@ class AuthConfigsController < ApplicationController
   def set_organization
     @organization = Organization.find_by!(slug: params[:organization_slug])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    return render json: { error: "Not found" }, status: :not_found if json_request?
+
+    respond_to do |format|
+      format.html { render "projects/not_found", status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
   end
 
   def set_project
     @project = @organization.projects.find_by!(slug: params[:project_slug])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    return render json: { error: "Not found" }, status: :not_found if json_request?
+
+    respond_to do |format|
+      format.html { render "projects/not_found", status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
+  end
+
+  def set_auth_config
+    @auth_config = @project&.project_auth_config
   end
 
   # Only user-facing auth settings are accepted. Keycloak identifiers
@@ -60,6 +129,109 @@ class AuthConfigsController < ApplicationController
     permitted = params
       .require(:auth_config)
       .permit(redirect_uris: [], post_logout_redirect_uris: [])
-    permitted.to_h.symbolize_keys
+
+    normalized = {}
+    if permitted.key?(:redirect_uris)
+      normalized[:redirect_uris] = normalize_uri_values(permitted[:redirect_uris])
+    end
+    if permitted.key?(:post_logout_redirect_uris)
+      normalized[:post_logout_redirect_uris] = normalize_uri_values(permitted[:post_logout_redirect_uris])
+    end
+    normalized
+  end
+
+  def prepare_show(form_values: nil)
+    base_values = {
+      redirect_uris: @auth_config&.redirect_uris,
+      post_logout_redirect_uris: @auth_config&.post_logout_redirect_uris
+    }
+    values = base_values.merge(form_values || {})
+    if @auth_config&.auth_type == "saml" && @auth_config.keycloak_client_uuid.present?
+      @saml_idp_metadata_url = saml_idp_metadata_url
+    end
+
+    @errors ||= []
+    @can_write_project = current_authorization.can?(:write_project, @project)
+    @active_provisioning_job = @project.provisioning_jobs
+                                      .where(status: ProvisioningJob::ACTIVE_STATUSES)
+                                      .order(created_at: :desc)
+                                      .first
+    @redirect_uris = form_rows(values[:redirect_uris])
+    @post_logout_redirect_uris = form_rows(values[:post_logout_redirect_uris])
+    @secret_payload = @can_write_project ? AuthConfigs::SecretRevealCache.read(@project) : {}
+    @secret_entries = @secret_payload.fetch("secrets", {})
+    @secret_reveal_storage_key = [
+      "auth-config-secret",
+      @project.id,
+      @secret_payload["generated_at"].presence || "current"
+    ].join(":")
+    @project_api_keys = @project.project_api_keys.order(created_at: :desc)
+    @project_api_key_reveal_payload = @can_write_project ? project_api_key_reveal_payload : {}
+    @project_api_key_reveal = @project_api_key_reveal_payload.dig("secrets", "project_api_key") || {}
+    @project_api_key_reveal_storage_key = [
+      "project-api-key",
+      @project.id,
+      @project_api_key_reveal_payload["generated_at"].presence || "current"
+    ].join(":")
+    @last_secret_regenerated_at = @project.audit_logs
+                                          .where(action: "auth_config.secret_regenerated")
+                                          .order(created_at: :desc)
+                                          .pick(:created_at)
+  end
+
+  def form_rows(values)
+    rows = normalize_uri_values(values)
+    rows.presence || [ "" ]
+  end
+
+  def normalize_uri_values(values)
+    Array(values).map(&:to_s).map(&:strip).reject(&:blank?)
+  end
+
+  def pkce_redirect_uri_errors(uris)
+    Array(uris).compact_blank.flat_map do |uri|
+      errors = []
+      begin
+        parsed = URI.parse(uri)
+        errors << "OAuth Redirect URI에 fragment(#)를 포함할 수 없습니다: #{uri}" if parsed.fragment.present?
+        if parsed.host.blank?
+          errors << "OAuth Redirect URI에 유효한 호스트가 없습니다: #{uri}"
+        else
+          localhost = parsed.scheme == "http" && %w[localhost 127.0.0.1 [::1]].include?(parsed.host)
+          errors << "OAuth Redirect URI는 HTTPS를 사용해야 합니다 (localhost 제외): #{uri}" unless parsed.scheme == "https" || localhost
+        end
+      rescue URI::InvalidURIError
+        errors << "유효하지 않은 URI 형식입니다: #{uri}"
+      end
+      errors
+    end
+  end
+
+  def saml_idp_metadata_url
+    base = ENV.fetch("KEYCLOAK_URL", "")
+    realm = ENV.fetch("KEYCLOAK_REALM", "aap")
+    "#{base}/realms/#{realm}/protocol/saml/descriptor"
+  end
+
+  def render_auth_config_not_found
+    return render json: { error: "Not found" }, status: :not_found if json_request?
+
+    respond_to do |format|
+      format.html { render "projects/not_found", status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
+  end
+
+  def disable_secret_response_cache!
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+  end
+
+  def project_api_key_reveal_payload
+    cache_payload = ProjectApiKeys::RevealCache.read(@project)
+    return cache_payload if cache_payload.dig("secrets", "project_api_key").present?
+
+    {}
   end
 end

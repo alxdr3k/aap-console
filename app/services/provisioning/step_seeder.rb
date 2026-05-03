@@ -1,6 +1,6 @@
 module Provisioning
   # Seeds provisioning_steps for a given ProvisioningJob based on its operation.
-  # Matches the step plan documented in docs/HLD.md §5.6.
+  # Matches the step plan documented in docs/02_HLD.md §5.6.
   #
   # Called from Projects::{Create,Update,Destroy}Service inside the same
   # transaction as the job creation so the job and its steps are always

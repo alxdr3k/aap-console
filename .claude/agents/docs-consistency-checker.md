@@ -14,9 +14,9 @@ Find cross-document inconsistencies before they reach review. Flag them concisel
 
 # Sources of truth
 
-- `docs/PRD.md` — functional requirements (FR-N), glossary (§2), API endpoints per integration.
-- `docs/HLD.md` — schemas, component boundaries, FR traceability matrix (§12).
-- `docs/adr-*.md` — accepted design decisions. Each has a single scope.
+- `docs/01_PRD.md` — functional requirements (FR-N), glossary (§2), API endpoints per integration.
+- `docs/02_HLD.md` — schemas, component boundaries, FR traceability matrix (§12).
+- `docs/adr/adr-*.md` — accepted design decisions. Each has a single scope.
 - `docs/ui-spec.md` — screens, state-to-UI mapping.
 - `docs/business-objectives.md` — BO-N drives PRD FRs.
 
@@ -53,7 +53,7 @@ Produce a report with exactly these sections. Use Korean prose (the docs are Kor
 ## 발견한 이슈 (총 N개)
 
 ### 1. [카테고리] 한 줄 요약
-- 파일: docs/PRD.md:123
+- 파일: docs/01_PRD.md:123
 - 현재: "..." (짧은 인용)
 - 기대: "..." (한 줄 제안)
 

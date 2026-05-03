@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_25_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_29_000001) do
   create_table "audit_logs", force: :cascade do |t|
     t.string "action", null: false
     t.datetime "created_at", null: false
@@ -57,6 +57,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_25_000001) do
   create_table "organizations", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "description"
+    t.datetime "destroy_finalizer_reserved_until"
     t.string "langfuse_org_id"
     t.string "name", null: false
     t.string "slug", null: false

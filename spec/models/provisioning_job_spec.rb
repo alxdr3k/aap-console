@@ -9,7 +9,7 @@ RSpec.describe ProvisioningJob, type: :model do
   describe "associations" do
     it { is_expected.to belong_to(:project) }
     it { is_expected.to have_many(:provisioning_steps).dependent(:destroy) }
-    it { is_expected.to have_one(:config_version) }
+    it { is_expected.to have_many(:config_versions).dependent(:nullify) }
   end
 
   describe "status enum" do
@@ -32,6 +32,18 @@ RSpec.describe ProvisioningJob, type: :model do
       %w[completed completed_with_warnings failed rolled_back rollback_failed].each do |status|
         job = build(:provisioning_job, status: status)
         expect(job.active?).to be(false), "expected #{status} to not be active"
+      end
+    end
+  end
+
+  describe "#retryable?" do
+    it "returns true only for failed and rollback_failed jobs" do
+      %w[failed rollback_failed].each do |status|
+        expect(build(:provisioning_job, status: status)).to be_retryable
+      end
+
+      %w[pending in_progress completed completed_with_warnings retrying rolling_back rolled_back].each do |status|
+        expect(build(:provisioning_job, status: status)).not_to be_retryable
       end
     end
   end

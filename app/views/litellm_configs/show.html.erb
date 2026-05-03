@@ -1,0 +1,149 @@
+<% content_for :title, "LiteLLM Config | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">
+    Console &gt;
+    <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
+    <%= link_to @project.name, organization_project_path(@organization.slug, @project.slug) %> &gt;
+    LiteLLM Config
+  </div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">LiteLLM Config</h1>
+      <p class="page-description"><%= @project.name %>의 모델, 가드레일, S3 retention 설정을 관리합니다.</p>
+    </div>
+
+    <div class="page-actions">
+      <% unless @can_write_project %>
+        <span class="badge badge--muted">write 권한 필요</span>
+      <% end %>
+      <%= link_to "Project 상세", organization_project_path(@organization.slug, @project.slug), class: "button button--secondary" %>
+    </div>
+  </header>
+
+  <% if @errors.present? %>
+    <ul class="error-list">
+      <% @errors.each do |error| %>
+        <li><%= error %></li>
+      <% end %>
+    </ul>
+  <% end %>
+
+  <% if @active_provisioning_job %>
+    <div class="status-banner status-banner--warning">
+      <strong>진행 중인 프로비저닝 작업이 있습니다.</strong>
+      <span>현재 작업이 완료된 후 LiteLLM 설정 변경을 진행하세요.</span>
+      <div class="status-banner__actions">
+        <%= link_to "진행 상황 보기", provisioning_job_path(@active_provisioning_job), class: "button button--secondary" %>
+      </div>
+    </div>
+  <% end %>
+
+  <section class="summary-grid summary-grid--four">
+    <div class="summary-item">
+      <span class="summary-item__label">Models</span>
+      <strong class="summary-item__value"><%= project_list_value(@selected_models) %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Guardrails</span>
+      <strong class="summary-item__value"><%= project_list_value(@selected_guardrails, fallback: "없음") %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">S3 Path</span>
+      <strong class="summary-item__value summary-item__value--code"><%= @s3_path %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Latest Version</span>
+      <strong class="summary-item__value summary-item__value--time"><%= @latest_config_version&.version_id || "-" %></strong>
+    </div>
+  </section>
+
+  <% if @can_write_project %>
+    <section class="panel">
+      <header class="panel__header">
+        <h2 class="panel__title">LiteLLM Config 편집</h2>
+      </header>
+
+      <%= form_with url: organization_project_litellm_config_path(@organization.slug, @project.slug),
+                    scope: :litellm_config,
+                    method: :patch,
+                    class: "form form--wide",
+                    data: { turbo_confirm: "설정을 변경하면 프로비저닝이 시작됩니다. 진행하시겠습니까?" } do %>
+        <section class="form-section">
+          <h2 class="form-section__title">모델 라우팅</h2>
+          <input type="hidden" name="litellm_config[models][]" value="">
+          <div class="option-grid">
+            <% @available_models.each do |model| %>
+              <label class="checkbox-tile">
+                <%= check_box_tag "litellm_config[models][]", model, @selected_models.include?(model) %>
+                <span><%= model %></span>
+              </label>
+            <% end %>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <h2 class="form-section__title">가드레일</h2>
+          <input type="hidden" name="litellm_config[guardrails][]" value="">
+          <div class="option-grid">
+            <% @available_guardrails.each do |guardrail| %>
+              <label class="checkbox-tile">
+                <%= check_box_tag "litellm_config[guardrails][]", guardrail, @selected_guardrails.include?(guardrail) %>
+                <span><%= guardrail %></span>
+              </label>
+            <% end %>
+          </div>
+        </section>
+
+        <div class="form-grid form-grid--two">
+          <div class="field">
+            <label for="litellm-s3-path">S3 경로 (prefix)</label>
+            <input id="litellm-s3-path" type="text" value="<%= @s3_path %>" readonly>
+          </div>
+          <div class="field">
+            <label for="litellm-retention">S3 Retention (일)</label>
+            <input id="litellm-retention"
+                   type="number"
+                   name="litellm_config[s3_retention_days]"
+                   value="<%= @s3_retention_days %>"
+                   min="1"
+                   max="3650"
+                   step="1">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <%= link_to "취소", organization_project_litellm_config_path(@organization.slug, @project.slug), class: "button button--ghost" %>
+          <button type="submit" class="button" <%= "disabled" if @active_provisioning_job %>>변경 저장 및 적용</button>
+        </div>
+      <% end %>
+    </section>
+  <% else %>
+    <section class="panel">
+      <header class="panel__header">
+        <h2 class="panel__title">LiteLLM Config</h2>
+        <span class="badge badge--muted">read only</span>
+      </header>
+
+      <dl class="details-list">
+        <div>
+          <dt>모델</dt>
+          <dd><%= project_list_value(@selected_models) %></dd>
+        </div>
+        <div>
+          <dt>가드레일</dt>
+          <dd><%= project_list_value(@selected_guardrails, fallback: "없음") %></dd>
+        </div>
+        <div>
+          <dt>S3 경로</dt>
+          <dd><%= @s3_path %></dd>
+        </div>
+        <div>
+          <dt>S3 Retention</dt>
+          <dd><%= @s3_retention_days %></dd>
+        </div>
+      </dl>
+    </section>
+  <% end %>
+</section>

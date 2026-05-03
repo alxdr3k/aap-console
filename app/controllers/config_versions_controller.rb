@@ -1,65 +1,223 @@
 class ConfigVersionsController < ApplicationController
+  ROLLBACK_RESULT_SESSION_KEY = "config_versions.rollback_result".freeze
+
+  before_action :set_project_context, only: [ :index ]
+  before_action -> { authorize_project!(@project) }, only: [ :index ]
   before_action :set_config_version, only: [ :show, :rollback ]
   before_action :authorize_config_version_read!, only: [ :show ]
   before_action :authorize_config_version_write!, only: [ :rollback ]
 
   def index
-    @organization = Organization.find_by!(slug: params[:organization_slug])
-    @project = @organization.projects.find_by!(slug: params[:project_slug])
-    authorize_project!(@project)
-    return if performed?
-    versions = @project.config_versions.order(created_at: :desc)
-    render json: versions
-  rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    @config_versions = ordered_project_versions
+
+    return render json: @config_versions if json_request?
+
+    prepare_index_state
+
+    respond_to do |format|
+      format.html
+      format.json { render json: @config_versions }
+    end
   end
 
   def show
-    render json: @config_version
+    return render json: @config_version if json_request?
+
+    prepare_detail_state(@config_version)
+
+    respond_to do |format|
+      format.html
+      format.json { render json: @config_version }
+    end
   end
 
-  # FR-8 ConfigVersion rollback is not yet implemented in the provisioning
-  # pipeline — the StepSeeder has no plan for rolling back to a target version
-  # and the previous implementation enqueued a stepless update Job that
-  # immediately fails. Returning 501 here keeps the route reachable for
-  # forward compatibility but signals "do not call yet" instead of silently
-  # creating broken jobs. The audit log is still written so we can see who
-  # tried and when.
   def rollback
-    project = @config_version.project
-    organization = project.organization
+    result = ConfigVersions::RollbackService.new(
+      config_version: @config_version,
+      current_user_sub: Current.user_sub
+    ).call
 
-    AuditLog.create!(
-      organization: organization,
-      project: project,
-      user_sub: Current.user_sub,
-      action: "config.rollback.attempted",
-      resource_type: "ConfigVersion",
-      resource_id: @config_version.id.to_s,
-      details: { target_version_id: @config_version.version_id, status: "not_implemented" }
-    )
+    if result.success?
+      return render json: rollback_payload(result.data), status: :ok if json_request?
 
-    render json: {
-      error: "ConfigVersion rollback is not yet implemented",
-      status: "not_implemented"
-    }, status: :not_implemented
+      flash[:success] = "Config #{result.data.rollback_version.version_id} 버전으로 롤백되었습니다."
+      store_rollback_result!(rollback_flash_payload(result.data))
+      redirect_to organization_project_config_versions_path(
+        @config_version.project.organization.slug,
+        @config_version.project.slug,
+        version_id: result.data.rollback_version.id
+      ), status: :see_other
+    else
+      return render json: rollback_error_payload(result.error), status: result.error.fetch(:status) if json_request?
+
+      flash[:error] = result.error.fetch(:message)
+      store_rollback_result!(rollback_error_flash_payload(result.error))
+      redirect_to organization_project_config_versions_path(
+        @config_version.project.organization.slug,
+        @config_version.project.slug,
+        version_id: @config_version.id
+      ), status: :see_other
+    end
   end
 
   private
 
+  def set_project_context
+    @organization = Organization.find_by!(slug: params[:organization_slug])
+    @project = @organization.projects.find_by!(slug: params[:project_slug])
+  rescue ActiveRecord::RecordNotFound
+    return render json: { error: "Not found" }, status: :not_found if json_request?
+
+    respond_to do |format|
+      format.html { render "projects/not_found", status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
+  end
+
   def set_config_version
     @config_version = ConfigVersion.find(params[:id])
   rescue ActiveRecord::RecordNotFound
-    render json: { error: "Not found" }, status: :not_found
+    return render json: { error: "Not found" }, status: :not_found if json_request?
+
+    respond_to do |format|
+      format.html { render "projects/not_found", status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
   end
 
   def authorize_config_version_read!
     return if @config_version.nil?
-    authorize_project!(@config_version.project)
+    return if current_authorization.can?(:read_project, @config_version.project)
+
+    render_config_version_not_found
   end
 
   def authorize_config_version_write!
     return if @config_version.nil?
-    authorize_project!(@config_version.project, minimum_role: :write)
+    return if current_authorization.can?(:write_project, @config_version.project)
+
+    render_config_version_not_found
+  end
+
+  def render_config_version_not_found
+    return render json: { error: "Not found" }, status: :not_found if json_request?
+
+    respond_to do |format|
+      format.html { render "projects/not_found", status: :not_found }
+      format.json { render json: { error: "Not found" }, status: :not_found }
+    end
+  end
+
+  def rollback_payload(data)
+    {
+      status: "completed",
+      target_version_id: @config_version.version_id,
+      config_version: data.rollback_version,
+      diagnostics: data.diagnostics
+    }
+  end
+
+  def rollback_error_payload(error)
+    {
+      status: error.fetch(:response_status),
+      error: error.fetch(:message),
+      target_version_id: @config_version.version_id,
+      diagnostics: error.fetch(:diagnostics)
+    }
+  end
+
+  def ordered_project_versions
+    @ordered_project_versions ||= @project.config_versions.order(created_at: :desc).to_a
+  end
+
+  def prepare_index_state
+    @can_write_project = current_authorization.can?(:write_project, @project)
+    @active_provisioning_job = active_provisioning_job_for(@project)
+    @rollback_result = pop_rollback_result
+
+    selected_version = selected_project_version
+    return unless selected_version
+
+    @selected_config_version = selected_version
+    @selected_comparison_version = comparison_version_for(selected_version, ordered_project_versions)
+    @selected_diff_lines = diff_lines_for(selected_version, @selected_comparison_version)
+  end
+
+  def prepare_detail_state(config_version)
+    @organization = config_version.project.organization
+    @project = config_version.project
+    @can_write_project = current_authorization.can?(:write_project, @project)
+    @active_provisioning_job = active_provisioning_job_for(@project)
+    @comparison_config_version = comparison_version_for(config_version, ordered_versions_for(config_version.project))
+    @diff_lines = diff_lines_for(config_version, @comparison_config_version)
+  end
+
+  def ordered_versions_for(project)
+    project.config_versions.order(created_at: :desc).to_a
+  end
+
+  def selected_project_version
+    return ordered_project_versions.first if params[:version_id].blank?
+
+    ordered_project_versions.find { |version| version.id == params[:version_id].to_i } || ordered_project_versions.first
+  end
+
+  def comparison_version_for(config_version, versions)
+    current_index = versions.index(config_version)
+    current_index ? versions[current_index + 1] : nil
+  end
+
+  def diff_lines_for(config_version, comparison_version)
+    ConfigVersions::DiffBuilder.new(
+      before_snapshot: comparison_version&.snapshot,
+      after_snapshot: config_version.snapshot,
+      before_label: comparison_version&.version_id || "empty",
+      after_label: config_version.version_id
+    ).lines
+  end
+
+  def active_provisioning_job_for(project)
+    project.provisioning_jobs.where(status: ProvisioningJob::ACTIVE_STATUSES).order(created_at: :desc).first
+  end
+
+  def rollback_flash_payload(data)
+    {
+      "status" => "completed",
+      "target_version_id" => @config_version.version_id,
+      "rollback_version_id" => data.rollback_version.version_id,
+      "diagnostics" => data.diagnostics
+    }
+  end
+
+  def rollback_error_flash_payload(error)
+    {
+      "status" => error.fetch(:response_status),
+      "error" => error.fetch(:message),
+      "target_version_id" => @config_version.version_id,
+      "diagnostics" => error.fetch(:diagnostics)
+    }
+  end
+
+  def store_rollback_result!(payload)
+    results = session[ROLLBACK_RESULT_SESSION_KEY]
+    results = {} unless results.is_a?(Hash)
+
+    results[@config_version.project.id.to_s] = payload
+    session[ROLLBACK_RESULT_SESSION_KEY] = results
+  end
+
+  def pop_rollback_result
+    results = session[ROLLBACK_RESULT_SESSION_KEY]
+    return unless results.is_a?(Hash)
+
+    payload = results.delete(@project.id.to_s)
+
+    if results.empty?
+      session.delete(ROLLBACK_RESULT_SESSION_KEY)
+    else
+      session[ROLLBACK_RESULT_SESSION_KEY] = results
+    end
+
+    payload
   end
 end

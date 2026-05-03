@@ -22,6 +22,7 @@ module Provisioning
       step_impl = build_step_impl
 
       if step_impl.already_completed?
+        step_impl.after_skip
         @step.update!(status: :skipped, completed_at: Time.current)
         broadcast_step_update
         return { status: :completed, step: @step, ephemeral_params: {} }
@@ -96,9 +97,22 @@ module Provisioning
       )
     end
 
+    STEP_CLASSES = {
+      "app_registry_deregister" => Steps::AppRegistryDeregister,
+      "app_registry_register"   => Steps::AppRegistryRegister,
+      "config_server_apply"     => Steps::ConfigServerApply,
+      "config_server_delete"    => Steps::ConfigServerDelete,
+      "db_cleanup"              => Steps::DbCleanup,
+      "health_check"            => Steps::HealthCheck,
+      "keycloak_client_create"  => Steps::KeycloakClientCreate,
+      "keycloak_client_delete"  => Steps::KeycloakClientDelete,
+      "keycloak_client_update"  => Steps::KeycloakClientUpdate,
+      "langfuse_project_create" => Steps::LangfuseProjectCreate,
+      "langfuse_project_delete" => Steps::LangfuseProjectDelete
+    }.freeze
+
     def step_class_for(name)
-      class_name = name.split("_").map(&:capitalize).join
-      "Provisioning::Steps::#{class_name}".constantize
+      STEP_CLASSES.fetch(name) { raise ArgumentError, "Unknown provisioning step: #{name.inspect}" }
     end
 
     def broadcast_step_update

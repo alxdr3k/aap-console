@@ -27,12 +27,26 @@ module LangfuseMock
     org_id
   end
 
-  def stub_langfuse_delete_org(org_id:)
+  def stub_langfuse_update_org(org_id:, name:, status: 200)
+    stub_langfuse_login
+    stub_request(:post, "#{TRPC_BASE}/organizations.update")
+      .with do |request|
+        body = JSON.parse(request.body)
+        body.dig("json", "id") == org_id && body.dig("json", "name") == name
+      end
+      .to_return(
+        status: status,
+        body: status == 200 ? { result: { data: { id: org_id, name: name } } }.to_json : { error: "Internal Server Error" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+  end
+
+  def stub_langfuse_delete_org(org_id:, status: 200)
     stub_langfuse_login
     stub_request(:post, "#{TRPC_BASE}/organizations.delete")
       .to_return(
-        status: 200,
-        body: { result: { data: { success: true } } }.to_json,
+        status: status,
+        body: status == 200 ? { result: { data: { success: true } } }.to_json : { error: "Internal Server Error" }.to_json,
         headers: { "Content-Type" => "application/json" }
       )
   end

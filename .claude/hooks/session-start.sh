@@ -18,7 +18,7 @@ AAP Console — session context
 - HEAD: ${head}
 - working tree: ${dirty} changed file(s)
 - worktrees: ${worktrees}
-- stage: documentation-only (no Rails code yet); see docs/harness-methodology.md §7.2 for S1 posture.
+- stage: implemented Rails app; read docs/context/current-state.md then docs/04_IMPLEMENTATION_PLAN.md.
 - reminder: commits in English, docs in Korean, external services must be mocked.
 EOF
 )

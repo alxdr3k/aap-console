@@ -1,0 +1,138 @@
+<% content_for :title, "Config Versions | AAP Console" %>
+
+<section class="page">
+  <div class="breadcrumbs">
+    Console &gt;
+    <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
+    <%= link_to @project.name, organization_project_path(@organization.slug, @project.slug) %> &gt;
+    변경 이력
+  </div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">변경 이력</h1>
+      <p class="page-description"><%= @project.name %>의 LiteLLM config snapshot, diff, rollback 결과를 확인합니다.</p>
+    </div>
+
+    <div class="page-actions">
+      <% unless @can_write_project %>
+        <span class="badge badge--muted">write 권한 필요</span>
+      <% end %>
+      <%= link_to "Project 상세", organization_project_path(@organization.slug, @project.slug), class: "button button--secondary" %>
+    </div>
+  </header>
+
+  <% if @active_provisioning_job %>
+    <div class="status-banner status-banner--warning">
+      <strong>진행 중인 프로비저닝 작업이 있습니다.</strong>
+      <span>현재 작업이 완료된 후 rollback을 진행하세요.</span>
+      <div class="status-banner__actions">
+        <%= link_to "진행 상황 보기", provisioning_job_path(@active_provisioning_job), class: "button button--secondary" %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @rollback_result.present? %>
+    <section class="panel">
+      <header class="panel__header">
+        <h2 class="panel__title">최근 롤백 결과</h2>
+        <span class="<%= rollback_result_badge_class(@rollback_result["status"]) %>"><%= @rollback_result["status"] %></span>
+      </header>
+
+      <dl class="details-list">
+        <div>
+          <dt>Target Version</dt>
+          <dd><%= @rollback_result["target_version_id"] %></dd>
+        </div>
+        <% if @rollback_result["rollback_version_id"].present? %>
+          <div>
+            <dt>Recorded Version</dt>
+            <dd><%= @rollback_result["rollback_version_id"] %></dd>
+          </div>
+        <% end %>
+        <% if @rollback_result["error"].present? %>
+          <div>
+            <dt>Error</dt>
+            <dd><%= @rollback_result["error"] %></dd>
+          </div>
+        <% end %>
+        <% @rollback_result.fetch("diagnostics", {}).each do |component, status| %>
+          <div>
+            <dt><%= component.to_s.humanize %></dt>
+            <dd><span class="<%= config_diagnostic_badge_class(status) %>"><%= config_diagnostic_label(status) %></span></dd>
+          </div>
+        <% end %>
+      </dl>
+    </section>
+  <% end %>
+
+  <section class="summary-grid summary-grid--four">
+    <div class="summary-item">
+      <span class="summary-item__label">Latest Version</span>
+      <strong class="summary-item__value summary-item__value--code"><%= @config_versions.first&.version_id || "-" %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Recorded Changes</span>
+      <strong class="summary-item__value"><%= @config_versions.size %></strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">Rollback Mode</span>
+      <strong class="summary-item__value summary-item__value--time">동기 실행</strong>
+    </div>
+    <div class="summary-item">
+      <span class="summary-item__label">External Restore</span>
+      <strong class="summary-item__value summary-item__value--time">diagnostics-only</strong>
+    </div>
+  </section>
+
+  <section class="panel">
+    <header class="panel__header">
+      <h2 class="panel__title">버전 목록</h2>
+    </header>
+
+    <% if @config_versions.any? %>
+      <div class="table-list">
+        <div class="table-list__row table-list__row--head table-list__row--config-version">
+          <span>Version</span>
+          <span>일시</span>
+          <span>변경자</span>
+          <span>요약</span>
+          <span></span>
+        </div>
+
+        <% @config_versions.each do |config_version| %>
+          <div class="table-list__row table-list__row--config-version <%= "table-list__row--selected" if @selected_config_version == config_version %>">
+            <span class="code-token"><%= config_version.version_id %></span>
+            <span><%= short_datetime(config_version.created_at) %></span>
+            <span class="code-token"><%= config_version.changed_by_sub %></span>
+            <span><%= config_version.change_summary.presence || config_version.change_type %></span>
+            <span class="table-list__actions">
+              <span class="<%= config_version_change_badge_class(config_version) %>"><%= config_version.change_type %></span>
+              <%= link_to "diff",
+                          config_version_path(config_version),
+                          class: "button button--secondary",
+                          data: { turbo_frame: "config-version-detail" } %>
+            </span>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="muted-text">Config 변경 이력이 없습니다.</p>
+    <% end %>
+  </section>
+
+  <%= turbo_frame_tag "config-version-detail" do %>
+    <% if @selected_config_version %>
+      <%= render "detail_panel",
+                 config_version: @selected_config_version,
+                 comparison_config_version: @selected_comparison_version,
+                 diff_lines: @selected_diff_lines,
+                 can_write_project: @can_write_project,
+                 active_provisioning_job: @active_provisioning_job %>
+    <% else %>
+      <section class="panel">
+        <p class="muted-text">표시할 config snapshot이 없습니다.</p>
+      </section>
+    <% end %>
+  <% end %>
+</section>

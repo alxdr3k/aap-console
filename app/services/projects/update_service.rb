@@ -54,6 +54,8 @@ module Projects
       Result.success({ project: @project, provisioning_job: provisioning_job })
     rescue ActiveRecord::RecordInvalid => e
       Result.failure(e.message)
+    rescue ActiveRecord::RecordNotUnique
+      Result.failure("Another provisioning job is in progress")
     end
 
     private
