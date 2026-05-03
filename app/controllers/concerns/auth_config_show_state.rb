@@ -10,6 +10,10 @@ module AuthConfigShowState
     }
     values = base_values.merge(form_values || {})
 
+    if @auth_config&.auth_type == "saml" && @auth_config.keycloak_client_uuid.present?
+      @saml_idp_metadata_url = saml_idp_metadata_url
+    end
+
     @errors ||= []
     @can_write_project = current_authorization.can?(:write_project, @project)
     @active_provisioning_job = @project.provisioning_jobs
@@ -67,5 +71,11 @@ module AuthConfigShowState
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+  end
+
+  def saml_idp_metadata_url
+    base = ENV.fetch("KEYCLOAK_URL", "")
+    realm = ENV.fetch("KEYCLOAK_REALM", "aap")
+    "#{base}/realms/#{realm}/protocol/saml/descriptor"
   end
 end
