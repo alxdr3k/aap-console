@@ -242,6 +242,10 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
       expect(audit).to be_present
       expect(audit.details["expected_client_id"]).to eq(auth_config.keycloak_client_id)
+      # Rollback must NOT be triggered — it would call delete_client on a UUID
+      # that belongs to a different (non-aap-prefixed or foreign) Keycloak client,
+      # silently destroying infrastructure we do not own.
+      expect(WebMock).not_to have_requested(:delete, %r{/clients/#{uuid}})
     end
 
     it "does not fail provisioning when secret caching cannot fetch the client secret" do

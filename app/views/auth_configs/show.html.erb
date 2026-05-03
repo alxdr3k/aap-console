@@ -409,7 +409,8 @@
       <%= form_with url: organization_project_project_api_keys_path(@organization.slug, @project.slug),
                     scope: :project_api_key,
                     method: :post,
-                    class: "form form--inline-panel" do |form| %>
+                    class: "form form--inline-panel",
+                    data: { turbo: false } do |form| %>
         <div class="form-grid form-grid--two">
           <div class="field">
             <%= form.label :name, "새 PAK 이름" %>
