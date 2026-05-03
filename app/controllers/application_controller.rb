@@ -3,6 +3,7 @@ class ApplicationController < ActionController::Base
 
   before_action :authenticate_user!
   before_action :set_current_user
+  before_action :purge_legacy_pak_session_fallback
 
   helper_method :current_authorization
 
@@ -78,6 +79,10 @@ class ApplicationController < ActionController::Base
 
   def prefer_json_for_default_requests
     request.format = :json if default_json_request?
+  end
+
+  def purge_legacy_pak_session_fallback
+    session.delete(:project_api_key_reveal_fallbacks) if session.key?(:project_api_key_reveal_fallbacks)
   end
 
   protected
