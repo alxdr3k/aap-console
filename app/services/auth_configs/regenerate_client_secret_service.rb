@@ -14,14 +14,6 @@ module AuthConfigs
 
       secret = KeycloakClient.new.regenerate_client_secret(uuid: auth_config.keycloak_client_uuid)
 
-      begin
-        SecretRevealCache.delete(@project)
-        SecretRevealCache.write(@project, key: "client_secret", label: "Client Secret", value: secret)
-      rescue StandardError => e
-        Rails.logger.error("Auth config secret cache write failed for project #{@project.id}: #{e.class}: #{e.message}")
-        return Result.failure("Client Secret은 재발급되었지만 표시 캐시에 저장하지 못했습니다. 다시 재발급하세요.")
-      end
-
       AuditLog.create!(
         organization: @project.organization,
         project: @project,
@@ -31,6 +23,14 @@ module AuthConfigs
         resource_id: auth_config.id.to_s,
         details: { auth_type: auth_config.auth_type, keycloak_client_uuid: auth_config.keycloak_client_uuid }
       )
+
+      begin
+        SecretRevealCache.delete(@project)
+        SecretRevealCache.write(@project, key: "client_secret", label: "Client Secret", value: secret)
+      rescue StandardError => e
+        Rails.logger.error("Auth config secret cache write failed for project #{@project.id}: #{e.class}: #{e.message}")
+        return Result.failure("Client Secret은 재발급되었지만 표시 캐시에 저장하지 못했습니다. 다시 재발급하세요.")
+      end
 
       Result.success(secret_revealed: true)
     rescue BaseClient::ApiError => e

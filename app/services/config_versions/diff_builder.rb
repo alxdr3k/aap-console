@@ -36,7 +36,13 @@ module ConfigVersions
       snapshot.deep_stringify_keys
     end
 
+    MAX_DIFF_LINES = 5_000
+
     def diff_lines(before_lines, after_lines)
+      if before_lines.length > MAX_DIFF_LINES || after_lines.length > MAX_DIFF_LINES
+        return [ Line.new(kind: :meta, text: "(diff too large to render — limit #{MAX_DIFF_LINES} lines per side)") ]
+      end
+
       lcs = Array.new(before_lines.length + 1) { Array.new(after_lines.length + 1, 0) }
 
       (before_lines.length - 1).downto(0) do |before_index|
