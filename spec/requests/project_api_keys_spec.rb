@@ -75,15 +75,11 @@ RSpec.describe "ProjectApiKeys", type: :request do
       expect(audit.details.to_s).not_to include(token)
     end
 
-    it "redirects browser issue requests back to auth config with a reveal panel" do
+    it "renders browser issue requests in-band with the reveal panel" do
       grant_project_role("write")
       create(:project_auth_config, project: project, auth_type: "oidc")
 
       post path, params: { project_api_key: { name: "browser-ci" } }, headers: html_headers
-
-      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
-
-      follow_redirect!
 
       expect(response).to have_http_status(:ok)
       expect(response.headers["Cache-Control"]).to eq("no-store")
@@ -240,9 +236,8 @@ RSpec.describe "ProjectApiKeys", type: :request do
 
       issued = project.project_api_keys.find_by!(name: "overwrite-malformed")
       expect(issued.revoked_at).to be_nil
-      # Reconcile-write succeeded on the retry, so the cache now holds the
-      # fresh PAK and the controller redirects to auth_config show.
-      expect(response).to redirect_to(organization_project_auth_config_path(org.slug, project.slug))
+      # Reconcile-write succeeded on the retry; the controller renders in-band.
+      expect(response).to have_http_status(:ok)
       cached_after = ProjectApiKeys::RevealCache.read(project)
       expect(cached_after.dig("secrets", "project_api_key", "project_api_key_id")).to eq(issued.id)
       expect(cached_after.dig("secrets", "stale_blob")).to be_nil
@@ -341,7 +336,7 @@ RSpec.describe "ProjectApiKeys", type: :request do
       stale_key = create(:project_api_key, project: project, name: "stale-ci")
 
       post path, params: { project_api_key: { name: "fresh-ci" } }, headers: html_headers
-      follow_redirect!
+      expect(response).to have_http_status(:ok)
       expect(response.body).to include("fresh-ci")
       expect(response.body).to include("일회성 PAK")
 

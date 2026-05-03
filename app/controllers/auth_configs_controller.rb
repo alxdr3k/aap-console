@@ -86,17 +86,16 @@ class AuthConfigsController < ApplicationController
       if json_request?
         disable_secret_response_cache!
         render json: payload, status: :created
-      elsif !cache_failed
-        flash[:warning] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
-        redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       elsif plain_html_request?
-        # Cache could not persist the rotated secret. Render the page in-band
-        # with the fresh secret so the operator can copy it once; redirecting
-        # would discard the value because the show action reads from the cache.
-        # Restrict to pure HTML so a Turbo Stream or other negotiated format
-        # cannot receive a secret-bearing response body that intermediaries
-        # may handle outside the no-store page lifecycle.
-        flash.now[:warning] = "Client Secret이 재발급되었지만 표시 캐시 저장에 실패했습니다. 이 화면을 떠나기 전에 즉시 복사하세요."
+        # Always render in-band with the freshly rotated secret rather than
+        # redirecting through the shared per-project reveal cache. A redirect
+        # would let a concurrent rotation overwrite the cache between our
+        # write and the subsequent GET, causing the wrong secret to be shown.
+        if cache_failed
+          flash.now[:warning] = "Client Secret이 재발급되었지만 표시 캐시 저장에 실패했습니다. 이 화면을 떠나기 전에 즉시 복사하세요."
+        else
+          flash.now[:success] = "Client Secret이 재발급되었습니다. 기존 Secret은 즉시 무효화됩니다."
+        end
         prepare_auth_config_show!(reveal_payload: payload)
         disable_secret_response_cache!
         render :show, formats: [ :html ]

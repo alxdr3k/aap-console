@@ -48,10 +48,14 @@ module AuthConfigs
         }
       )
 
+      # Always build the response from the freshly rotated secret rather than
+      # reading back from the shared per-project cache. A concurrent rotation
+      # can overwrite the cache between our write and our read, causing this
+      # response to carry a different rotation's secret.
       Result.success(
         secret_revealed: true,
         cache_failed: cache_failed,
-        reveal_payload: cache_failed ? in_memory_reveal_payload(secret) : SecretRevealCache.read(@project)
+        reveal_payload: in_memory_reveal_payload(secret, cache_failed: cache_failed)
       )
     rescue BaseClient::ApiError => e
       Result.failure("Client Secret 재발급에 실패했습니다: #{e.message}")
@@ -63,7 +67,7 @@ module AuthConfigs
       @project.provisioning_jobs.where(status: ProvisioningJob::ACTIVE_STATUSES).exists?
     end
 
-    def in_memory_reveal_payload(secret)
+    def in_memory_reveal_payload(secret, cache_failed: false)
       now = Time.current.iso8601(6)
       {
         "organization_id" => @project.organization_id,
@@ -72,9 +76,7 @@ module AuthConfigs
           "client_secret" => { "label" => "Client Secret", "value" => secret }
         },
         "generated_at" => now,
-        # Signal to JSON callers that the persistent reveal cache could not
-        # store this payload; the secret only exists in this single response.
-        "cache_failed" => true,
+        "cache_failed" => cache_failed,
         "expires_at" => now
       }
     end
