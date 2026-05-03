@@ -1,3 +1,4 @@
+@AGENTS.policy.md
 # AAP Console — Project Charter for Claude Code
 
 > This file is Claude Code's persistent instructions for this repository. Keep it short. For Codex/agent read order, see `AGENTS.md`.
