@@ -152,7 +152,9 @@ class KeycloakClient < BaseClient
 
   def assert_aap_client!(uuid)
     client = get_client_by_uuid(uuid)
-    raise ArgumentError, "client #{uuid} is not an aap- client" unless client["clientId"].to_s.start_with?("aap-")
+    unless client["clientId"].to_s.start_with?("aap-")
+      raise ApiError.new("Refusing to mutate non-aap client #{uuid}")
+    end
   end
 
   def get_client_by_uuid(uuid)
