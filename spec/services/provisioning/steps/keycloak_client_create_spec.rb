@@ -236,6 +236,12 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       # any stale entry should be cleared instead.
       expect(Provisioning::SecretCache.read(job)).to eq({})
       expect(WebMock).not_to have_requested(:get, %r{/clients/#{uuid}/client-secret})
+      # Divergence is treated as completed (not retried) to avoid unconditionally
+      # POSTing a duplicate client or hard-failing on 409. An audit event is
+      # created so operators can investigate the mismatch manually.
+      audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
+      expect(audit).to be_present
+      expect(audit.details["expected_client_id"]).to eq(auth_config.keycloak_client_id)
     end
 
     it "does not fail provisioning when secret caching cannot fetch the client secret" do
