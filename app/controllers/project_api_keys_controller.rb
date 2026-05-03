@@ -36,6 +36,7 @@ class ProjectApiKeysController < ApplicationController
 
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       else
+        disable_secret_response_cache!
         render json: serialize_key(key).merge(token: token), status: :created
       end
     else
@@ -107,5 +108,11 @@ class ProjectApiKeysController < ApplicationController
 
   def browser_request?
     (request.format.html? || request.format.turbo_stream?) && !default_json_request?
+  end
+
+  def disable_secret_response_cache!
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
   end
 end
