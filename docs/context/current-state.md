@@ -59,9 +59,10 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 ## Planned
 
 - `P0-M5`: core server-rendered UI, provisioning detail, and secret reveal.
-- `P1-M1`: SAML/OAuth/PAK product UI.
+- `P1-M1`: SAML/OAuth/PAK product UI. `AUTH-6A.1` / `AUTH-6A.2` is **ready**.
 - `P1-M2`: production deploy/rollback/Litestream restore evidence and audit archive.
-- `P2-M1`: Playground.
+- `P1-M3`: auth_type seamless migration (AUTH-6B dual-client flow). Planned after AUTH-6A.
+- `P2-M1`: Playground. Deferred until after OPS stabilization (P1-M2).
 - `P2-M2`: super-admin operations dashboard.
 
 ## Explicit Non-goals
@@ -73,16 +74,16 @@ Importmap-backed Turbo/Stimulus baseline과 application shell이 있고, product
 
 ## Current Priorities
 
-1. `AUTH-6A.1` / `AUTH-6A.2`의 metadata/form contract를 더 구체화해 다음 ready leaf를 만든다.
-2. `OPS-7A.*`와 `PLAY-8A.*`의 ready 조건을 계속 추적한다.
-3. `AC-017` 범위에서 남은 SAML/OAuth auth UI 정의와 검증 전략을 정리한다.
+1. `AUTH-6A.1` / `AUTH-6A.2` 구현 — contract 확정 완료, ready 상태 (DEC-005).
+2. `OPS-7A.*` (P1-M2) ready 조건 추적.
+3. `AUTH-6B.1`~`AUTH-6B.5` 설계 상세화 — AUTH-6A 완료 후 착수.
 
 ## Current Risks / Unknowns
 
 - `Q-003`: super-admin dashboard scope.
 - Deployment command, rollback procedure, and Litestream restore are not accepted until `OPS-7A.1` / `OPS-7A.2`.
-- `AUTH-6A.3` 이후 다음 ready auth leaf가 비어 있다. SAML/OAuth contract tightening 없이는 `AUTH-6A.1` / `AUTH-6A.2`를 바로 구현 큐로 올리기 어렵다.
 - Full Keycloak/Langfuse config rollback is diagnostics-only until `OPS-7A.5`.
+- `AUTH-6B` 마이그레이션 기간 중 active session 처리 정책 미결 (proactive Keycloak logout-all vs 자연 만료). 구현 전 결정 필요.
 
 ## Current Validation
 

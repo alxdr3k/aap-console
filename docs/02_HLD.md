@@ -1,7 +1,7 @@
 # AAP Console — High-Level Design (HLD)
 
-> **Version**: 1.18
-> **Date**: 2026-04-22
+> **Version**: 1.19
+> **Date**: 2026-05-03
 > **Status**: Approved
 > **References**: [PRD](./01_PRD.md) · [UI Spec](./ui-spec.md)
 
@@ -991,7 +991,7 @@ Orchestrator.run(job)
 |----------|------|------|
 | `projects.name`, `projects.description` | **프로비저닝 없음** — 트랜잭션 내 UPDATE + AuditLog | 외부 서비스에 전파되지 않는 순수 메타데이터 |
 | `project_auth_configs.*` (Redirect URI, Protocol Mapper 등) | **Update 프로비저닝 트리거** — `keycloak_client_update` + `config_server_apply` + `health_check` | Keycloak Client 동기화 필요 |
-| `auth_type` 변경 (예: OIDC → SAML) | **변경 금지** (UI `readonly`, Controller 레벨 rejection) | Client 재생성이 필요 — Project를 재생성하는 것이 안전 |
+| `auth_type` 변경 (예: OIDC → SAML) | **`AUTH-6B` dual-client 마이그레이션 플로우를 통해 허용** (`auth_binding_add` → `auth_binding_promote` → `auth_binding_remove` 3단계 순서 필수; 단일 cut-over 금지) | Keycloak client 재생성이 필요; in-place 프로토콜 전환은 안전하지 않음 — `docs/adr/adr-007-auth-type-migration.md` 참조 |
 | LiteLLM Config (모델, 가드레일, S3 Retention) | **Update 프로비저닝 트리거** — `config_server_apply` + `health_check` | Config Server 반영 필요 |
 | `project_permissions` (멤버 권한) | **프로비저닝 없음** — DB만 갱신 | Console DB 내부 인가만 사용 |
 
