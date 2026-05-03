@@ -2,6 +2,7 @@ class ProjectsController < ApplicationController
   AVAILABLE_MODELS = %w[azure-gpt4 claude-sonnet gemini-pro].freeze
   AVAILABLE_GUARDRAILS = %w[content-filter token-limit].freeze
   DEFAULT_S3_RETENTION_DAYS = 90
+  ENABLED_AUTH_TYPES = %w[oidc oauth].freeze
 
   before_action :set_organization
   before_action -> { authorize_org!(@organization) }, only: [ :index ]
@@ -198,7 +199,7 @@ class ProjectsController < ApplicationController
 
   def project_form_errors(attributes)
     errors = []
-    errors << "인증 방식은 OIDC만 선택할 수 있습니다." unless attributes[:auth_type] == "oidc"
+    errors << "허용되지 않은 인증 방식입니다. OIDC 또는 OAuth를 선택하세요." unless ENABLED_AUTH_TYPES.include?(attributes[:auth_type].to_s)
 
     submitted_models = Array(attributes[:models]).compact_blank
     errors << "모델을 하나 이상 선택하세요." if submitted_models.blank?

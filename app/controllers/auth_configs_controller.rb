@@ -25,9 +25,22 @@ class AuthConfigsController < ApplicationController
   def update
     return render_auth_config_not_found unless @auth_config
 
+    auth_params = permitted_auth_params
+
+    if @auth_config.auth_type == "oauth"
+      uri_errors = pkce_redirect_uri_errors(auth_params[:redirect_uris] || [])
+      if uri_errors.any?
+        return render json: { errors: uri_errors }, status: :unprocessable_entity if json_request?
+
+        @errors = uri_errors
+        prepare_show(form_values: auth_params)
+        return render :show, status: :unprocessable_entity
+      end
+    end
+
     result = Projects::UpdateService.new(
       project: @project,
-      params: permitted_auth_params,
+      params: auth_params,
       current_user_sub: Current.user_sub
     ).call
 
@@ -173,6 +186,21 @@ class AuthConfigsController < ApplicationController
 
   def normalize_uri_values(values)
     Array(values).map(&:to_s).map(&:strip).reject(&:blank?)
+  end
+
+  def pkce_redirect_uri_errors(uris)
+    Array(uris).compact_blank.flat_map do |uri|
+      errors = []
+      begin
+        parsed = URI.parse(uri)
+        errors << "OAuth Redirect URI에 fragment(#)를 포함할 수 없습니다: #{uri}" if parsed.fragment.present?
+        localhost = %w[localhost 127.0.0.1].include?(parsed.host)
+        errors << "OAuth Redirect URI는 HTTPS를 사용해야 합니다 (localhost 제외): #{uri}" unless parsed.scheme == "https" || localhost
+      rescue URI::InvalidURIError
+        errors << "유효하지 않은 URI 형식입니다: #{uri}"
+      end
+      errors
+    end
   end
 
   def saml_idp_metadata_url

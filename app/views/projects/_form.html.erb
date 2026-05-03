@@ -30,11 +30,19 @@
         <%= form.radio_button :auth_type, "oidc", checked: @selected_auth_type == "oidc" %>
         <span>
           <strong>OIDC</strong>
-          <small>현재 활성화</small>
+          <small>OpenID Connect</small>
         </span>
       </label>
 
-      <% %w[saml oauth pak].each do |auth_type| %>
+      <label class="radio-card">
+        <%= form.radio_button :auth_type, "oauth", checked: @selected_auth_type == "oauth" %>
+        <span>
+          <strong>OAuth</strong>
+          <small>PKCE S256 (Public Client)</small>
+        </span>
+      </label>
+
+      <% %w[saml pak].each do |auth_type| %>
         <label class="radio-card radio-card--disabled">
           <%= radio_button_tag "project[auth_type_disabled_#{auth_type}]", auth_type, false, disabled: true %>
           <span>

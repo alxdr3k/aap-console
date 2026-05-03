@@ -93,15 +93,22 @@ RSpec.describe "AuthConfigs", type: :request do
       end
     end
 
-    it "shows disabled panel for oauth auth_type (AUTH-6A.2 pending)" do
-      project.project_auth_config.update!(auth_type: "oauth")
+    context "when auth_type is oauth (reader)" do
+      before { project.project_auth_config.update!(auth_type: "oauth") }
 
-      get "/organizations/#{org.slug}/projects/#{project.slug}/auth_config", headers: html_headers
+      it "renders OAuth panel with public client info and read-only redirect URIs" do
+        project.project_auth_config.update!(redirect_uris: [ "https://app.example.com/callback" ])
 
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include("OAUTH 설정")
-      expect(response.body).to include("준비 중")
-      expect(response.body).not_to include("AUTH-6A 예정")
+        get "/organizations/#{org.slug}/projects/#{project.slug}/auth_config", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("OAuth / PKCE 설정")
+        expect(response.body).to include("Public Client")
+        expect(response.body).to include("S256")
+        expect(response.body).to include("https://app.example.com/callback")
+        expect(response.body).not_to include("준비 중")
+        expect(response.body).not_to include("Client Secret 재발급")
+      end
     end
   end
 
@@ -164,6 +171,49 @@ RSpec.describe "AuthConfigs", type: :request do
 
       job = project.provisioning_jobs.order(:id).last
       expect(job.input_snapshot["redirect_uris"]).to eq([])
+    end
+
+    context "OAuth PKCE redirect URI validation" do
+      before do
+        project.project_auth_config.update!(
+          auth_type: "oauth",
+          keycloak_client_id: "aap-#{org.slug}-#{project.slug}-oauth"
+        )
+      end
+
+      it "accepts HTTPS redirect URIs for OAuth" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+                params: { auth_config: { redirect_uris: [ "https://app.example.com/callback" ] } },
+                headers: wildcard_headers
+        }.to change(ProvisioningJob, :count).by(1)
+        expect(response).to have_http_status(:accepted)
+      end
+
+      it "accepts http://localhost redirect URIs for OAuth" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+                params: { auth_config: { redirect_uris: [ "http://localhost:3000/callback" ] } },
+                headers: wildcard_headers
+        }.to change(ProvisioningJob, :count).by(1)
+        expect(response).to have_http_status(:accepted)
+      end
+
+      it "rejects http (non-localhost) redirect URIs for OAuth" do
+        patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+              params: { auth_config: { redirect_uris: [ "http://app.example.com/callback" ] } },
+              headers: wildcard_headers
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(JSON.parse(response.body)["errors"]).to include(match(/HTTPS를 사용해야 합니다/))
+      end
+
+      it "rejects redirect URIs with fragment for OAuth" do
+        patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+              params: { auth_config: { redirect_uris: [ "https://app.example.com/callback#section" ] } },
+              headers: wildcard_headers
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(JSON.parse(response.body)["errors"]).to include(match(/fragment/))
+      end
     end
 
     it "returns 403 for read-only member" do
