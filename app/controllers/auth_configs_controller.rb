@@ -194,8 +194,12 @@ class AuthConfigsController < ApplicationController
       begin
         parsed = URI.parse(uri)
         errors << "OAuth Redirect URI에 fragment(#)를 포함할 수 없습니다: #{uri}" if parsed.fragment.present?
-        localhost = parsed.scheme == "http" && %w[localhost 127.0.0.1].include?(parsed.host)
-        errors << "OAuth Redirect URI는 HTTPS를 사용해야 합니다 (localhost 제외): #{uri}" unless parsed.scheme == "https" || localhost
+        if parsed.host.blank?
+          errors << "OAuth Redirect URI에 유효한 호스트가 없습니다: #{uri}"
+        else
+          localhost = parsed.scheme == "http" && %w[localhost 127.0.0.1].include?(parsed.host)
+          errors << "OAuth Redirect URI는 HTTPS를 사용해야 합니다 (localhost 제외): #{uri}" unless parsed.scheme == "https" || localhost
+        end
       rescue URI::InvalidURIError
         errors << "유효하지 않은 URI 형식입니다: #{uri}"
       end

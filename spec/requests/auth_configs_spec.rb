@@ -207,6 +207,14 @@ RSpec.describe "AuthConfigs", type: :request do
         expect(JSON.parse(response.body)["errors"]).to include(match(/HTTPS를 사용해야 합니다/))
       end
 
+      it "rejects URIs with no host for OAuth" do
+        patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
+              params: { auth_config: { redirect_uris: [ "https://" ] } },
+              headers: wildcard_headers
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(JSON.parse(response.body)["errors"]).to include(match(/유효한 호스트/))
+      end
+
       it "rejects non-http/https localhost schemes for OAuth" do
         patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
               params: { auth_config: { redirect_uris: [ "custom://localhost/callback" ] } },
