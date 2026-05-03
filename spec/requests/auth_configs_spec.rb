@@ -73,11 +73,10 @@ RSpec.describe "AuthConfigs", type: :request do
       end
     end
 
-    context "when auth_type is saml and client is not yet provisioned" do
+    context "when auth_type is saml and keycloak_client_uuid is absent (unprovisioned)" do
       before do
         project.project_auth_config.update!(
           auth_type: "saml",
-          keycloak_client_id: nil,
           keycloak_client_uuid: nil
         )
       end

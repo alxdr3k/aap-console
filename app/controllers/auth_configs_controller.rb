@@ -133,7 +133,7 @@ class AuthConfigsController < ApplicationController
       post_logout_redirect_uris: @auth_config&.post_logout_redirect_uris
     }
     values = base_values.merge(form_values || {})
-    if @auth_config&.auth_type == "saml" && @auth_config.keycloak_client_id.present?
+    if @auth_config&.auth_type == "saml" && @auth_config.keycloak_client_uuid.present?
       @saml_idp_metadata_url = saml_idp_metadata_url
     end
 
