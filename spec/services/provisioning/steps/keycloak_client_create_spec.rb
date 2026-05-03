@@ -63,6 +63,19 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
         expect(build_step(result_snapshot: snap).already_completed?).to be(true)
       end
 
+      it "returns false when the clientId fallback returns a different clientId (no UUID repair)" do
+        allow(Rails.logger).to receive(:warn)
+        stub_keycloak_get_client(uuid: "uuid-old", status: 404)
+        stub_keycloak_get_clients(
+          client_id: auth_config.keycloak_client_id,
+          clients: [ { "id" => "uuid-other", "clientId" => "aap-some-other-service-oidc" } ]
+        )
+        step = build_step(result_snapshot: snap)
+        expect(step.already_completed?).to be(false)
+        expect(step.instance_variable_get(:@live_uuid_from_fallback)).to be_nil
+        expect(Rails.logger).to have_received(:warn).with(/mismatched or empty result/)
+      end
+
       it "repairs the local UUID mirror to the live UUID via the runner skip path" do
         cache = ActiveSupport::Cache::MemoryStore.new
         allow(Rails).to receive(:cache).and_return(cache)
