@@ -26,7 +26,12 @@ module AuthConfigShowState
     @secret_payload = if reveal_payload && @can_write_project
                         reveal_payload
     elsif @can_write_project
-                        AuthConfigs::SecretRevealCache.read(@project)
+                        # Read-and-consume: clear any cached entry after reading so a
+                        # subsequent render by another operator cannot see the same
+                        # plaintext (one-time reveal contract, stale-cache defence).
+                        payload = AuthConfigs::SecretRevealCache.read(@project)
+                        AuthConfigs::SecretRevealCache.delete(@project) if payload.dig("secrets").present? rescue nil
+                        payload
     else
                         {}
     end
@@ -41,7 +46,10 @@ module AuthConfigShowState
     @project_api_key_reveal_payload = if pak_reveal_payload && @can_write_project
                                         pak_reveal_payload
     elsif @can_write_project
-                                        ProjectApiKeys::RevealCache.read(@project)
+                                        # Read-and-consume: same stale-cache defence as above.
+                                        payload = ProjectApiKeys::RevealCache.read(@project)
+                                        ProjectApiKeys::RevealCache.delete(@project) if payload.dig("secrets", "project_api_key").present? rescue nil
+                                        payload
     else
                                         {}
     end

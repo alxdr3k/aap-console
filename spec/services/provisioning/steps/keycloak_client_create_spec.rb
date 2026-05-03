@@ -39,25 +39,28 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       end
     end
 
-    context "when the Keycloak client is gone (NotFoundError)" do
+    context "when the Keycloak client is fully gone (UUID and clientId both 404)" do
       let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
       let(:snap) { { "keycloak_client_uuid" => auth_config.keycloak_client_uuid } }
 
       it "returns false so the create step runs again" do
         stub_keycloak_get_client(uuid: auth_config.keycloak_client_uuid, status: 404)
+        stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id, clients: [])
         expect(build_step(result_snapshot: snap).already_completed?).to be(false)
       end
     end
 
-    context "when the snapshot UUID is stale (client recreated under same client_id)" do
+    context "when the snapshot UUID is stale but clientId still exists (manual recreation)" do
       let!(:auth_config) { create(:project_auth_config, :oidc, project: project) }
-      let(:snap) { { "keycloak_client_uuid" => "uuid-snapshot" } }
+      let(:snap) { { "keycloak_client_uuid" => "uuid-old" } }
 
-      it "returns false because the stale UUID no longer resolves" do
-        # Direct UUID GET returns 404 because the snapshot UUID has been removed
-        # (a new client with the same clientId now lives under a different UUID).
-        stub_keycloak_get_client(uuid: "uuid-snapshot", status: 404)
-        expect(build_step(result_snapshot: snap).already_completed?).to be(false)
+      it "returns true via client_id fallback to avoid 409 on duplicate POST" do
+        stub_keycloak_get_client(uuid: "uuid-old", status: 404)
+        stub_keycloak_get_clients(
+          client_id: auth_config.keycloak_client_id,
+          clients: [ { "id" => "uuid-new", "clientId" => auth_config.keycloak_client_id } ]
+        )
+        expect(build_step(result_snapshot: snap).already_completed?).to be(true)
       end
     end
 
