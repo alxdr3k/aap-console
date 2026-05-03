@@ -19,15 +19,27 @@ class ProvisioningJobsController < ApplicationController
 
   def retry
     return retry_error("Job is not in a retryable state", :unprocessable_entity) unless @job.retryable?
-    return retry_error("Another provisioning job is in progress", :conflict) if retry_conflict?
 
+    enqueued = false
     ActiveRecord::Base.transaction do
-      reset_project_for_retry!
-      @job.update!(status: :retrying, error_message: nil, completed_at: nil)
+      @job.lock!
+      if !@job.retryable?
+        retry_error("Job is not in a retryable state", :conflict)
+        raise ActiveRecord::Rollback
+      elsif retry_conflict?
+        retry_error("Another provisioning job is in progress", :conflict)
+        raise ActiveRecord::Rollback
+      else
+        reset_project_for_retry!
+        @job.update!(status: :retrying, error_message: nil, completed_at: nil)
+        enqueued = true
+      end
     end
 
-    ProvisioningExecuteJob.perform_later(@job.id, current_user_sub: Current.user_sub)
-    retry_success
+    if enqueued
+      ProvisioningExecuteJob.perform_later(@job.id, current_user_sub: Current.user_sub)
+      retry_success
+    end
   rescue ActiveRecord::RecordNotUnique
     retry_error("Another provisioning job is in progress", :conflict)
   end
