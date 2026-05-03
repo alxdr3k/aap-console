@@ -133,6 +133,9 @@ class AuthConfigsController < ApplicationController
       post_logout_redirect_uris: @auth_config&.post_logout_redirect_uris
     }
     values = base_values.merge(form_values || {})
+    if @auth_config&.auth_type == "saml" && @auth_config.keycloak_client_id.present?
+      @saml_idp_metadata_url = saml_idp_metadata_url
+    end
 
     @errors ||= []
     @can_write_project = current_authorization.can?(:write_project, @project)
@@ -170,6 +173,12 @@ class AuthConfigsController < ApplicationController
 
   def normalize_uri_values(values)
     Array(values).map(&:to_s).map(&:strip).reject(&:blank?)
+  end
+
+  def saml_idp_metadata_url
+    base = ENV.fetch("KEYCLOAK_URL", "")
+    realm = ENV.fetch("KEYCLOAK_REALM", "aap")
+    "#{base}/realms/#{realm}/protocol/saml/descriptor"
   end
 
   def render_auth_config_not_found
