@@ -25,8 +25,14 @@ class ProjectApiKeysController < ApplicationController
       token = result.data.fetch(:token)
 
       if browser_request?
-        ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token)
-        flash[:success] = "PAK가 발급되었습니다."
+        cache_persisted = ProjectApiKeys::RevealCache.write(@project, project_api_key: key, token: token).present?
+
+        if cache_persisted
+          flash[:success] = "PAK가 발급되었습니다."
+        else
+          flash[:warning] = "PAK가 발급되었지만 캐시 저장에 실패해 토큰을 표시할 수 없습니다. 해당 PAK를 취소하고 재발급하세요."
+        end
+
         redirect_to organization_project_auth_config_path(@organization.slug, @project.slug), status: :see_other
       else
         render json: serialize_key(key).merge(token: token), status: :created
