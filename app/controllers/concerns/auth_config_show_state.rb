@@ -26,12 +26,12 @@ module AuthConfigShowState
     @secret_payload = if reveal_payload && @can_write_project
                         reveal_payload
     elsif @can_write_project
-                        # Read-and-consume: clear any cached entry after reading so a
-                        # subsequent render by another operator cannot see the same
-                        # plaintext (one-time reveal contract, stale-cache defence).
-                        payload = AuthConfigs::SecretRevealCache.read(@project)
-                        AuthConfigs::SecretRevealCache.delete(@project) if payload.dig("secrets").present? rescue nil
-                        payload
+                        # Client-secret rotation is now in-band; the shared reveal cache
+                        # is no longer written by the rotation flow. Purge any legacy/stale
+                        # entry silently without displaying it, matching the PAK show path.
+                        stale = AuthConfigs::SecretRevealCache.read(@project)
+                        AuthConfigs::SecretRevealCache.delete(@project) if stale.dig("secrets").present? rescue nil
+                        {}
     else
                         {}
     end
