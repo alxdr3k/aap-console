@@ -46,10 +46,12 @@ module AuthConfigShowState
     @project_api_key_reveal_payload = if pak_reveal_payload && @can_write_project
                                         pak_reveal_payload
     elsif @can_write_project
-                                        # Read-and-consume: same stale-cache defence as above.
-                                        payload = ProjectApiKeys::RevealCache.read(@project)
-                                        ProjectApiKeys::RevealCache.delete(@project) if payload.dig("secrets", "project_api_key").present? rescue nil
-                                        payload
+                                        # Browser PAK issuance no longer writes to the shared
+                                        # reveal cache; the token is delivered in-band. Purge
+                                        # any legacy/stale entry silently without displaying it.
+                                        stale = ProjectApiKeys::RevealCache.read(@project)
+                                        ProjectApiKeys::RevealCache.delete(@project) if stale.dig("secrets", "project_api_key").present? rescue nil
+                                        {}
     else
                                         {}
     end
