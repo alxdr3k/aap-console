@@ -79,18 +79,16 @@ module Provisioning
 
         begin
           client = KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
-          # Found by client_id — update divergence flag for after_skip.
-          @client_identity_diverged = client_identity_diverged?(
-            client, step_record.result_snapshot&.dig("keycloak_client_uuid"), auth_config.keycloak_client_id
+          # The client exists with the expected clientId but a new UUID (manual
+          # recreation). Treat as completed and store the live UUID so after_skip
+          # can repair the local mirror. Do not set @client_identity_diverged since
+          # the clientId matches — rollback must not delete this client.
+          @live_uuid_from_fallback = client.is_a?(Hash) ? client["id"] : nil
+          Rails.logger.info(
+            "[Provisioning::Steps::KeycloakClientCreate] snapshot UUID missing but " \
+            "client_id=#{auth_config.keycloak_client_id.inspect} found in Keycloak " \
+            "(live_uuid=#{@live_uuid_from_fallback.inspect}); will repair local UUID mirror"
           )
-          if @client_identity_diverged
-            Rails.logger.warn(
-              "[Provisioning::Steps::KeycloakClientCreate] snapshot UUID missing but " \
-              "client_id=#{auth_config.keycloak_client_id.inspect} found in Keycloak; " \
-              "treating step complete with divergence audit"
-            )
-            record_identity_diverged_audit!(client, step_record.result_snapshot&.dig("keycloak_client_uuid"), auth_config.keycloak_client_id)
-          end
           true
         rescue BaseClient::NotFoundError, BaseClient::ApiError
           false
@@ -105,13 +103,14 @@ module Provisioning
 
         snapshot_uuid = step_record.result_snapshot&.dig("keycloak_client_uuid")
 
-        # Repair the local UUID mirror when execute() previously succeeded in
-        # creating the Keycloak client (snapshot persisted) but crashed before
-        # auth_config.update! committed the UUID locally. Without this, the
-        # auth UI, secret regeneration, and downstream delete step remain
-        # gated off even though the external client exists.
-        if snapshot_uuid.present? && auth_config.keycloak_client_uuid.blank? && !@client_identity_diverged
-          auth_config.update!(keycloak_client_uuid: snapshot_uuid)
+        # Repair the local UUID mirror from:
+        # (a) a crash between external creation and local auth_config.update!, or
+        # (b) a clientId fallback that found the client under a new UUID.
+        # Without repair, auth UI, secret regeneration, and the delete step remain
+        # gated on a stale or missing UUID.
+        repair_uuid = @live_uuid_from_fallback.presence || (snapshot_uuid if !@client_identity_diverged)
+        if repair_uuid.present? && auth_config.keycloak_client_uuid != repair_uuid
+          auth_config.update!(keycloak_client_uuid: repair_uuid)
         end
 
         return unless auth_config.auth_type == "oidc"
@@ -124,7 +123,11 @@ module Provisioning
           return
         end
 
-        client_uuid = snapshot_uuid || auth_config.keycloak_client_uuid
+        # Prefer the live UUID resolved by the clientId fallback; fall back to
+        # the snapshot UUID or the already-repaired local mirror.
+        client_uuid = @live_uuid_from_fallback.presence ||
+                      snapshot_uuid ||
+                      auth_config.keycloak_client_uuid
         return if client_uuid.blank?
 
         cache_client_secret!(KeycloakClient.new, client_uuid, auth_config.auth_type)
