@@ -79,15 +79,28 @@ module Provisioning
 
         begin
           client = KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
-          # The client exists with the expected clientId but a new UUID (manual
+          live_id        = client.is_a?(Hash) ? client["id"].presence : nil
+          live_client_id = client.is_a?(Hash) ? client["clientId"] : nil
+
+          # Require exact clientId match and a present id before repairing local
+          # state. The list endpoint is ordering-dependent; a fuzzy/partial first
+          # result must not bind the project to the wrong Keycloak client.
+          unless live_id.present? && live_client_id == auth_config.keycloak_client_id
+            Rails.logger.warn(
+              "[Provisioning::Steps::KeycloakClientCreate] snapshot UUID missing and " \
+              "clientId fallback returned mismatched or empty result; treating as not found"
+            )
+            return false
+          end
+
+          # The client exists with the correct clientId under a new UUID (manual
           # recreation). Treat as completed and store the live UUID so after_skip
-          # can repair the local mirror. Do not set @client_identity_diverged since
-          # the clientId matches — rollback must not delete this client.
-          @live_uuid_from_fallback = client.is_a?(Hash) ? client["id"] : nil
+          # can repair the local mirror without triggering rollback.
+          @live_uuid_from_fallback = live_id
           Rails.logger.info(
             "[Provisioning::Steps::KeycloakClientCreate] snapshot UUID missing but " \
             "client_id=#{auth_config.keycloak_client_id.inspect} found in Keycloak " \
-            "(live_uuid=#{@live_uuid_from_fallback.inspect}); will repair local UUID mirror"
+            "(live_uuid=#{live_id.inspect}); will repair local UUID mirror"
           )
           true
         rescue BaseClient::NotFoundError, BaseClient::ApiError
