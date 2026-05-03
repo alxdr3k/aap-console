@@ -71,7 +71,30 @@ module Provisioning
         end
         true
       rescue BaseClient::NotFoundError
-        false
+        # UUID from snapshot is gone. Fall back to client_id lookup to avoid
+        # driving execute into an unconditional POST that hard-fails on 409
+        # when the client was manually recreated under the same client_id.
+        auth_config = project.project_auth_config
+        return false unless auth_config&.keycloak_client_id
+
+        begin
+          client = KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
+          # Found by client_id — update divergence flag for after_skip.
+          @client_identity_diverged = client_identity_diverged?(
+            client, step_record.result_snapshot&.dig("keycloak_client_uuid"), auth_config.keycloak_client_id
+          )
+          if @client_identity_diverged
+            Rails.logger.warn(
+              "[Provisioning::Steps::KeycloakClientCreate] snapshot UUID missing but " \
+              "client_id=#{auth_config.keycloak_client_id.inspect} found in Keycloak; " \
+              "treating step complete with divergence audit"
+            )
+            record_identity_diverged_audit!(client, step_record.result_snapshot&.dig("keycloak_client_uuid"), auth_config.keycloak_client_id)
+          end
+          true
+        rescue BaseClient::NotFoundError, BaseClient::ApiError
+          false
+        end
       rescue BaseClient::ApiError
         false
       end
