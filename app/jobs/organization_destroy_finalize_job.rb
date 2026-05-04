@@ -73,9 +73,19 @@ class OrganizationDestroyFinalizeJob < ApplicationJob
       "rescheduling in #{BLOCKED_RETRY_DELAY.inspect} and releasing reservation"
     )
     record_blocked_audit!(organization, current_user_sub, blocked_summary)
-    self.class.set(wait: BLOCKED_RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
-    organization.with_lock do
-      organization.update!(destroy_finalizer_reserved_until: nil)
+    enqueued = self.class.set(wait: BLOCKED_RETRY_DELAY).perform_later(organization.id, current_user_sub: current_user_sub)
+    # Release the lease only when the retry job was successfully enqueued.
+    # If the adapter rejects the enqueue (returns nil/false), keep the lease
+    # so an operator-triggered retry can still fire rather than stalling.
+    if enqueued
+      organization.with_lock do
+        organization.update!(destroy_finalizer_reserved_until: nil)
+      end
+    else
+      Rails.logger.error(
+        "[OrganizationDestroyFinalizeJob] failed to enqueue retry for org #{organization.id}; " \
+        "lease retained so a manual trigger can resume finalization"
+      )
     end
   end
 
