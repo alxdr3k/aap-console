@@ -11,6 +11,9 @@
   <header class="page-header">
     <div>
       <h1 class="page-title"><%= @project.name %></h1>
+      <% if @project.description.present? %>
+        <p class="page-description"><%= @project.description %></p>
+      <% end %>
       <p class="page-description" style="display:flex;align-items:center;gap:6px;">
         App ID: <code><%= @project.app_id %></code>
       </p>
