@@ -6,7 +6,7 @@
   <div class="timeline-step__body">
     <div class="timeline-step__header">
       <h3><%= provisioning_step_label(step) %></h3>
-      <span class="<%= provisioning_step_status_badge_class(step) %>"><%= step.status %></span>
+      <%= render "shared/status_badge", status: step.status %>
     </div>
 
     <dl class="timeline-step__meta">

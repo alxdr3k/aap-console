@@ -3,6 +3,7 @@ class ProjectsController < ApplicationController
   AVAILABLE_GUARDRAILS = %w[content-filter token-limit].freeze
   DEFAULT_S3_RETENTION_DAYS = 90
   ENABLED_AUTH_TYPES = %w[oidc oauth].freeze
+  SHOW_TABS = %w[auth langfuse litellm history prov].freeze
 
   before_action :set_organization
   before_action -> { authorize_org!(@organization) }, only: [ :index ]
@@ -173,6 +174,7 @@ class ProjectsController < ApplicationController
   end
 
   def prepare_project_show
+    @current_tab = SHOW_TABS.include?(params[:tab]) ? params[:tab] : "auth"
     @auth_config = @project.project_auth_config
     @active_provisioning_job = @project.provisioning_jobs
                                       .where(status: ProvisioningJob::ACTIVE_STATUSES)

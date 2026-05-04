@@ -39,7 +39,6 @@ class ProjectApiKeysController < ApplicationController
         # regression this avoids) or session secret storage (forbidden by policy).
         render_pak_in_band(key, token)
       else
-        disable_secret_response_cache!
         render json: serialize_key(key).merge(token: token), status: :created
       end
     else

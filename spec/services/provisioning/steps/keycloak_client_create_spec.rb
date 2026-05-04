@@ -205,8 +205,7 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       auth_config.update!(keycloak_client_uuid: uuid)
       stub_keycloak_get_client(uuid: uuid,
                                client: { "id" => uuid, "clientId" => auth_config.keycloak_client_id })
-      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret",
-                                      client_id: auth_config.keycloak_client_id)
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
 
       step_record = create(
         :provisioning_step,
@@ -234,8 +233,7 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       auth_config.update!(keycloak_client_uuid: nil)
       stub_keycloak_get_client(uuid: uuid,
                                client: { "id" => uuid, "clientId" => auth_config.keycloak_client_id })
-      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret",
-                                      client_id: auth_config.keycloak_client_id)
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
 
       step_record = create(
         :provisioning_step,

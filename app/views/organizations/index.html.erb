@@ -27,7 +27,7 @@
 
           <div class="resource-row__meta">
             <span><%= pluralize(organization_project_count(organization), "Project") %></span>
-            <span class="badge"><%= organization_role_label(organization) %></span>
+            <%= render "shared/role_badge", role: organization_role_label(organization) %>
           </div>
         <% end %>
       <% end %>
