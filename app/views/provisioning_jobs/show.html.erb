@@ -99,7 +99,7 @@
     <div class="summary-item">
       <span class="summary-item__label">Status</span>
       <strong class="summary-item__value">
-        <span class="<%= provisioning_status_badge_class(@job) %>" data-provisioning-target="status"><%= @job.status %></span>
+        <%= render "shared/status_badge", status: @job.status %>
       </strong>
     </div>
     <div class="summary-item">

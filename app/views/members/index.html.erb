@@ -119,7 +119,7 @@
                 <%= form.submit "저장", class: "button button--secondary" %>
               <% end %>
             <% else %>
-              <span class="badge"><%= membership.role %></span>
+              <%= render "shared/role_badge", role: membership.role %>
             <% end %>
           </div>
 

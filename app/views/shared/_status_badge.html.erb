@@ -1,0 +1,51 @@
+<%#
+  Renders a status badge with icon and Korean label.
+  Locals:
+    status (String) — one of the STATUS_MAP keys
+    spin   (Boolean, optional) — override spin; auto-detected from status if omitted
+%>
+<%
+  status_info_map = {
+    "pending"                 => { icon: :circle,          css: "badge--pending",      label: "대기",                  spin: false },
+    "in_progress"             => { icon: :rotate_cw,       css: "badge--in-progress",  label: "진행중",                spin: true  },
+    "completed"               => { icon: :check,           css: "badge--completed",    label: "완료",                  spin: false },
+    "completed_with_warnings" => { icon: :alert_triangle,  css: "badge--warnings",     label: "완료 (경고)",           spin: false },
+    "failed"                  => { icon: :x,               css: "badge--failed",       label: "실패",                  spin: false },
+    "retrying"                => { icon: :rotate_cw,       css: "badge--retrying",     label: "재시도중",              spin: true  },
+    "rolling_back"            => { icon: :rotate_cw,       css: "badge--rolling-back", label: "정리중",                spin: true  },
+    "rolled_back"             => { icon: :x_circle,        css: "badge--rolled-back",  label: "실패 (정리 완료)",      spin: false },
+    "rollback_failed"         => { icon: :alert_circle,    css: "badge--rollback-fail",label: "실패 (수동 조치 필요)", spin: false },
+    "active"                  => { icon: :check_circle,    css: "badge--active",       label: "활성",                  spin: false },
+    "provisioning"            => { icon: :loader,          css: "badge--provisioning", label: "생성중",                spin: true  },
+    "provision_failed"        => { icon: :x_circle,        css: "badge--prov-failed",  label: "생성 실패",             spin: false },
+  }
+
+  st      = status.to_s
+  info    = status_info_map[st] || { icon: :circle, css: "badge--muted", label: st, spin: false }
+  spinning = local_assigns.key?(:spin) ? spin : info[:spin]
+%>
+<span class="badge <%= info[:css] %>">
+  <span class="<%= spinning ? "spin" : "" %>" style="display:inline-flex;align-items:center;width:12px;height:12px;">
+    <% case info[:icon] %>
+    <% when :check %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    <% when :check_circle %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    <% when :x %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    <% when :x_circle %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+    <% when :circle %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>
+    <% when :alert_triangle %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <% when :alert_circle %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <% when :rotate_cw %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.16"/></svg>
+    <% when :loader %>
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    <% end %>
+  </span>
+  <%= info[:label] %>
+</span>

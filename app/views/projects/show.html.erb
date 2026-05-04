@@ -11,12 +11,15 @@
   <header class="page-header">
     <div>
       <h1 class="page-title"><%= @project.name %></h1>
-      <% if @project.description.present? %>
-        <p class="page-description"><%= @project.description %></p>
-      <% end %>
+      <p class="page-description" style="display:flex;align-items:center;gap:6px;">
+        App ID: <code><%= @project.app_id %></code>
+      </p>
     </div>
 
-    <div class="page-actions">
+    <div class="page-actions" style="align-items:center;">
+      <% if @latest_provisioning_job %>
+        <%= render "shared/status_badge", status: @latest_provisioning_job.status %>
+      <% end %>
       <% if current_authorization.can?(:manage_org, @organization) %>
         <% if @active_provisioning_job %>
           <span class="button button--disabled" title="진행 중인 작업이 완료된 후 삭제할 수 있습니다.">Project 삭제 대기</span>
@@ -24,11 +27,11 @@
           <%= button_to "Project 삭제",
                         organization_project_path(@organization.slug, @project.slug),
                         method: :delete,
-                        class: "button button--ghost",
+                        class: "button button--danger-ghost button--sm",
                         data: { turbo_confirm: "Project 삭제 프로비저닝을 시작할까요?" } %>
         <% end %>
       <% end %>
-      <%= link_to "Project 목록", organization_projects_path(@organization.slug), class: "button button--secondary" %>
+      <%= link_to "Project 목록", organization_projects_path(@organization.slug), class: "button button--secondary button--sm" %>
     </div>
   </header>
 
@@ -42,55 +45,206 @@
 
   <% if @active_provisioning_job %>
     <div class="status-banner status-banner--warning">
-      <strong>진행 중인 프로비저닝 작업이 있습니다.</strong>
-      <span>현재 작업이 완료된 후 Project 삭제나 외부 설정 변경을 진행하세요.</span>
+      <strong>⚠ 진행 중인 프로비저닝 작업이 있습니다.</strong>
+      <span>현재 작업이 완료된 후 설정을 변경해주세요.</span>
       <div class="status-banner__actions">
-        <%= link_to "진행 상황 보기", provisioning_job_path(@active_provisioning_job), class: "button button--secondary" %>
+        <%= link_to "진행 상황 보기", provisioning_job_path(@active_provisioning_job), class: "button button--secondary button--sm" %>
       </div>
     </div>
   <% end %>
 
   <% if @latest_provisioning_job&.completed_with_warnings? %>
     <div class="status-banner status-banner--warning">
-      최근 프로비저닝이 경고와 함께 완료되었습니다. 프로비저닝 이력에서 상세 상태를 확인하세요.
+      <strong>⚠ Health Check 경고가 있습니다.</strong>
+      <span>일부 정합성 검증이 실패했습니다. 아래 설정을 확인해주세요.</span>
     </div>
   <% end %>
 
-  <section class="summary-grid summary-grid--four">
-    <div class="summary-item">
-      <span class="summary-item__label">Status</span>
-      <strong class="summary-item__value">
-        <span class="<%= project_status_badge_class(@project) %>"><%= @project.status %></span>
-      </strong>
-    </div>
-    <div class="summary-item">
-      <span class="summary-item__label">App ID</span>
-      <strong class="summary-item__value summary-item__value--code"><%= @project.app_id %></strong>
-    </div>
-    <div class="summary-item">
-      <span class="summary-item__label">Auth</span>
-      <strong class="summary-item__value"><%= @auth_config&.auth_type || "미설정" %></strong>
-    </div>
-    <div class="summary-item">
-      <span class="summary-item__label">Latest Job</span>
-      <strong class="summary-item__value">
-        <% if @latest_provisioning_job %>
-          <span class="<%= provisioning_status_badge_class(@latest_provisioning_job) %>">
-            <%= @latest_provisioning_job.operation %> <%= @latest_provisioning_job.status %>
-          </span>
-        <% else %>
-          -
-        <% end %>
-      </strong>
-    </div>
-  </section>
+  <%# Tab container — replaces vertical panel stack %>
+  <% current_tab = params[:tab].presence || "auth" %>
+  <div style="background:white;border:1px solid #d9e0ec;border-radius:8px;overflow:hidden;">
+    <nav class="tab-nav" role="tablist">
+      <% [
+        ["auth",    "인증 설정"],
+        ["langfuse","Langfuse"],
+        ["litellm", "LiteLLM Config"],
+        ["history", "변경 이력"],
+        ["prov",    "프로비저닝 이력"],
+      ].each do |tab_id, tab_label| %>
+        <%= link_to tab_label,
+            organization_project_path(@organization.slug, @project.slug, tab: tab_id),
+            class: "tab-btn #{"active" if current_tab == tab_id}",
+            role: "tab",
+            aria: { selected: current_tab == tab_id } %>
+      <% end %>
+    </nav>
 
+    <div class="tab-content">
+      <%# Auth tab %>
+      <% if current_tab == "auth" %>
+        <div style="display:grid;gap:14px;">
+          <dl class="details-list">
+            <div><dt>인증 방식</dt><dd><%= @auth_config&.auth_type || "미설정" %></dd></div>
+            <div><dt>Client ID</dt><dd><code><%= @auth_config&.keycloak_client_id || "아직 없음" %></code></dd></div>
+            <div>
+              <dt>Client Secret</dt>
+              <dd>
+                <span style="display:flex;align-items:center;gap:8px;color:#64748b;">
+                  <span style="letter-spacing:2px;">●●●●●●●●●●●●</span>
+                  <% if current_authorization.can?(:write_project, @project) %>
+                    <%= link_to "재발급", organization_project_auth_config_path(@organization.slug, @project.slug, anchor: "secret"),
+                                class: "button button--ghost button--sm" %>
+                  <% end %>
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt>Redirect URIs</dt>
+              <dd>
+                <% redirect_uris = @auth_config&.redirect_uris.presence || project_snapshot_list(@latest_config_snapshot, "redirect_uris") %>
+                <% if redirect_uris.any? %>
+                  <span style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <% redirect_uris.each do |uri| %>
+                      <code><%= uri %></code>
+                    <% end %>
+                  </span>
+                <% else %>
+                  <span style="color:#64748b;">아직 없음</span>
+                <% end %>
+              </dd>
+            </div>
+          </dl>
+          <div style="display:flex;gap:8px;padding-top:6px;">
+            <%= link_to current_authorization.can?(:write_project, @project) ? "설정 편집" : "상세 보기",
+                        organization_project_auth_config_path(@organization.slug, @project.slug),
+                        class: "button button--sm" %>
+          </div>
+        </div>
+
+      <%# Langfuse tab %>
+      <% elsif current_tab == "langfuse" %>
+        <dl class="details-list">
+          <div><dt>Langfuse Project</dt><dd><%= @project.slug %></dd></div>
+          <div>
+            <dt>SDK Key</dt>
+            <dd>
+              <span style="display:inline-flex;align-items:center;gap:6px;">
+                <span class="badge badge--completed">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  발급됨
+                </span>
+                <span style="font-size:12px;color:#64748b;">(값 비공개)</span>
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt>트레이싱 연동</dt>
+            <dd>
+              <% if @project.active? %>
+                <span class="badge badge--completed">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  연동됨
+                </span>
+              <% else %>
+                <span style="color:#64748b;">프로비저닝 완료 후 활성화</span>
+              <% end %>
+            </dd>
+          </div>
+        </dl>
+
+      <%# LiteLLM tab %>
+      <% elsif current_tab == "litellm" %>
+        <div style="display:grid;gap:14px;">
+          <dl class="details-list">
+            <div>
+              <dt>모델</dt>
+              <dd>
+                <% models = project_snapshot_list(@latest_config_snapshot, "models") %>
+                <% if models.any? %>
+                  <span style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <% models.each do |m| %><code><%= m %></code><% end %>
+                  </span>
+                <% else %>
+                  <span style="color:#64748b;">설정 없음</span>
+                <% end %>
+              </dd>
+            </div>
+            <div>
+              <dt>가드레일</dt>
+              <dd>
+                <% guardrails = project_snapshot_list(@latest_config_snapshot, "guardrails") %>
+                <% if guardrails.any? %>
+                  <span style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <% guardrails.each do |g| %><code><%= g %></code><% end %>
+                  </span>
+                <% else %>
+                  <span style="color:#64748b;">설정 없음</span>
+                <% end %>
+              </dd>
+            </div>
+            <div><dt>S3 Retention</dt><dd><%= project_snapshot_value(@latest_config_snapshot, "s3_retention_days") %>일</dd></div>
+          </dl>
+          <div>
+            <% if @active_provisioning_job %>
+              <span class="button button--disabled" title="진행 중인 작업이 완료된 후 시도하세요">설정 편집 (작업 중)</span>
+            <% else %>
+              <%= link_to "설정 편집",
+                          organization_project_litellm_config_path(@organization.slug, @project.slug),
+                          class: "button button--sm" %>
+            <% end %>
+          </div>
+        </div>
+
+      <%# History tab %>
+      <% elsif current_tab == "history" %>
+        <% if @config_versions.any? %>
+          <div style="display:grid;gap:8px;">
+            <% @config_versions.each do |version| %>
+              <div style="display:grid;grid-template-columns:56px 180px minmax(0,1fr) auto;gap:12px;padding:10px 14px;border-radius:6px;border:1px solid #edf1f7;font-size:13px;align-items:center;">
+                <span style="font-family:'JetBrains Mono',monospace;font-weight:700;color:#233566;"><%= version.version_id %></span>
+                <span style="color:#64748b;font-size:12px;"><%= short_datetime(version.created_at) %></span>
+                <span><%= version.change_summary.presence || version.change_type %></span>
+                <%= link_to "diff", config_version_path(version),
+                            class: "button button--ghost button--sm" %>
+              </div>
+            <% end %>
+            <div style="padding-top:4px;">
+              <%= link_to "전체 이력 보기",
+                          organization_project_config_versions_path(@organization.slug, @project.slug),
+                          class: "button button--ghost button--sm" %>
+            </div>
+          </div>
+        <% else %>
+          <p class="muted-text">Config 변경 이력이 없습니다.</p>
+        <% end %>
+
+      <%# Provisioning history tab %>
+      <% elsif current_tab == "prov" %>
+        <% if @provisioning_jobs.any? %>
+          <div style="display:grid;gap:8px;">
+            <% @provisioning_jobs.each do |job| %>
+              <div style="display:grid;grid-template-columns:180px minmax(0,1fr) auto auto auto;gap:12px;padding:10px 14px;border-radius:6px;border:1px solid #edf1f7;font-size:13px;align-items:center;">
+                <span style="color:#64748b;font-size:12px;"><%= short_datetime(job.created_at) %></span>
+                <span><%= provisioning_operation_title(job) %></span>
+                <%= render "shared/status_badge", status: job.status %>
+                <span style="color:#64748b;font-size:12px;"><%= provisioning_duration(job) %></span>
+                <%= link_to "상세", provisioning_job_path(job), class: "button button--ghost button--sm" %>
+              </div>
+            <% end %>
+          </div>
+        <% else %>
+          <p class="muted-text">프로비저닝 이력이 없습니다.</p>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <%# Name/description edit panel (outside tabs) %>
   <% if current_authorization.can?(:write_project, @project) %>
     <section class="panel">
       <header class="panel__header">
         <h2 class="panel__title">기본 정보 편집</h2>
       </header>
-
       <%= form_with url: organization_project_path(@organization.slug, @project.slug),
                     scope: :project,
                     method: :patch,
@@ -112,118 +266,7 @@
     </section>
   <% end %>
 
-  <section class="panel">
-    <header class="panel__header">
-      <h2 class="panel__title">인증 설정</h2>
-      <%= link_to current_authorization.can?(:write_project, @project) ? "상세 편집" : "상세 보기",
-                  organization_project_auth_config_path(@organization.slug, @project.slug),
-                  class: "button button--secondary" %>
-    </header>
-
-    <% redirect_uris = @auth_config&.redirect_uris.presence || project_snapshot_list(@latest_config_snapshot, "redirect_uris") %>
-    <dl class="details-list">
-      <div>
-        <dt>방식</dt>
-        <dd><%= @auth_config&.auth_type || "미설정" %></dd>
-      </div>
-      <div>
-        <dt>Client ID</dt>
-        <dd><%= @auth_config&.keycloak_client_id || "아직 없음" %></dd>
-      </div>
-      <div>
-        <dt>Redirect URIs</dt>
-        <dd><%= project_list_value(redirect_uris) %></dd>
-      </div>
-    </dl>
-  </section>
-
-  <section class="panel">
-    <header class="panel__header">
-      <h2 class="panel__title">Langfuse</h2>
-      <span class="badge badge--muted">SDK Key 값 비공개</span>
-    </header>
-
-    <dl class="details-list">
-      <div>
-        <dt>Langfuse Project</dt>
-        <dd><%= @project.slug %></dd>
-      </div>
-      <div>
-        <dt>Tracing</dt>
-        <dd><%= @project.active? ? "연동됨" : "프로비저닝 완료 후 활성화" %></dd>
-      </div>
-    </dl>
-  </section>
-
-  <section class="panel">
-    <header class="panel__header">
-      <h2 class="panel__title">LiteLLM Config</h2>
-      <%= link_to current_authorization.can?(:write_project, @project) ? "설정 편집" : "상세 보기",
-                  organization_project_litellm_config_path(@organization.slug, @project.slug),
-                  class: "button button--secondary" %>
-    </header>
-
-    <dl class="details-list">
-      <div>
-        <dt>모델</dt>
-        <dd><%= project_snapshot_value(@latest_config_snapshot, "models") %></dd>
-      </div>
-      <div>
-        <dt>가드레일</dt>
-        <dd><%= project_snapshot_value(@latest_config_snapshot, "guardrails") %></dd>
-      </div>
-      <div>
-        <dt>S3 Retention</dt>
-        <dd><%= project_snapshot_value(@latest_config_snapshot, "s3_retention_days") %></dd>
-      </div>
-    </dl>
-  </section>
-
-  <section class="panel">
-    <header class="panel__header">
-      <h2 class="panel__title">변경 이력</h2>
-      <%= link_to "전체 이력 보기",
-                  organization_project_config_versions_path(@organization.slug, @project.slug),
-                  class: "button button--secondary" %>
-    </header>
-
-    <% if @config_versions.any? %>
-      <div class="history-list">
-        <% @config_versions.each do |version| %>
-          <div class="history-row">
-            <span><%= short_datetime(version.created_at) %></span>
-            <strong><%= version.change_type %></strong>
-            <span><%= version.change_summary.presence || version.version_id %></span>
-          </div>
-        <% end %>
-      </div>
-    <% else %>
-      <p class="muted-text">Config 변경 이력이 없습니다.</p>
-    <% end %>
-  </section>
-
-  <section class="panel">
-    <header class="panel__header">
-      <h2 class="panel__title">프로비저닝 이력</h2>
-    </header>
-
-    <% if @provisioning_jobs.any? %>
-      <div class="history-list">
-        <% @provisioning_jobs.each do |job| %>
-          <div class="history-row history-row--with-action">
-            <span><%= short_datetime(job.created_at) %></span>
-            <strong><%= job.operation %></strong>
-            <span class="<%= provisioning_status_badge_class(job) %>"><%= job.status %></span>
-            <span><%= provisioning_duration(job) %></span>
-            <%= link_to "상세", provisioning_job_path(job), class: "button button--secondary" %>
-          </div>
-        <% end %>
-      </div>
-    <% else %>
-      <p class="muted-text">프로비저닝 이력이 없습니다.</p>
-    <% end %>
-  </section>
-
+  <%# Playground placeholder %>
   <section class="panel panel--disabled">
     <header class="panel__header">
       <h2 class="panel__title">Playground</h2>

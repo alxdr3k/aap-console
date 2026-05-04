@@ -48,7 +48,7 @@
           <%= link_to organization_project_path(@organization.slug, project.slug), class: "table-list__row table-list__row--link" do %>
             <span><strong><%= project.name %></strong></span>
             <span><%= project.app_id %></span>
-            <span class="<%= project_status_badge_class(project) %>"><%= project.status %></span>
+            <%= render "shared/status_badge", status: project.status %>
           <% end %>
         <% end %>
       </div>

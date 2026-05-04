@@ -202,16 +202,24 @@ RSpec.describe "Projects", type: :request do
                change_summary: "Initial config",
                snapshot: { "models" => [ "azure-gpt4" ], "guardrails" => [ "content-filter" ], "s3_retention_days" => 90 })
 
+        # Default auth tab: project header and auth content
         get "/organizations/#{org.slug}/projects/#{project.slug}", headers: html_headers
-
         expect(response).to have_http_status(:ok)
         expect(response.body).to include(project.name)
         expect(response.body).to include(project.app_id)
         expect(response.body).to include("aap-acme-project-oidc")
-        expect(response.body).to include("azure-gpt4")
-        expect(response.body).to include("completed_with_warnings")
+        expect(response.body).to include("완료 (경고)")
         expect(response.body).to include(organization_project_auth_config_path(org.slug, project.slug))
+
+        # LiteLLM tab: model and edit link
+        get "/organizations/#{org.slug}/projects/#{project.slug}?tab=litellm", headers: html_headers
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("azure-gpt4")
         expect(response.body).to include(organization_project_litellm_config_path(org.slug, project.slug))
+
+        # History tab: config versions link
+        get "/organizations/#{org.slug}/projects/#{project.slug}?tab=history", headers: html_headers
+        expect(response).to have_http_status(:ok)
         expect(response.body).to include(organization_project_config_versions_path(org.slug, project.slug))
       end
 
