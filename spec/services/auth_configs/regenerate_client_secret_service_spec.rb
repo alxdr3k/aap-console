@@ -14,14 +14,18 @@ RSpec.describe AuthConfigs::RegenerateClientSecretService do
 
   before { allow(Rails).to receive(:cache).and_return(cache) }
 
-  it "regenerates the client secret, caches it, and writes an audit log" do
+  it "regenerates the client secret and returns it in-memory without caching" do
     stub_keycloak_regenerate_client_secret(uuid: "uuid-123", secret: "new-client-secret")
 
     result = described_class.new(project: project, current_user_sub: "user-sub-123").call
 
     expect(result).to be_success
-    expect(AuthConfigs::SecretRevealCache.read(project).dig("secrets", "client_secret", "value")).to eq("new-client-secret")
-    expect(project.audit_logs.order(:id).last.action).to eq("auth_config.secret_regenerated")
+    expect(result.data[:cache_failed]).to be(false)
+    expect(result.data[:reveal_payload].dig("secrets", "client_secret", "value")).to eq("new-client-secret")
+    # Secret must NOT be written to the shared reveal cache (one-time reveal contract).
+    expect(AuthConfigs::SecretRevealCache.read(project).dig("secrets", "client_secret")).to be_nil
+    audit = project.audit_logs.order(:id).last
+    expect(audit.action).to eq("auth_config.secret_regenerated")
   end
 
   it "returns failure when another provisioning job is active" do
@@ -42,13 +46,16 @@ RSpec.describe AuthConfigs::RegenerateClientSecretService do
     expect(result.error).to include("OIDC")
   end
 
-  it "reports a reveal-cache failure after the upstream secret changed" do
+  it "clears any stale cache entry from a prior rotation without writing a new one" do
     stub_keycloak_regenerate_client_secret(uuid: "uuid-123", secret: "new-client-secret")
-    allow(AuthConfigs::SecretRevealCache).to receive(:write).and_raise("cache boom")
+    # Simulate stale data from a previous reveal cycle.
+    AuthConfigs::SecretRevealCache.write(project, key: "client_secret", label: "Client Secret", value: "old-stale-secret")
 
     result = described_class.new(project: project, current_user_sub: "user-sub-123").call
 
-    expect(result).to be_failure
-    expect(result.error).to include("표시 캐시에 저장하지 못했습니다")
+    expect(result).to be_success
+    expect(result.data[:reveal_payload].dig("secrets", "client_secret", "value")).to eq("new-client-secret")
+    # Stale entry must be cleared; fresh secret is never written to shared cache.
+    expect(AuthConfigs::SecretRevealCache.read(project).dig("secrets", "client_secret")).to be_nil
   end
 end

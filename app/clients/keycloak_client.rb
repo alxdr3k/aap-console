@@ -118,6 +118,16 @@ class KeycloakClient < BaseClient
     clients.first || raise(NotFoundError.new("Client not found: #{client_id}"))
   end
 
+  # Direct UUID lookup. Use this whenever the snapshot already holds the
+  # Keycloak UUID — it bypasses the list endpoint so the result is bound to
+  # the exact client that produced the snapshot.
+  def get_client(uuid:)
+    raise ArgumentError, "uuid is required" if uuid.blank?
+
+    response = get("#{clients_path}/#{uuid}", headers: auth_headers)
+    response.body
+  end
+
   def update_client(uuid:, attributes:)
     raise ArgumentError, "uuid is required" if uuid.blank?
 

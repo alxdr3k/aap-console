@@ -43,23 +43,110 @@ module Provisioning
         auth_config = project.project_auth_config
         return false unless auth_config&.keycloak_client_id
 
-        # KeycloakClient#get_client_by_client_id takes a positional client_id
-        # and either returns a single Hash or raises NotFoundError. Passing
-        # a keyword arg lands as a Hash in the positional slot, and treating
-        # the return value as an array was broken on both counts.
-        KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
+        # Look up the client by UUID directly. The list endpoint
+        # `get_client_by_client_id` is a clientId search that only returns the
+        # first match and depends on Keycloak's ordering — we already have the
+        # UUID from the snapshot, so use the stable path-based GET. A
+        # NotFoundError or ApiError surface as the step needing to re-run.
+        client = KeycloakClient.new.get_client(uuid: uuid)
+
+        # Treat any successful 200 against the UUID-targeted GET as
+        # authoritative completion. Returning false on representation drift
+        # (missing `id`, malformed body, omitted clientId) would push the
+        # orchestrator back into `execute`, which unconditionally POSTs a new
+        # client and either mints a duplicate or hard-fails on 409. Track
+        # whether the live identity matches our snapshot — `after_skip` uses
+        # this to decide if the secret cache refresh is safe.
+        @client_identity_diverged = client_identity_diverged?(client, uuid, auth_config.keycloak_client_id)
+        if @client_identity_diverged
+          Rails.logger.warn(
+            "[Provisioning::Steps::KeycloakClientCreate] live client identity " \
+            "diverges from snapshot (uuid=#{uuid}, " \
+            "live_id=#{client.is_a?(Hash) ? client["id"].inspect : 'n/a'}, " \
+            "live_clientId=#{client.is_a?(Hash) ? client["clientId"].inspect : 'n/a'}, " \
+            "expected_clientId=#{auth_config.keycloak_client_id.inspect}); treating step " \
+            "as complete but skipping secret cache refresh"
+          )
+          record_identity_diverged_audit!(client, uuid, auth_config.keycloak_client_id)
+        end
         true
       rescue BaseClient::NotFoundError
-        false
+        # UUID from snapshot is gone. Fall back to client_id lookup to avoid
+        # driving execute into an unconditional POST that hard-fails on 409
+        # when the client was manually recreated under the same client_id.
+        auth_config = project.project_auth_config
+        return false unless auth_config&.keycloak_client_id
+
+        begin
+          client = KeycloakClient.new.get_client_by_client_id(auth_config.keycloak_client_id)
+          live_id        = client.is_a?(Hash) ? client["id"].presence : nil
+          live_client_id = client.is_a?(Hash) ? client["clientId"] : nil
+
+          # Require exact clientId match and a present id before repairing local
+          # state. The list endpoint is ordering-dependent; a fuzzy/partial first
+          # result must not bind the project to the wrong Keycloak client.
+          unless live_id.present? && live_client_id == auth_config.keycloak_client_id
+            Rails.logger.warn(
+              "[Provisioning::Steps::KeycloakClientCreate] snapshot UUID missing and " \
+              "clientId fallback returned mismatched or empty result; treating as not found"
+            )
+            return false
+          end
+
+          # The client exists with the correct clientId under a new UUID (manual
+          # recreation). Treat as completed and store the live UUID so after_skip
+          # can repair the local mirror without triggering rollback.
+          @live_uuid_from_fallback = live_id
+          Rails.logger.info(
+            "[Provisioning::Steps::KeycloakClientCreate] snapshot UUID missing but " \
+            "client_id=#{auth_config.keycloak_client_id.inspect} found in Keycloak " \
+            "(live_uuid=#{live_id.inspect}); will repair local UUID mirror"
+          )
+          true
+        rescue BaseClient::NotFoundError, BaseClient::ApiError
+          false
+        end
       rescue BaseClient::ApiError
         false
       end
 
       def after_skip
         auth_config = project.project_auth_config
-        return unless auth_config&.auth_type == "oidc"
+        return unless auth_config
 
-        client_uuid = step_record.result_snapshot&.dig("keycloak_client_uuid") || auth_config.keycloak_client_uuid
+        snapshot_uuid = step_record.result_snapshot&.dig("keycloak_client_uuid")
+
+        # Repair the local UUID mirror from:
+        # (a) a crash between external creation and local auth_config.update!, or
+        # (b) a clientId fallback that found the client under a new UUID.
+        # Without repair, auth UI, secret regeneration, and the delete step remain
+        # gated on a stale or missing UUID.
+        repair_uuid = @live_uuid_from_fallback.presence || (snapshot_uuid if !@client_identity_diverged)
+        if repair_uuid.present? && auth_config.keycloak_client_uuid != repair_uuid
+          auth_config.update!(keycloak_client_uuid: repair_uuid)
+        end
+
+        # Do NOT update result_snapshot with the fallback UUID.
+        # The snapshot records the UUID this provisioning run originally created.
+        # If that UUID is stale/missing, rollback's delete_client call will get a
+        # 404 (safely rescued), which is preferable to deleting a manually
+        # recreated client that belongs to an operator outside this run's scope.
+
+        return unless auth_config.auth_type == "oidc"
+
+        # Identity diverged from the snapshot — refreshing the secret cache
+        # would expose a different client's secret. Drop any stale entry and
+        # let the operator surface the divergence via the warning log.
+        if @client_identity_diverged
+          Provisioning::SecretCache.delete(step_record.provisioning_job_id)
+          return
+        end
+
+        # Prefer the live UUID resolved by the clientId fallback; fall back to
+        # the snapshot UUID or the already-repaired local mirror.
+        client_uuid = @live_uuid_from_fallback.presence ||
+                      snapshot_uuid ||
+                      auth_config.keycloak_client_uuid
         return if client_uuid.blank?
 
         cache_client_secret!(KeycloakClient.new, client_uuid, auth_config.auth_type)
@@ -101,6 +188,46 @@ module Provisioning
           # Extract UUID from Location header (Keycloak 201 response)
           nil
         end
+      end
+
+      def record_identity_diverged_audit!(client, expected_uuid, expected_client_id)
+        AuditLog.create!(
+          organization: project.organization,
+          project: project,
+          # System-detected divergence has no acting user; mark the actor
+          # explicitly so audit queries can distinguish it from operator
+          # actions.
+          user_sub: "system:keycloak-client-create",
+          action: "auth_config.keycloak_client_diverged",
+          resource_type: "ProjectAuthConfig",
+          resource_id: project.project_auth_config&.id&.to_s,
+          details: {
+            expected_uuid: expected_uuid,
+            expected_client_id: expected_client_id,
+            live_id: client.is_a?(Hash) ? client["id"] : nil,
+            live_client_id: client.is_a?(Hash) ? client["clientId"] : nil,
+            provisioning_job_id: step_record.provisioning_job_id,
+            provisioning_step_id: step_record.id
+          }
+        )
+      rescue StandardError => e
+        # Don't fail the step on an audit insert failure; the warn log above
+        # already captures the divergence.
+        Rails.logger.error(
+          "[Provisioning::Steps::KeycloakClientCreate] failed to record identity " \
+          "divergence audit for project #{project.id}: #{e.class}: #{e.message}"
+        )
+      end
+
+      def client_identity_diverged?(client, expected_uuid, expected_client_id)
+        return false unless client.is_a?(Hash)
+
+        live_id = client["id"]
+        live_client_id = client["clientId"]
+        return true if live_id.present? && live_id != expected_uuid
+        return true if expected_client_id.present? && live_client_id.present? && live_client_id != expected_client_id
+
+        false
       end
 
       def cache_client_secret!(keycloak, client_uuid, auth_type)

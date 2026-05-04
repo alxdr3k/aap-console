@@ -1,4 +1,9 @@
 <% content_for :title, "인증 설정 | AAP Console" %>
+<% content_for :head do %>
+  <%# Secrets may be rendered into this page; opt out of Turbo's page cache so
+      back/forward navigation cannot restore a stale secret-bearing DOM. %>
+  <meta name="turbo-cache-control" content="no-cache">
+<% end %>
 
 <section class="page">
   <div class="breadcrumbs">
@@ -23,7 +28,8 @@
                         regenerate_secret_organization_project_auth_config_path(@organization.slug, @project.slug),
                         method: :post,
                         class: "button",
-                        data: { turbo_confirm: "Client Secret을 재발급할까요? 기존 Secret은 즉시 무효화됩니다." } %>
+                        data: { turbo: false },
+                        form: { onsubmit: "return confirm('Client Secret을 재발급할까요? 기존 Secret은 즉시 무효화됩니다.')" } %>
         <% else %>
           <span class="button button--disabled" title="Keycloak client가 아직 준비되지 않았습니다.">Client Secret 재발급 불가</span>
         <% end %>
@@ -404,7 +410,8 @@
       <%= form_with url: organization_project_project_api_keys_path(@organization.slug, @project.slug),
                     scope: :project_api_key,
                     method: :post,
-                    class: "form form--inline-panel" do |form| %>
+                    class: "form form--inline-panel",
+                    data: { turbo: false } do |form| %>
         <div class="form-grid form-grid--two">
           <div class="field">
             <%= form.label :name, "새 PAK 이름" %>

@@ -6,19 +6,24 @@ module Provisioning
       def write(provisioning_job, key:, label:, value:)
         return if value.blank?
 
-        existing = Rails.cache.read(cache_key(provisioning_job.id))
-        existing_secrets = existing["secrets"] if existing.is_a?(Hash) && existing["secrets"].is_a?(Hash)
-        secrets = existing_secrets&.dup || {}
-        secrets[key.to_s] = {
-          "label" => label,
-          "value" => value
-        }
+        # Serialize concurrent writes from parallel steps that share the same
+        # provisioning_job cache key. Without this, a read-merge-write race can
+        # silently drop a successfully minted secret from a sibling step.
+        provisioning_job.with_lock do
+          existing = Rails.cache.read(cache_key(provisioning_job.id))
+          existing_secrets = existing["secrets"] if existing.is_a?(Hash) && existing["secrets"].is_a?(Hash)
+          secrets = existing_secrets&.dup || {}
+          secrets[key.to_s] = {
+            "label" => label,
+            "value" => value
+          }
 
-        Rails.cache.write(
-          cache_key(provisioning_job.id),
-          payload_for(provisioning_job, secrets),
-          expires_in: TTL
-        )
+          Rails.cache.write(
+            cache_key(provisioning_job.id),
+            payload_for(provisioning_job, secrets),
+            expires_in: TTL
+          )
+        end
       end
 
       def read(provisioning_job)

@@ -59,28 +59,36 @@ RSpec.describe OrganizationDestroyFinalizeJob, type: :job do
       }.not_to have_enqueued_job(described_class)
     end
 
-    it "stops rescheduling when remaining projects are not in a delete flow" do
+    it "reschedules with a backoff and releases the reservation when a remaining project has no active delete job" do
       create(:project, :provision_failed, organization: organization, slug: "blocked-project")
-      allow(Rails.logger).to receive(:error)
+      organization.update!(destroy_finalizer_reserved_until: 5.minutes.from_now)
+      allow(Rails.logger).to receive(:warn)
 
       expect {
         described_class.perform_now(organization.id, current_user_sub: user_sub)
-      }.not_to have_enqueued_job(described_class)
+      }.to have_enqueued_job(described_class)
+        .and change { AuditLog.where(action: "organization.destroy.blocked").count }.by(1)
 
+      # Releasing the reservation allows operator-driven recovery paths to
+      # call enqueue_once immediately rather than waiting for the lease.
       expect(organization.reload.destroy_finalizer_reserved_until).to be_nil
-      expect(Rails.logger).to have_received(:error).with(/blocked-project:provision_failed/)
+      expect(Rails.logger).to have_received(:warn).with(/blocked-project:provision_failed/)
+      audit = AuditLog.where(action: "organization.destroy.blocked").last
+      expect(audit.organization).to eq(organization)
+      expect(audit.details["remaining_projects"]).to include("blocked-project:provision_failed")
     end
 
-    it "stops rescheduling when a deleting project has no active delete job" do
+    it "reschedules with a backoff and releases the reservation when a deleting project has no active delete job" do
       create(:project, :deleting, organization: organization, slug: "stalled-project")
-      allow(Rails.logger).to receive(:error)
+      organization.update!(destroy_finalizer_reserved_until: 5.minutes.from_now)
+      allow(Rails.logger).to receive(:warn)
 
       expect {
         described_class.perform_now(organization.id, current_user_sub: user_sub)
-      }.not_to have_enqueued_job(described_class)
+      }.to have_enqueued_job(described_class)
 
       expect(organization.reload.destroy_finalizer_reserved_until).to be_nil
-      expect(Rails.logger).to have_received(:error).with(/stalled-project:deleting/)
+      expect(Rails.logger).to have_received(:warn).with(/stalled-project:deleting/)
     end
   end
 end

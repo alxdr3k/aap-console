@@ -45,6 +45,8 @@ class MembersController < ApplicationController
       invited_at: Time.current
     )
 
+    membership_committed = false
+
     begin
       ActiveRecord::Base.transaction do
         membership.save!
@@ -64,29 +66,29 @@ class MembersController < ApplicationController
           }
         )
       end
-    rescue ActiveRecord::RecordInvalid => e
-      compensate_keycloak_user(created_keycloak_user_sub)
-      keycloak_compensated = true
-      return render_member_errors(e.record.errors.full_messages, :unprocessable_entity)
-    rescue StandardError
-      compensate_keycloak_user(created_keycloak_user_sub)
-      keycloak_compensated = true
-      raise
-    end
 
-    respond_to do |format|
-      format.json { render json: serialize_membership(membership.reload), status: :created }
-      format.html do
-        flash[:success] = "멤버가 추가되었습니다."
-        redirect_to organization_members_path(@organization.slug), status: :see_other
+      membership_committed = true
+
+      respond_to do |format|
+        format.json { render json: serialize_membership(membership.reload), status: :created }
+        format.html do
+          flash[:success] = "멤버가 추가되었습니다."
+          redirect_to organization_members_path(@organization.slug), status: :see_other
+        end
       end
+    rescue ActiveRecord::RecordInvalid => e
+      render_member_errors(e.record.errors.full_messages, :unprocessable_entity)
+    ensure
+      # Roll back any Keycloak user we just pre-created if the local membership
+      # never committed. Covers transient DB errors (StatementInvalid, lock
+      # timeouts) that bypass the explicit RecordInvalid/RecordNotFound paths.
+      compensate_keycloak_user(created_keycloak_user_sub) unless membership_committed
     end
   rescue BaseClient::NotFoundError
     render_member_errors([ "User not found" ], :unprocessable_entity)
   rescue BaseClient::ApiError
     render_member_error("Keycloak user lookup failed", :service_unavailable)
   rescue ActiveRecord::RecordNotFound
-    compensate_keycloak_user(created_keycloak_user_sub) unless keycloak_compensated
     render_member_error("Project not found", :not_found)
   end
 
