@@ -61,9 +61,12 @@
   <% end %>
 
   <%# Tab container — replaces vertical panel stack %>
-  <% current_tab = params[:tab].presence || "auth" %>
+  <%
+    allowed_tabs = %w[auth langfuse litellm history prov]
+    current_tab  = allowed_tabs.include?(params[:tab]) ? params[:tab] : "auth"
+  %>
   <div style="background:white;border:1px solid #d9e0ec;border-radius:8px;overflow:hidden;">
-    <nav class="tab-nav" role="tablist">
+    <nav class="tab-nav" aria-label="Project sections">
       <% [
         ["auth",    "인증 설정"],
         ["langfuse","Langfuse"],
@@ -74,8 +77,7 @@
         <%= link_to tab_label,
             organization_project_path(@organization.slug, @project.slug, tab: tab_id),
             class: "tab-btn #{"active" if current_tab == tab_id}",
-            role: "tab",
-            aria: { selected: current_tab == tab_id } %>
+            aria: { current: current_tab == tab_id ? "page" : nil } %>
       <% end %>
     </nav>
 
