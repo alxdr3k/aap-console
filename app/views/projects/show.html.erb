@@ -61,10 +61,6 @@
   <% end %>
 
   <%# Tab container — replaces vertical panel stack %>
-  <%
-    allowed_tabs = %w[auth langfuse litellm history prov]
-    current_tab  = allowed_tabs.include?(params[:tab]) ? params[:tab] : "auth"
-  %>
   <div style="background:white;border:1px solid #d9e0ec;border-radius:8px;overflow:hidden;">
     <nav class="tab-nav" aria-label="Project sections">
       <% [
@@ -76,14 +72,14 @@
       ].each do |tab_id, tab_label| %>
         <%= link_to tab_label,
             organization_project_path(@organization.slug, @project.slug, tab: tab_id),
-            class: "tab-btn #{"active" if current_tab == tab_id}",
-            aria: { current: current_tab == tab_id ? "page" : nil } %>
+            class: "tab-btn #{"active" if @current_tab == tab_id}",
+            aria: { current: @current_tab == tab_id ? "page" : nil } %>
       <% end %>
     </nav>
 
     <div class="tab-content">
       <%# Auth tab %>
-      <% if current_tab == "auth" %>
+      <% if @current_tab == "auth" %>
         <div style="display:grid;gap:14px;">
           <dl class="details-list">
             <div><dt>인증 방식</dt><dd><%= @auth_config&.auth_type || "미설정" %></dd></div>
@@ -124,7 +120,7 @@
         </div>
 
       <%# Langfuse tab %>
-      <% elsif current_tab == "langfuse" %>
+      <% elsif @current_tab == "langfuse" %>
         <dl class="details-list">
           <div><dt>Langfuse Project</dt><dd><%= @project.slug %></dd></div>
           <div>
@@ -155,7 +151,7 @@
         </dl>
 
       <%# LiteLLM tab %>
-      <% elsif current_tab == "litellm" %>
+      <% elsif @current_tab == "litellm" %>
         <div style="display:grid;gap:14px;">
           <dl class="details-list">
             <div>
@@ -198,7 +194,7 @@
         </div>
 
       <%# History tab %>
-      <% elsif current_tab == "history" %>
+      <% elsif @current_tab == "history" %>
         <% if @config_versions.any? %>
           <div style="display:grid;gap:8px;">
             <% @config_versions.each do |version| %>
@@ -221,7 +217,7 @@
         <% end %>
 
       <%# Provisioning history tab %>
-      <% elsif current_tab == "prov" %>
+      <% elsif @current_tab == "prov" %>
         <% if @provisioning_jobs.any? %>
           <div style="display:grid;gap:8px;">
             <% @provisioning_jobs.each do |job| %>

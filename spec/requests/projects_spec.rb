@@ -223,6 +223,14 @@ RSpec.describe "Projects", type: :request do
         expect(response.body).to include(organization_project_config_versions_path(org.slug, project.slug))
       end
 
+      it "defaults unknown tab param to auth tab" do
+        create(:project_auth_config, project: project, auth_type: "oidc", keycloak_client_id: "aap-unknown-tab-test")
+        get "/organizations/#{org.slug}/projects/#{project.slug}?tab=bogus", headers: html_headers
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("aap-unknown-tab-test")
+        expect(response.body).not_to include("azure-gpt4")
+      end
+
       it "renders an active provisioning warning and disables delete affordance" do
         active_job = create(:provisioning_job, :in_progress, project: project, operation: "update")
 

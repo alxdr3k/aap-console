@@ -208,7 +208,8 @@ module ApplicationHelper
 
   def provisioning_step_status_badge_class(step)
     case step.status
-    when "completed", "skipped"    then "badge badge--completed"
+    when "completed"               then "badge badge--completed"
+    when "skipped"                 then "badge badge--muted"
     when "in_progress"             then "badge badge--in-progress"
     when "failed"                  then "badge badge--failed"
     when "rollback_failed"         then "badge badge--rollback-fail"
@@ -223,7 +224,7 @@ module ApplicationHelper
   def provisioning_step_status_label(step)
     case step.status
     when "completed"      then "완료"
-    when "skipped"        then "완료"
+    when "skipped"        then "건너뜀"
     when "in_progress"    then "진행중..."
     when "failed"         then "실패"
     when "rollback_failed" then "롤백 실패"

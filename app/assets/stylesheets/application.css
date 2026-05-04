@@ -1,8 +1,6 @@
 /* Application styles */
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 html {
@@ -433,11 +431,21 @@ select {
 .badge--role-write       { background: #eef6ee; color: #276227; border-color: #86efac; }
 .badge--role-read        { background: #f5f5f5; color: #475569; border-color: #cbd5e1; }
 
-.code-token,
-code {
+.code-token {
   overflow-wrap: anywhere;
   color: #334155;
-  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Inline code chips — scoped to avoid touching diff-view and pre blocks */
+:not(pre) > code:not(.diff-view__line) {
+  overflow-wrap: anywhere;
+  color: #334155;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   background: #f1f5f9;
   padding: 1px 5px;
