@@ -126,17 +126,11 @@ module Provisioning
           auth_config.update!(keycloak_client_uuid: repair_uuid)
         end
 
-        # Also update the step snapshot so rollback targets the live UUID.
-        # Without this, rollback uses the stale/missing UUID, which is a no-op,
-        # while the live client (with the correct clientId) stays orphaned.
-        if @live_uuid_from_fallback.present? &&
-           step_record.result_snapshot&.dig("keycloak_client_uuid") != @live_uuid_from_fallback
-          step_record.update!(
-            result_snapshot: (step_record.result_snapshot || {}).merge(
-              "keycloak_client_uuid" => @live_uuid_from_fallback
-            )
-          )
-        end
+        # Do NOT update result_snapshot with the fallback UUID.
+        # The snapshot records the UUID this provisioning run originally created.
+        # If that UUID is stale/missing, rollback's delete_client call will get a
+        # 404 (safely rescued), which is preferable to deleting a manually
+        # recreated client that belongs to an operator outside this run's scope.
 
         return unless auth_config.auth_type == "oidc"
 

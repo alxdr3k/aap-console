@@ -102,9 +102,10 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
         expect(result[:status]).to eq(:completed)
         expect(auth_config.reload.keycloak_client_uuid).to eq("uuid-new")
         expect(Provisioning::SecretCache.read(job).dig("secrets", "client_secret", "value")).to eq("live-secret")
-        # Step snapshot must be updated so rollback targets the live UUID and
-        # does not leave the repaired Keycloak client orphaned.
-        expect(step_record.reload.result_snapshot["keycloak_client_uuid"]).to eq("uuid-new")
+        # Snapshot must retain the original UUID so rollback does not target the
+        # manually-recreated live client (which was not created by this run).
+        # Rollback will 404 on the stale UUID — that is intentional and safe.
+        expect(step_record.reload.result_snapshot["keycloak_client_uuid"]).to eq("uuid-old")
       end
     end
 
