@@ -35,14 +35,25 @@ module ApplicationHelper
 
   def project_status_badge_class(project)
     case project.status
-    when "active"
-      "badge"
-    when "provisioning", "update_pending", "deleting"
-      "badge badge--warning"
-    when "deleted", "provision_failed"
-      "badge badge--danger"
-    else
-      "badge badge--muted"
+    when "active"             then "badge badge--active"
+    when "provisioning"       then "badge badge--provisioning"
+    when "update_pending"     then "badge badge--in-progress"
+    when "deleting"           then "badge badge--rolling-back"
+    when "provision_failed"   then "badge badge--prov-failed"
+    when "deleted"            then "badge badge--muted"
+    else                           "badge badge--muted"
+    end
+  end
+
+  def project_status_label(project)
+    case project.status
+    when "active"             then "활성"
+    when "provisioning"       then "생성중"
+    when "update_pending"     then "업데이트 대기"
+    when "deleting"           then "삭제중"
+    when "provision_failed"   then "생성 실패"
+    when "deleted"            then "삭제됨"
+    else project.status
     end
   end
 
@@ -50,14 +61,33 @@ module ApplicationHelper
     return "badge badge--muted" unless job
 
     case job.status
-    when "completed", "completed_with_warnings"
-      "badge"
-    when "failed", "rollback_failed"
-      "badge badge--danger"
-    when "rolled_back"
-      "badge badge--muted"
-    else
-      "badge badge--warning"
+    when "completed"               then "badge badge--completed"
+    when "completed_with_warnings" then "badge badge--warnings"
+    when "failed"                  then "badge badge--failed"
+    when "rollback_failed"         then "badge badge--rollback-fail"
+    when "rolled_back"             then "badge badge--rolled-back"
+    when "in_progress"             then "badge badge--in-progress"
+    when "retrying"                then "badge badge--retrying"
+    when "rolling_back"            then "badge badge--rolling-back"
+    when "pending"                 then "badge badge--pending"
+    else                                "badge badge--muted"
+    end
+  end
+
+  def provisioning_status_label(job)
+    return "-" unless job
+
+    case job.status
+    when "completed"               then "완료"
+    when "completed_with_warnings" then "완료 (경고)"
+    when "failed"                  then "실패"
+    when "rollback_failed"         then "실패 (수동 조치 필요)"
+    when "rolled_back"             then "실패 (정리 완료)"
+    when "in_progress"             then "진행중"
+    when "retrying"                then "재시도중"
+    when "rolling_back"            then "정리중"
+    when "pending"                 then "대기"
+    else job.status
     end
   end
 
@@ -178,14 +208,31 @@ module ApplicationHelper
 
   def provisioning_step_status_badge_class(step)
     case step.status
-    when "completed"
-      "badge"
-    when "failed", "rollback_failed"
-      "badge badge--danger"
-    when "skipped", "rolled_back"
-      "badge badge--muted"
-    else
-      "badge badge--warning"
+    when "completed"               then "badge badge--completed"
+    when "skipped"                 then "badge badge--muted"
+    when "in_progress"             then "badge badge--in-progress"
+    when "failed"                  then "badge badge--failed"
+    when "rollback_failed"         then "badge badge--rollback-fail"
+    when "rolled_back"             then "badge badge--rolled-back"
+    when "retrying"                then "badge badge--retrying"
+    when "rolling_back"            then "badge badge--rolling-back"
+    when "pending"                 then "badge badge--pending"
+    else                                "badge badge--muted"
+    end
+  end
+
+  def provisioning_step_status_label(step)
+    case step.status
+    when "completed"      then "완료"
+    when "skipped"        then "건너뜀"
+    when "in_progress"    then "진행중..."
+    when "failed"         then "실패"
+    when "rollback_failed" then "롤백 실패"
+    when "rolled_back"    then "롤백 완료"
+    when "retrying"       then "재시도중"
+    when "rolling_back"   then "정리중"
+    when "pending"        then "대기"
+    else step.status
     end
   end
 

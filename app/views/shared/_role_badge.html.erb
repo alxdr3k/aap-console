@@ -1,0 +1,16 @@
+<%#
+  Renders a role badge.
+  Locals: role (String) — "super_admin" | "super admin" | "admin" | "write" | "read"
+  The helper organization_role_label may return "super admin" (space) for super-admin users.
+%>
+<%
+  role_css_map = {
+    "super_admin" => "badge--role-super-admin",
+    "super admin" => "badge--role-super-admin",
+    "admin"       => "badge--role-admin",
+    "write"       => "badge--role-write",
+    "read"        => "badge--role-read",
+  }
+  css = role_css_map[role.to_s] || "badge--role-read"
+%>
+<span class="badge <%= css %>"><%= role %></span>

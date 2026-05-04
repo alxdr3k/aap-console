@@ -104,7 +104,7 @@ export default class extends Controller {
 
     this.statusValue = status
     if (this.hasStatusTarget) {
-      this.statusTarget.textContent = status
+      this.statusTarget.textContent = this.jobStatusLabel(status)
       this.statusTarget.className = this.jobStatusClass(status)
     }
 
@@ -277,11 +277,33 @@ export default class extends Controller {
     delete this.targetLinkTarget.dataset.originalHref
   }
 
-  jobStatusClass(status) {
-    if (["completed", "completed_with_warnings"].includes(status)) return "badge"
-    if (["failed", "rollback_failed"].includes(status)) return "badge badge--danger"
-    if (status === "rolled_back") return "badge badge--muted"
+  jobStatusLabel(status) {
+    const labels = {
+      pending:                 "대기",
+      in_progress:             "진행중",
+      completed:               "완료",
+      completed_with_warnings: "완료 (경고)",
+      failed:                  "실패",
+      retrying:                "재시도중",
+      rolling_back:            "정리중",
+      rolled_back:             "실패 (정리 완료)",
+      rollback_failed:         "실패 (수동 조치 필요)",
+    }
+    return labels[status] || status
+  }
 
-    return "badge badge--warning"
+  jobStatusClass(status) {
+    const classes = {
+      pending:                 "badge badge--pending",
+      in_progress:             "badge badge--in-progress",
+      completed:               "badge badge--completed",
+      completed_with_warnings: "badge badge--warnings",
+      failed:                  "badge badge--failed",
+      retrying:                "badge badge--retrying",
+      rolling_back:            "badge badge--rolling-back",
+      rolled_back:             "badge badge--rolled-back",
+      rollback_failed:         "badge badge--rollback-fail",
+    }
+    return classes[status] || "badge badge--muted"
   }
 }
