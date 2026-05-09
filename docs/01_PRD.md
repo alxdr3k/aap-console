@@ -1,6 +1,6 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> **Version**: 1.22
+> **Version**: 1.23
 > **Date**: 2026-05-09
 > **Status**: Approved
 > **References**: [HLD](./02_HLD.md) · [UI Spec](./ui-spec.md)
@@ -259,7 +259,7 @@ Realm: aap (단일)
 |------|------|
 | **생성** | Organization 하위에 신규 Project 등록. 이름, 설명 입력. 생성 시 App ID 자동 발급 |
 | **조회** | Project 목록 및 상세 정보 (각 서비스에 추가된 설정 현황, 발급된 App ID) 확인 |
-| **수정** | Project 설정 변경 (Redirect URI, Client Secret 재발급, 모델 라우팅, S3 Retention 등). 주 인증 방식(`auth_type`) 변경은 [ADR-007](./adr/adr-007-auth-type-migration.md) Dual-Client 마이그레이션 플로우(AUTH-6B)로만 가능하며, 단일 cut-over는 허용하지 않는다 |
+| **수정** | Project 설정 변경 (Redirect URI, Client Secret 재발급, 모델 라우팅, S3 Retention 등). 주 인증 방식(`auth_type`) 변경은 [ADR-007](./adr/adr-007-auth-type-migration.md) Dual-Client 마이그레이션 플로우(AUTH-6B)로만 가능하며, 단일 cut-over는 허용하지 않는다. 인증 설정과 LiteLLM Config는 **통합 편집 화면**에서 단일 PATCH로 일괄 변경 가능하며, 이 경우 단 1회의 Update 프로비저닝 Job이 변경된 필드에 따라 조건부 step만 실행한다 |
 | **삭제** | Project 삭제 시 생성/수정 과정에서 추가된 **모든** 내역을 롤백. 아래 전체 대상 참고 |
 
 **삭제 시 롤백 대상**:
@@ -276,6 +276,8 @@ Realm: aap (단일)
 ### FR-4. 인증 체계 자동 구성
 
 사용자가 Project 생성 시 인증 방식을 선택하면 자동으로 구성된다. 최종 목표는 SAML/OIDC/OAuth/PAK 전체 지원이지만, Phase 1에서는 OIDC만 실제 선택 가능하게 하고 SAML/OAuth/PAK는 Phase 4까지 숨김 또는 disabled 상태로 둔다.
+
+> 인증 설정 변경은 통합 편집 화면(FR-3 §수정 참조)에서 LiteLLM Config 등 다른 설정과 동일 PATCH로 묶어 단일 Update 프로비저닝 Job으로 처리할 수 있다. 단독 편집 경로(read-only 상세 → "지금 적용" 단축 경로)도 호환을 위해 유지한다.
 
 | 인증 방식 | 구성 내용 |
 |-----------|-----------|
@@ -352,6 +354,8 @@ Langfuse 웹 UI가 내부적으로 사용하는 tRPC API를 직접 호출한다.
 | **S3 Retention** | App별 S3 데이터 보관 주기를 LiteLLM Config 변수로 설정. LiteLLM이 해당 변수를 읽어 커스텀 구현된 Retention 로직을 적용 (S3 Lifecycle Policy가 아닌 애플리케이션 레벨 처리) |
 | **Config 반영** | Console이 Config Server Admin API (`POST /api/v1/admin/changes`)로 설정/시크릿 데이터를 일괄 전달. Config Server가 atomic하게 처리 후 버전 식별자 반환 |
 | **Reload 방식** | Console은 Config Server Admin API 호출까지만 수행. 저장, 인메모리 갱신, LiteLLM 전파는 Config Server 모듈이 자동 처리 |
+
+> LiteLLM Config 변경은 통합 편집 화면(FR-3 §수정 참조)에서 인증 설정 등 다른 설정과 동일 PATCH로 묶어 단일 Update 프로비저닝 Job으로 처리할 수 있다.
 
 ### FR-7. 프로비저닝 파이프라인 관리
 
