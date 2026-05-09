@@ -489,6 +489,20 @@ RSpec.describe "Projects", type: :request do
 
         expect(project.reload.description).to be_nil
       end
+
+      it "returns 202 Accepted with provisioning_job_id for JSON unified PATCH that enqueues a job" do
+        patch "/organizations/#{org.slug}/projects/#{project.slug}",
+              params: { project: {
+                redirect_uris: [ "https://app.example.com/callback" ]
+              } },
+              headers: wildcard_headers
+
+        expect(response).to have_http_status(:accepted)
+        body = response.parsed_body
+        job = project.provisioning_jobs.order(:id).last
+        expect(body["provisioning_job_id"]).to eq(job.id)
+        expect(body.dig("project", "name")).to eq(project.name)
+      end
     end
   end
 

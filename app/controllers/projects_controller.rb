@@ -127,7 +127,13 @@ class ProjectsController < ApplicationController
 
     if result.success?
       provisioning_job = result.data[:provisioning_job]
-      return render json: @project if default_json_request?
+      if default_json_request?
+        if provisioning_job
+          return render json: { project: @project, provisioning_job_id: provisioning_job.id }, status: :accepted
+        else
+          return render json: @project
+        end
+      end
 
       respond_to do |format|
         format.html do
@@ -139,7 +145,13 @@ class ProjectsController < ApplicationController
             redirect_to organization_project_path(@organization.slug, @project.slug), status: :see_other
           end
         end
-        format.json { render json: @project }
+        format.json do
+          if provisioning_job
+            render json: { project: @project, provisioning_job_id: provisioning_job.id }, status: :accepted
+          else
+            render json: @project
+          end
+        end
       end
     else
       @errors = [ result.error ]
