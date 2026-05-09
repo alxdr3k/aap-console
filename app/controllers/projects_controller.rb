@@ -95,9 +95,33 @@ class ProjectsController < ApplicationController
   end
 
   def update
+    attributes = project_update_params.to_h.symbolize_keys
+    validation_errors = unified_edit_errors(attributes)
+
+    if validation_errors.any?
+      @errors = validation_errors
+
+      return render json: { errors: @errors }, status: :unprocessable_entity if default_json_request?
+
+      if unified_edit_request?
+        prepare_unified_edit
+        respond_to do |format|
+          format.html { render :edit, status: :unprocessable_entity }
+          format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+        end
+      else
+        prepare_project_show
+        respond_to do |format|
+          format.html { render :show, status: :unprocessable_entity }
+          format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+        end
+      end
+      return
+    end
+
     result = Projects::UpdateService.new(
       project: @project,
-      params: project_update_params.to_h.symbolize_keys,
+      params: attributes,
       current_user_sub: Current.user_sub
     ).call
 
@@ -251,8 +275,10 @@ class ProjectsController < ApplicationController
   end
 
   UNIFIED_EXTERNAL_KEYS = %i[redirect_uris post_logout_redirect_uris models guardrails s3_retention_days].freeze
+  URI_TEXTAREA_KEYS = %i[redirect_uris post_logout_redirect_uris].freeze
 
   def project_update_params
+    coerce_uri_textareas!
     permitted = params.require(:project).permit(
       :name,
       :description,
@@ -273,6 +299,22 @@ class ProjectsController < ApplicationController
     permitted
   end
 
+  # Convert newline-separated strings from the unified edit textareas
+  # (`project[redirect_uris]` etc.) into array form so the strong-params
+  # `key: []` filter retains them. Without this, scalar values are dropped
+  # silently and the unified PATCH would never reach the auth provisioning step.
+  def coerce_uri_textareas!
+    project_params = params[:project]
+    return unless project_params.respond_to?(:[])
+
+    URI_TEXTAREA_KEYS.each do |key|
+      raw = project_params[key]
+      next unless raw.is_a?(String)
+
+      project_params[key] = raw.split(/\r?\n/).map(&:strip).reject(&:blank?)
+    end
+  end
+
   def unified_edit_request?
     UNIFIED_EXTERNAL_KEYS.any? { |key| params.dig(:project, key).present? }
   end
@@ -285,5 +327,54 @@ class ProjectsController < ApplicationController
     @selected_models = Array(snapshot["models"]).compact_blank
     @selected_guardrails = Array(snapshot["guardrails"]).compact_blank
     @s3_retention_days = snapshot["s3_retention_days"].presence || DEFAULT_S3_RETENTION_DAYS
+  end
+
+  # Mirror the validation rules of the legacy AuthConfigsController and
+  # LitellmConfigsController so the unified PATCH cannot bypass them. Without this,
+  # a write user could push e.g. an OAuth redirect_uri without HTTPS, an unknown
+  # LiteLLM model, or an out-of-range retention through the new endpoint.
+  def unified_edit_errors(attributes)
+    errors = []
+
+    if attributes.key?(:models)
+      errors << "모델을 하나 이상 선택하세요." if Array(attributes[:models]).compact_blank.empty?
+      unknown_models = Array(attributes[:models]).compact_blank - AVAILABLE_MODELS
+      errors << "허용되지 않은 모델: #{unknown_models.join(', ')}" if unknown_models.any?
+    end
+
+    if attributes.key?(:guardrails)
+      unknown_guardrails = Array(attributes[:guardrails]).compact_blank - AVAILABLE_GUARDRAILS
+      errors << "허용되지 않은 가드레일: #{unknown_guardrails.join(', ')}" if unknown_guardrails.any?
+    end
+
+    if attributes.key?(:s3_retention_days) && !attributes[:s3_retention_days].nil?
+      retention_days = attributes[:s3_retention_days].to_i
+      errors << "S3 Retention은 1일부터 3650일 사이여야 합니다." unless retention_days.between?(1, 3650)
+    end
+
+    if attributes.key?(:redirect_uris) && @project.project_auth_config&.auth_type == "oauth"
+      errors.concat(pkce_redirect_uri_errors(attributes[:redirect_uris]))
+    end
+
+    errors
+  end
+
+  def pkce_redirect_uri_errors(uris)
+    Array(uris).compact_blank.flat_map do |uri|
+      errors = []
+      begin
+        parsed = URI.parse(uri)
+        errors << "OAuth Redirect URI에 fragment(#)를 포함할 수 없습니다: #{uri}" if parsed.fragment.present?
+        if parsed.host.blank?
+          errors << "OAuth Redirect URI에 유효한 호스트가 없습니다: #{uri}"
+        else
+          localhost = parsed.scheme == "http" && %w[localhost 127.0.0.1 [::1]].include?(parsed.host)
+          errors << "OAuth Redirect URI는 HTTPS를 사용해야 합니다 (localhost 제외): #{uri}" unless parsed.scheme == "https" || localhost
+        end
+      rescue URI::InvalidURIError
+        errors << "유효하지 않은 URI 형식입니다: #{uri}"
+      end
+      errors
+    end
   end
 end

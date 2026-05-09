@@ -365,6 +365,70 @@ RSpec.describe "Projects", type: :request do
 
         expect(response).to have_http_status(:unprocessable_entity)
       end
+
+      it "coerces newline-separated redirect_uris textarea into an array" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: {
+                  redirect_uris: "https://app.example.com/callback\nhttps://staging.example.com/callback\n"
+                } },
+                headers: html_headers
+        }.to change(ProvisioningJob, :count).by(1)
+
+        job = project.provisioning_jobs.order(:id).last
+        expect(job.input_snapshot["redirect_uris"]).to eq(
+          [ "https://app.example.com/callback", "https://staging.example.com/callback" ]
+        )
+      end
+
+      it "does not enqueue a job when submitted external values match the persisted state" do
+        project.project_auth_config.update!(redirect_uris: [ "https://app.example.com/callback" ])
+
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: {
+                  redirect_uris: [ "https://app.example.com/callback" ]
+                } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to redirect_to(organization_project_path(org.slug, project.slug))
+      end
+
+      it "rejects unknown LiteLLM models with 422 even on the unified path" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { models: [ "rogue-model" ] } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("허용되지 않은 모델")
+      end
+
+      it "rejects out-of-range S3 retention on the unified path" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { s3_retention_days: 5000 } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("S3 Retention")
+      end
+
+      it "rejects insecure OAuth redirect URIs on the unified path" do
+        project.project_auth_config.update!(auth_type: "oauth")
+
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { redirect_uris: [ "http://evil.example.com/callback" ] } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("HTTPS")
+      end
     end
   end
 
