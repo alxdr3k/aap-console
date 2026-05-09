@@ -70,8 +70,19 @@ module Projects
 
     private
 
+    # Compare submitted metadata to persisted state. The unified edit form
+    # serializes a nil `description` as an empty string, so we normalize blanks
+    # to nil before comparison; otherwise an unchanged form would mutate
+    # description from nil to "" and write a misleading audit row.
+    OPTIONAL_METADATA = %i[description].freeze
+
     def compute_dirty_metadata_params
-      @params.slice(:name, :description).reject { |k, v| @project.public_send(k) == v }
+      @params.slice(:name, :description).reject do |key, value|
+        normalized_submitted = OPTIONAL_METADATA.include?(key) ? value.presence : value
+        normalized_current = @project.public_send(key)
+        normalized_current = normalized_current.presence if OPTIONAL_METADATA.include?(key)
+        normalized_submitted == normalized_current
+      end
     end
 
     def active_job_exists?

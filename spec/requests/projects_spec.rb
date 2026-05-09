@@ -477,6 +477,18 @@ RSpec.describe "Projects", type: :request do
 
         expect(response).to redirect_to(organization_project_path(org.slug, project.slug))
       end
+
+      it "treats blank description equivalent to nil for dirty detection" do
+        project.update_columns(description: nil)
+
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { name: project.name, description: "" } },
+                headers: html_headers
+        }.to change(AuditLog, :count).by(0).and change(ProvisioningJob, :count).by(0)
+
+        expect(project.reload.description).to be_nil
+      end
     end
   end
 
@@ -521,6 +533,17 @@ RSpec.describe "Projects", type: :request do
 
       get "/organizations/#{org.slug}/projects/#{project.slug}/edit", headers: html_headers
       expect(response).to have_http_status(:forbidden)
+    end
+
+    it "does not show the LiteLLM tab edit CTA to read-only members" do
+      read_membership = create(:org_membership, organization: org, user_sub: "reader", role: "read")
+      create(:project_permission, org_membership: read_membership, project: project, role: "read")
+      login_as("reader")
+
+      get "/organizations/#{org.slug}/projects/#{project.slug}?tab=litellm", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).not_to match(/href="[^"]*\/edit"[^>]*>\s*설정 편집/)
     end
   end
 
