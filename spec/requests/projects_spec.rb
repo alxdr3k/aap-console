@@ -451,6 +451,32 @@ RSpec.describe "Projects", type: :request do
         expect(response).to have_http_status(:unprocessable_entity)
         expect(response.body).to include("모델을 하나 이상")
       end
+
+      it "audits the actually-changed metadata field even when no external fields are dirty" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { name: "Audit Renamed" } },
+                headers: html_headers
+        }.to change(AuditLog, :count).by(1)
+
+        log = AuditLog.order(:id).last
+        expect(log.action).to eq("project.update")
+        expect(log.details["changed_fields"]).to eq([ "name" ])
+      end
+
+      it "skips audit and provisioning entirely for a no-op unified submission" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: {
+                  name: project.name,
+                  description: project.description,
+                  redirect_uris: Array(project.project_auth_config.redirect_uris)
+                } },
+                headers: html_headers
+        }.to change(AuditLog, :count).by(0).and change(ProvisioningJob, :count).by(0)
+
+        expect(response).to redirect_to(organization_project_path(org.slug, project.slug))
+      end
     end
   end
 

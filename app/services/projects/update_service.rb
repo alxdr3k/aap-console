@@ -15,7 +15,16 @@ module Projects
       return Result.failure("Cannot update a deleted project") if @project.deleted?
 
       dirty_external = compute_dirty_external_params
+      dirty_metadata = compute_dirty_metadata_params
       needs_provisioning = dirty_external.any?
+
+      # Short-circuit no-op submissions (e.g., user opened the unified edit
+      # form, made no changes, hit save). Without this we'd write a
+      # `project.update` audit log row with no useful changed_fields and,
+      # for unified PATCH, surface success even though nothing happened.
+      if dirty_external.empty? && dirty_metadata.empty?
+        return Result.success({ project: @project, provisioning_job: nil })
+      end
 
       if needs_provisioning
         return Result.failure("Another provisioning job is in progress") if active_job_exists?
@@ -24,7 +33,7 @@ module Projects
       provisioning_job = nil
 
       ActiveRecord::Base.transaction do
-        update_project_metadata if metadata_params.any?
+        @project.update!(dirty_metadata) if dirty_metadata.any?
 
         if needs_provisioning
           @project.update!(status: :update_pending)
@@ -48,7 +57,7 @@ module Projects
           action: "project.update",
           resource_type: "Project",
           resource_id: @project.id.to_s,
-          details: { changed_fields: changed_field_names(dirty_external) }
+          details: { changed_fields: (dirty_metadata.keys + dirty_external.keys).map(&:to_s) }
         )
       end
 
@@ -61,11 +70,7 @@ module Projects
 
     private
 
-    def update_project_metadata
-      @project.update!(metadata_params)
-    end
-
-    def metadata_params
+    def compute_dirty_metadata_params
       @params.slice(:name, :description).reject { |k, v| @project.public_send(k) == v }
     end
 
@@ -110,11 +115,6 @@ module Projects
       else
         a.to_s == b.to_s
       end
-    end
-
-    def changed_field_names(dirty_external)
-      metadata_keys = metadata_params.keys
-      (metadata_keys + dirty_external.keys).map(&:to_s)
     end
   end
 end
