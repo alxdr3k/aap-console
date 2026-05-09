@@ -627,7 +627,7 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 `/organizations/:org_slug/projects/:slug/edit`. 인증 설정·LiteLLM Config·메타데이터(이름/설명)를 단일 폼으로 편집한다. 변경된 필드만 단일 PATCH로 전송되며 백엔드(`Projects::UpdateService`)가 dirty 필드 기준으로 단일 Update 프로비저닝 Job을 enqueue한다 (HLD §5.6 트리거 표 참조).
 
 **설계 원칙**:
-- **하나의 쓰기 가능한 편집 표면(single writable surface)**. §8.8/§8.11은 read-only 상세 + Client Secret 재발급/인증 마이그레이션 같은 destructive 액션 전용으로 강등.
+- **하나의 쓰기 가능한 편집 표면(single writable surface)**. §8.8/§8.11은 read-only 상세 + Client Secret 재발급/인증 마이그레이션 같은 destructive 액션 전용으로 강등. ⚠ 현재 슬라이스(`UI-5C.4`)에서는 통합 편집 + CTA 전환만 도입하고, `auth_config#update` / `litellm_config#update` 레거시 PATCH 경로는 호환을 위해 유지된다. 완전한 read-only 전환은 `UI-5C.5`(레거시 deprecation) 슬라이스에서 처리한다.
 - **탭 사용 금지**. 탭은 다른 섹션의 dirty 상태를 가려 한 폼으로 묶어 보내는 의도를 약화시킨다. 대신 collapsible sections (기본 expanded)로 모든 변경을 동시 가시화.
 - **확인 모달 없음**. Update는 가역(rollback runner)이라 §6.2 위험 액션 모달의 대상이 아니다. 폼 하단 sticky "변경 요약" 패널이 사전 검토 역할.
 

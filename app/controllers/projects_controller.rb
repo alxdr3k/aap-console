@@ -327,6 +327,10 @@ class ProjectsController < ApplicationController
     @selected_models = Array(snapshot["models"]).compact_blank
     @selected_guardrails = Array(snapshot["guardrails"]).compact_blank
     @s3_retention_days = snapshot["s3_retention_days"].presence || DEFAULT_S3_RETENTION_DAYS
+    @active_provisioning_job = @project.provisioning_jobs
+                                       .where(status: ProvisioningJob::ACTIVE_STATUSES)
+                                       .order(created_at: :desc)
+                                       .first
   end
 
   # Mirror the validation rules of the legacy AuthConfigsController and
@@ -347,9 +351,15 @@ class ProjectsController < ApplicationController
       errors << "허용되지 않은 가드레일: #{unknown_guardrails.join(', ')}" if unknown_guardrails.any?
     end
 
-    if attributes.key?(:s3_retention_days) && !attributes[:s3_retention_days].nil?
-      retention_days = attributes[:s3_retention_days].to_i
-      errors << "S3 Retention은 1일부터 3650일 사이여야 합니다." unless retention_days.between?(1, 3650)
+    if attributes.key?(:s3_retention_days)
+      raw = params.dig(:project, :s3_retention_days)
+      raw = raw.respond_to?(:strip) ? raw.strip : raw
+      coerced = attributes[:s3_retention_days]
+      if coerced.nil? || raw.to_s.empty?
+        errors << "S3 Retention은 1일부터 3650일 사이여야 합니다."
+      else
+        errors << "S3 Retention은 1일부터 3650일 사이여야 합니다." unless coerced.is_a?(Integer) && coerced.between?(1, 3650)
+      end
     end
 
     if attributes.key?(:redirect_uris) && @project.project_auth_config&.auth_type == "oauth"

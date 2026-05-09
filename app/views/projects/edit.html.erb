@@ -23,11 +23,23 @@
     </ul>
   <% end %>
 
+  <% if @active_provisioning_job %>
+    <aside class="banner banner-warning" role="status">
+      ⚠ 진행 중인 프로비저닝 작업이 있습니다. 현재 작업이 완료된 후 설정을 변경해주세요.
+      <%= link_to "진행 상황 보기", provisioning_job_path(@active_provisioning_job) %>
+    </aside>
+  <% end %>
+
   <%= form_with model: @project,
                 url: organization_project_path(@organization.slug, @project.slug),
                 method: :patch,
                 local: true,
-                html: { class: "stacked-form", data: { dirty_tracker_target: "form" } } do |f| %>
+                html: {
+                  class: "stacked-form",
+                  data: { dirty_tracker_target: "form" }
+                } do |f| %>
+    <% form_disabled = @active_provisioning_job.present? %>
+    <% disabled_attrs = form_disabled ? { disabled: true } : {} %>
 
     <details open class="config-section" data-dirty-tracker-target="section" data-section="meta">
       <summary>
@@ -102,6 +114,8 @@
 
       <fieldset class="field">
         <legend>모델 *</legend>
+        <%# Hidden empty value preserves an explicit "all models cleared" submission %>
+        <%= hidden_field_tag "project[models][]", "" %>
         <% @available_models.each do |model_name| %>
           <label class="checkbox">
             <%= check_box_tag "project[models][]",
@@ -118,6 +132,7 @@
 
       <fieldset class="field">
         <legend>가드레일</legend>
+        <%= hidden_field_tag "project[guardrails][]", "" %>
         <% @available_guardrails.each do |guardrail| %>
           <label class="checkbox">
             <%= check_box_tag "project[guardrails][]",
@@ -151,7 +166,12 @@
       <ul data-dirty-tracker-target="summaryList" hidden></ul>
       <div class="actions">
         <%= link_to "취소", organization_project_path(@organization.slug, @project.slug), class: "button" %>
-        <%= f.submit "변경 저장 및 적용", class: "button button-primary" %>
+        <% if form_disabled %>
+          <%= f.submit "변경 저장 및 적용", class: "button button-primary", disabled: true,
+                title: "진행 중인 작업이 완료된 후 시도하세요" %>
+        <% else %>
+          <%= f.submit "변경 저장 및 적용", class: "button button-primary" %>
+        <% end %>
       </div>
     </aside>
   <% end %>

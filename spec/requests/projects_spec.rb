@@ -429,6 +429,28 @@ RSpec.describe "Projects", type: :request do
         expect(response).to have_http_status(:unprocessable_entity)
         expect(response.body).to include("HTTPS")
       end
+
+      it "rejects blank S3 retention on the unified path" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { s3_retention_days: "" } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("S3 Retention")
+      end
+
+      it "rejects an explicit empty model array (clearing all models) on the unified path" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { models: [ "" ] } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("모델을 하나 이상")
+      end
     end
   end
 
@@ -453,6 +475,16 @@ RSpec.describe "Projects", type: :request do
         expect(response.body).to include("메타데이터")
         expect(response.body).to include("인증 설정")
         expect(response.body).to include("LiteLLM Config")
+      end
+
+      it "shows the active-provisioning banner and disables submit when a job is active" do
+        create(:provisioning_job, project: project, operation: "update", status: :in_progress)
+
+        get "/organizations/#{org.slug}/projects/#{project.slug}/edit", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("진행 중인 프로비저닝 작업")
+        expect(response.body).to match(/<input[^>]+type="submit"[^>]+disabled/)
       end
     end
 
