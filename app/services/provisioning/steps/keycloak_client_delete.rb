@@ -15,11 +15,34 @@ module Provisioning
         return { deleted: true, reason: "no_uuid" } unless uuid
 
         keycloak = KeycloakClient.new
-        keycloak.delete_client(uuid: uuid)
+        keycloak.delete_client(uuid: uuid, expected_client_id: client_id)
 
         { deleted: true, keycloak_client_uuid: uuid }
       rescue BaseClient::NotFoundError
         { deleted: true, reason: "already_deleted" }
+      rescue KeycloakClient::IdentityMismatchError => e
+        # Stale UUID resolves to a different aap-prefixed client. Deleting
+        # the foreign client would be a cross-project breach, but reporting
+        # success would mark this project deleted while its real Keycloak
+        # client remains active. Audit and propagate so the orchestrator
+        # records a failure that an operator must reconcile.
+        AuditLog.create!(
+          organization: project.organization,
+          project: project,
+          user_sub: "system:keycloak-client-delete",
+          action: "auth_config.keycloak_client_diverged",
+          resource_type: "ProjectAuthConfig",
+          resource_id: project.project_auth_config&.id&.to_s,
+          details: {
+            expected_uuid: uuid,
+            expected_client_id: client_id,
+            live_client_id: e.live_client_id,
+            detection_phase: "client_delete",
+            provisioning_job_id: step_record.provisioning_job_id,
+            provisioning_step_id: step_record.id
+          }
+        )
+        raise
       end
 
       def rollback

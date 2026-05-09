@@ -21,7 +21,8 @@ module Provisioning
         previous_redirect_uris = auth_config.redirect_uris&.dup
         previous_post_logout_redirect_uris = auth_config.post_logout_redirect_uris&.dup
 
-        keycloak.update_client(uuid: uuid, attributes: build_update_payload)
+        keycloak.update_client(uuid: uuid, attributes: build_update_payload,
+                               expected_client_id: auth_config.keycloak_client_id)
 
         # Phase 1: persist rollback metadata + "external happened" marker
         # before any local DB write so that RollbackRunner can restore the
@@ -53,9 +54,32 @@ module Provisioning
 
         if uuid && previous
           begin
-            KeycloakClient.new.update_client(uuid: uuid, attributes: previous)
+            expected = project.project_auth_config&.keycloak_client_id
+            KeycloakClient.new.update_client(uuid: uuid, attributes: previous,
+                                             expected_client_id: expected) if expected
           rescue BaseClient::NotFoundError
             # Client already deleted — Keycloak rollback is implicitly done
+          rescue KeycloakClient::IdentityMismatchError => e
+            # Audit and re-raise so RollbackRunner does not silently mark the
+            # step rolled_back while the foreign Keycloak client retains the
+            # mutation we should have reverted. Operators must reconcile.
+            AuditLog.create!(
+              organization: project.organization,
+              project: project,
+              user_sub: "system:keycloak-client-update",
+              action: "auth_config.keycloak_client_diverged",
+              resource_type: "ProjectAuthConfig",
+              resource_id: project.project_auth_config&.id&.to_s,
+              details: {
+                expected_uuid: uuid,
+                expected_client_id: expected,
+                live_client_id: e.live_client_id,
+                detection_phase: "update_rollback",
+                provisioning_job_id: step_record.provisioning_job_id,
+                provisioning_step_id: step_record.id
+              }
+            )
+            raise
           end
         end
 

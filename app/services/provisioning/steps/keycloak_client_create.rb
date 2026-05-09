@@ -21,19 +21,32 @@ module Provisioning
         # Phase 2: mirror the UUID onto the auth_config row for read paths.
         # Skipped for PAK because no Keycloak client was created (uuid is nil).
         auth_config.update!(keycloak_client_uuid: client_uuid) if client_uuid
-        cache_client_secret!(keycloak, client_uuid, auth_type) if client_uuid
+        cache_client_secret!(keycloak, client_uuid, auth_type, expected_client_id: client_id) if client_uuid
 
         snapshot
       end
 
       def rollback
-        uuid = step_record.result_snapshot&.dig("keycloak_client_uuid")
-        return unless uuid
+        snapshot = step_record.result_snapshot
+        uuid = snapshot&.dig("keycloak_client_uuid")
+        client_id = snapshot&.dig("keycloak_client_id")
+        return unless uuid && client_id
 
-        keycloak = KeycloakClient.new
-        keycloak.delete_client(uuid: uuid)
+        KeycloakClient.new.delete_client(uuid: uuid, expected_client_id: client_id)
       rescue BaseClient::NotFoundError
         # Already deleted, nothing to do
+      rescue KeycloakClient::IdentityMismatchError => e
+        # Snapshot UUID resolves to a different aap-prefixed client. Audit
+        # and re-raise: a silent return would let RollbackRunner mark the
+        # step rolled_back even though the original Keycloak side-effect was
+        # never reversed, hiding cross-project drift behind a successful
+        # rollback state.
+        record_identity_diverged_audit!(
+          { "id" => uuid, "clientId" => e.live_client_id },
+          uuid, client_id,
+          detection_phase: "create_rollback"
+        )
+        raise
       end
 
       def already_completed?
@@ -67,7 +80,8 @@ module Provisioning
             "expected_clientId=#{auth_config.keycloak_client_id.inspect}); treating step " \
             "as complete but skipping secret cache refresh"
           )
-          record_identity_diverged_audit!(client, uuid, auth_config.keycloak_client_id)
+          record_identity_diverged_audit!(client, uuid, auth_config.keycloak_client_id,
+                                          detection_phase: "completion_check")
         end
         true
       rescue BaseClient::NotFoundError
@@ -149,7 +163,10 @@ module Provisioning
                       auth_config.keycloak_client_uuid
         return if client_uuid.blank?
 
-        cache_client_secret!(KeycloakClient.new, client_uuid, auth_config.auth_type)
+        cache_client_secret!(
+          KeycloakClient.new, client_uuid, auth_config.auth_type,
+          expected_client_id: auth_config.keycloak_client_id
+        )
       end
 
       private
@@ -190,7 +207,27 @@ module Provisioning
         end
       end
 
-      def record_identity_diverged_audit!(client, expected_uuid, expected_client_id)
+      def record_identity_diverged_audit!(client, expected_uuid, expected_client_id,
+                                          detection_phase:, divergence_stage: nil,
+                                          secret_fetched: false)
+        details = {
+          expected_uuid: expected_uuid,
+          expected_client_id: expected_client_id,
+          live_id: client.is_a?(Hash) ? client["id"] : nil,
+          live_client_id: client.is_a?(Hash) ? client["clientId"] : nil,
+          detection_phase: detection_phase,
+          provisioning_job_id: step_record.provisioning_job_id,
+          provisioning_step_id: step_record.id
+        }
+        # Only the secret-refresh path can observe a post_fetch stage (and
+        # therefore an in-process foreign secret leak). Keep the keys absent
+        # for the completion-check path so audit consumers do not have to
+        # special-case nil values.
+        if divergence_stage
+          details[:divergence_stage] = divergence_stage
+          details[:secret_fetched] = secret_fetched
+        end
+
         AuditLog.create!(
           organization: project.organization,
           project: project,
@@ -201,14 +238,7 @@ module Provisioning
           action: "auth_config.keycloak_client_diverged",
           resource_type: "ProjectAuthConfig",
           resource_id: project.project_auth_config&.id&.to_s,
-          details: {
-            expected_uuid: expected_uuid,
-            expected_client_id: expected_client_id,
-            live_id: client.is_a?(Hash) ? client["id"] : nil,
-            live_client_id: client.is_a?(Hash) ? client["clientId"] : nil,
-            provisioning_job_id: step_record.provisioning_job_id,
-            provisioning_step_id: step_record.id
-          }
+          details: details
         )
       rescue StandardError => e
         # Don't fail the step on an audit insert failure; the warn log above
@@ -230,15 +260,43 @@ module Provisioning
         false
       end
 
-      def cache_client_secret!(keycloak, client_uuid, auth_type)
+      def cache_client_secret!(keycloak, client_uuid, auth_type, expected_client_id:)
         return unless auth_type == "oidc"
 
+        # Drop any stale entry up-front so a transient fetch failure cannot
+        # leave a previous run's secret visible to readers — the rescue
+        # branches below also rely on this no-op delete to keep the cache
+        # empty when the new fetch never returns a value.
         Provisioning::SecretCache.delete(step_record.provisioning_job_id)
+        # The exact-clientId binding lives inside KeycloakClient#get_client_secret
+        # so the identity check and the /client-secret read share a single
+        # network round trip — without that, an aap-prefixed but foreign
+        # client at the same UUID would slip past a precheck-only guard and
+        # cache the wrong secret.
+        secret = keycloak.get_client_secret(uuid: client_uuid, expected_client_id: expected_client_id)
         Provisioning::SecretCache.write(
           step_record.provisioning_job,
           key: "client_secret",
           label: "Client Secret",
-          value: keycloak.get_client_secret(uuid: client_uuid)
+          value: secret
+        )
+      rescue KeycloakClient::IdentityMismatchError => e
+        # post_fetch divergence means /client-secret already returned a value
+        # for the foreign client. The cache is empty (delete fires above) but
+        # the in-process value should be treated as compromised — operators
+        # must rotate via regenerate_client_secret on the correct client.
+        Rails.logger.warn(
+          "[Provisioning::Steps::KeycloakClientCreate] secret refresh skipped " \
+          "for job=#{step_record.provisioning_job_id} step=#{step_record.id} " \
+          "stage=#{e.stage}: #{e.message}"
+        )
+        record_identity_diverged_audit!(
+          { "id" => client_uuid, "clientId" => e.live_client_id },
+          client_uuid,
+          expected_client_id,
+          detection_phase: "secret_refresh",
+          divergence_stage: e.stage,
+          secret_fetched: e.stage == "post_fetch"
         )
       rescue StandardError => e
         Rails.logger.warn(

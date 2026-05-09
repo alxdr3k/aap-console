@@ -75,6 +75,35 @@ RSpec.describe Provisioning::RollbackRunner do
       end
     end
 
+    context "when a higher-order step rollback raises but a lower-order step is independent" do
+      it "still attempts the lower-order rollback and marks each step accordingly" do
+        higher = create(:provisioning_step, :keycloak_client_create, :completed, provisioning_job: job,
+                        step_order: 2, result_snapshot: { "keycloak_client_uuid" => "uuid-1",
+                                                          "keycloak_client_id" => "aap-foo-bar-oidc" })
+        lower = create(:provisioning_step, :app_registry_register, :completed, provisioning_job: job,
+                       step_order: 1, result_snapshot: { "registered" => true, "app_id" => "app-x" })
+
+        allow_any_instance_of(Provisioning::Steps::KeycloakClientCreate)
+          .to receive(:rollback)
+          .and_raise(KeycloakClient::IdentityMismatchError.new(
+            uuid: "uuid-1",
+            expected_client_id: "aap-foo-bar-oidc",
+            live_client_id: "aap-some-other-client"
+          ))
+
+        lower_called = false
+        allow_any_instance_of(Provisioning::Steps::AppRegistryRegister)
+          .to receive(:rollback) { lower_called = true }
+
+        result = described_class.new(provisioning_job: job).run
+
+        expect(result).to be(false)
+        expect(higher.reload.status).to eq("rollback_failed")
+        expect(lower.reload.status).to eq("rolled_back")
+        expect(lower_called).to be(true)
+      end
+    end
+
     context "when only skipped steps exist" do
       it "treats them the same as completed and returns true" do
         step = create(:provisioning_step, :config_server_apply, provisioning_job: job,

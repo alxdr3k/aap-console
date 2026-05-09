@@ -1,4 +1,47 @@
 class KeycloakClient < BaseClient
+  class IdentityMismatchError < ApiError
+    attr_reader :uuid, :expected_client_id, :live_client_id, :stage
+
+    # `stage` distinguishes a pre-mutation/pre-fetch identity check from a
+    # post-fetch revalidation that fires after a /client-secret read or a
+    # /client-secret POST has already returned a value. Operators use the
+    # stage to decide whether the secret cache is merely empty or whether a
+    # foreign client's value may have been observed in-process and rotation
+    # is required.
+    def initialize(uuid:, expected_client_id:, live_client_id:, stage: "pre_fetch")
+      @uuid = uuid
+      @expected_client_id = expected_client_id
+      @live_client_id = live_client_id
+      @stage = stage
+      super(
+        "Refusing Keycloak operation (stage=#{stage}): live clientId=#{live_client_id.inspect} " \
+        "differs from expected #{expected_client_id.inspect} for uuid=#{uuid.inspect}"
+      )
+    end
+  end
+
+  # Raised when a /client-secret POST already committed a rotation but the
+  # post-rotation identity verification could not complete (timeout, 5xx,
+  # malformed body, etc.). Distinct from IdentityMismatchError — the
+  # identity is unknown rather than known-foreign — but operators must
+  # treat the secret as rotated and reconcile manually.
+  class RotationVerifyError < ApiError
+    attr_reader :uuid, :expected_client_id, :secret_rotated, :cause_class, :cause_message
+
+    def initialize(uuid:, expected_client_id:, cause:, secret_rotated: true)
+      @uuid = uuid
+      @expected_client_id = expected_client_id
+      @secret_rotated = secret_rotated
+      @cause_class = cause.class.name
+      @cause_message = cause.message
+      super(
+        "Post-rotation verification failed (secret_rotated=#{secret_rotated}) for " \
+        "uuid=#{uuid.inspect} expected_client_id=#{expected_client_id.inspect}: " \
+        "#{@cause_class}: #{@cause_message}"
+      )
+    end
+  end
+
   def initialize
     super(
       base_url: ENV.fetch("KEYCLOAK_URL"),
@@ -128,42 +171,98 @@ class KeycloakClient < BaseClient
     response.body
   end
 
-  def update_client(uuid:, attributes:)
+  def update_client(uuid:, attributes:, expected_client_id:)
     raise ArgumentError, "uuid is required" if uuid.blank?
+    raise ArgumentError, "expected_client_id is required" if expected_client_id.blank?
 
-    assert_aap_client!(uuid)
+    assert_client_identity!(uuid, expected_client_id)
     put("#{clients_path}/#{uuid}", body: attributes, headers: auth_headers)
   end
 
-  def delete_client(uuid:)
+  def delete_client(uuid:, expected_client_id:)
     raise ArgumentError, "uuid is required" if uuid.blank?
+    raise ArgumentError, "expected_client_id is required" if expected_client_id.blank?
 
-    assert_aap_client!(uuid)
+    assert_client_identity!(uuid, expected_client_id)
     delete("#{clients_path}/#{uuid}", headers: auth_headers)
   end
 
-  def get_client_secret(uuid:)
-    assert_aap_client!(uuid)
+  # `expected_client_id` is required: a stale UUID may resolve to another
+  # aap-prefixed client, so the prefix-only invariant is not sufficient for
+  # secret reads. Callers must pass the project-owned client_id so the
+  # returned value can be bound to the expected identity.
+  def get_client_secret(uuid:, expected_client_id:)
+    raise ArgumentError, "uuid is required" if uuid.blank?
+    raise ArgumentError, "expected_client_id is required" if expected_client_id.blank?
+
+    assert_client_identity!(uuid, expected_client_id)
+
     response = get("#{clients_path}/#{uuid}/client-secret", headers: auth_headers)
-    response.body["value"]
+    secret_value = response.body["value"]
+
+    # Post-fetch revalidation is best-effort detection, not a security
+    # boundary. The three GETs are independent, so a foreign-client window
+    # that opens during /client-secret and closes again before this check
+    # remains undetectable. It still catches drift that persists past the
+    # secret read; operators that observe a post_fetch mismatch must treat
+    # the read value as compromised and rotate via regenerate_client_secret.
+    assert_client_identity!(uuid, expected_client_id, stage: "post_fetch")
+
+    secret_value
   end
 
-  def regenerate_client_secret(uuid:)
-    assert_aap_client!(uuid)
+  def regenerate_client_secret(uuid:, expected_client_id:)
+    raise ArgumentError, "uuid is required" if uuid.blank?
+    raise ArgumentError, "expected_client_id is required" if expected_client_id.blank?
+
+    assert_client_identity!(uuid, expected_client_id)
+
     response = post("#{clients_path}/#{uuid}/client-secret", headers: auth_headers)
-    response.body["value"]
+    secret_value = response.body["value"]
+
+    # Post-rotation revalidation: if the record at this UUID was swapped to
+    # another aap-prefixed client between the precheck and the POST, the
+    # rotated secret belongs to that foreign client and must not be returned
+    # to the caller. Best-effort, same race-window caveat as get_client_secret.
+    # Wrap every non-IdentityMismatch failure (timeout, 5xx, malformed JSON,
+    # connection drop) so the caller always learns the POST already rotated
+    # whichever client was present at this UUID — leaving the verification
+    # error untyped would bypass the secret_rotated audit signal.
+    begin
+      assert_client_identity!(uuid, expected_client_id, stage: "post_fetch")
+    rescue IdentityMismatchError
+      raise
+    rescue StandardError => verify_error
+      raise RotationVerifyError.new(uuid: uuid, expected_client_id: expected_client_id,
+                                    cause: verify_error, secret_rotated: true)
+    end
+
+    secret_value
   end
 
-  def assign_client_scope(client_uuid:, scope_id:)
+  def assign_client_scope(client_uuid:, scope_id:, expected_client_id:)
+    raise ArgumentError, "client_uuid is required" if client_uuid.blank?
+    raise ArgumentError, "expected_client_id is required" if expected_client_id.blank?
+
+    assert_client_identity!(client_uuid, expected_client_id)
     put("#{clients_path}/#{client_uuid}/default-client-scopes/#{scope_id}", headers: auth_headers)
   end
 
   private
 
-  def assert_aap_client!(uuid)
+  def assert_client_identity!(uuid, expected_client_id, stage: "pre_fetch")
     client = get_client_by_uuid(uuid)
-    unless client["clientId"].to_s.start_with?("aap-")
-      raise ApiError.new("Refusing to mutate non-aap client #{uuid}")
+    live_client_id = client.is_a?(Hash) ? client["clientId"].to_s : ""
+    unless live_client_id.start_with?("aap-")
+      raise ApiError.new("Refusing to operate on non-aap client #{uuid}")
+    end
+    if live_client_id != expected_client_id
+      raise IdentityMismatchError.new(
+        uuid: uuid,
+        expected_client_id: expected_client_id,
+        live_client_id: live_client_id,
+        stage: stage
+      )
     end
   end
 
