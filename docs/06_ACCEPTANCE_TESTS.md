@@ -43,6 +43,7 @@ gate / acceptance 상태만 관리한다.
 | `AC-020` | Audit retention | Given audit logs older than the retention window, when the archive job runs, then JSONL archive output is written to the configured S3 prefix and archived rows are removed without losing recent audit records | future `TEST-020` | `defined` |
 | `AC-021` | Admin observability | Given a super_admin, when they open the operations dashboard, then organization/project status, external service health, and failed/manual-intervention provisioning work queues are visible without exposing tenant secrets | future `TEST-021` | `defined` |
 | `AC-022` | FR-8 full rollback | Given Keycloak and Langfuse mutable config snapshots exist, when a user rolls back a config version, then Console restores Config Server, Keycloak, Langfuse, Console snapshots, and diagnostics atomically or reports a recoverable failure without silent drift | future `TEST-022` | `defined` |
+| `AC-023` | FR-4 auth migration | Given an existing project with active auth_type, when an operator runs the dual-client migration (`auth_binding_add` → `auth_binding_promote` → `auth_binding_remove`), then both bindings coexist during transition, role swap is reversible up to remove, retiring sessions expire naturally, and Keycloak `aap-` prefix guard is enforced | future `TEST-023`; per `ADR-007` | `defined` |
 | `AC-DOC-001` | DOC-M1 | Given a new session or PR, when an agent follows repo guidance, then it reaches `current-state`, `04_IMPLEMENTATION_PLAN`, `current/*`, canonical PRD/HLD paths, and the PR template/doc-freshness guidance without stale doc-only guidance | link check + doc review | `passing` |
 
 ## Tests
@@ -72,6 +73,7 @@ gate / acceptance 상태만 관리한다.
 | `TEST-020` | Audit archive job specs | planned job/storage specs for archive JSONL content, prefix selection, retention deletion, and failure handling | `AC-020` |
 | `TEST-021` | Super-admin dashboard specs | planned request/system specs for super_admin-only dashboard, service health summaries, and failed/manual-intervention job queue | `AC-021` |
 | `TEST-022` | Full external rollback specs | planned service/request specs for Keycloak/Langfuse snapshot capture, restore ordering, Config Server rollback, diagnostics, and recoverable failure states | `AC-022` |
+| `TEST-023` | Auth migration dual-client specs | planned request/service specs for `auth_binding_add` / `auth_binding_promote` / `auth_binding_remove` plans, role/state transitions on `project_auth_configs`, partial unique index enforcement, prefix-guarded Keycloak deletion, and rollback paths | `AC-023` |
 
 ## Definition of Done
 
