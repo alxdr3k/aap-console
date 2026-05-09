@@ -306,6 +306,100 @@ RSpec.describe "Projects", type: :request do
             params: { project: { name: "Hack" } }
       expect(response).to have_http_status(:forbidden)
     end
+
+    context "unified edit (auth + LiteLLM + metadata in one PATCH) — AC-024" do
+      before do
+        create(:project_auth_config,
+               project: project,
+               auth_type: "oidc",
+               keycloak_client_id: "aap-#{org.slug}-#{project.slug}-oidc",
+               keycloak_client_uuid: "server-owned-uuid")
+      end
+
+      it "creates a single Update provisioning job for combined dirty fields" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: {
+                  name: "Renamed",
+                  redirect_uris: [ "https://app.example.com/callback" ],
+                  models: [ "azure-gpt4", "claude-sonnet" ],
+                  s3_retention_days: 60
+                } },
+                headers: html_headers
+        }.to change(ProvisioningJob, :count).by(1)
+
+        job = project.provisioning_jobs.order(:id).last
+        expect(job.operation).to eq("update")
+        expect(job.input_snapshot).to include(
+          "redirect_uris" => [ "https://app.example.com/callback" ],
+          "models" => [ "azure-gpt4", "claude-sonnet" ],
+          "s3_retention_days" => 60
+        )
+        expect(job.provisioning_steps.pluck(:name)).to match_array(%w[
+          keycloak_client_update config_server_apply health_check
+        ])
+        expect(project.reload.name).to eq("Renamed")
+        expect(project.status).to eq("update_pending")
+        expect(response).to redirect_to(provisioning_job_path(job))
+      end
+
+      it "does not enqueue a provisioning job when only metadata is dirty" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { name: "Only Meta", description: "x" } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to redirect_to(organization_project_path(org.slug, project.slug))
+        expect(project.reload.status).to eq("active")
+      end
+
+      it "rejects unified PATCH with external fields when an active job exists" do
+        create(:provisioning_job, project: project, operation: "update", status: :in_progress)
+
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { redirect_uris: [ "https://new.example.com/cb" ] } },
+                headers: html_headers
+        }.not_to change(project.provisioning_jobs.where(status: :pending), :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+    end
+  end
+
+  describe "GET /organizations/:org_slug/projects/:slug/edit (unified edit form) — AC-024" do
+    let!(:project) { create(:project, :active, organization: org) }
+
+    before do
+      create(:project_auth_config, project: project, auth_type: "oidc")
+    end
+
+    context "as project write+ member" do
+      before do
+        membership = create(:org_membership, organization: org, user_sub: user_sub, role: "write")
+        create(:project_permission, org_membership: membership, project: project, role: "write")
+      end
+
+      it "renders the unified edit form with all sections" do
+        get "/organizations/#{org.slug}/projects/#{project.slug}/edit", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("Project 설정 편집")
+        expect(response.body).to include("메타데이터")
+        expect(response.body).to include("인증 설정")
+        expect(response.body).to include("LiteLLM Config")
+      end
+    end
+
+    it "returns 403 for read-only member" do
+      read_membership = create(:org_membership, organization: org, user_sub: "reader", role: "read")
+      create(:project_permission, org_membership: read_membership, project: project, role: "read")
+      login_as("reader")
+
+      get "/organizations/#{org.slug}/projects/#{project.slug}/edit", headers: html_headers
+      expect(response).to have_http_status(:forbidden)
+    end
   end
 
   describe "DELETE /organizations/:org_slug/projects/:slug" do

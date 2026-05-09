@@ -1,0 +1,158 @@
+<% content_for :title, "Edit Project | AAP Console" %>
+
+<section class="page" data-controller="dirty-tracker">
+  <div class="breadcrumbs">
+    Console &gt;
+    <%= link_to @organization.name, organization_path(@organization.slug) %> &gt;
+    <%= link_to @project.name, organization_project_path(@organization.slug, @project.slug) %> &gt;
+    설정 편집
+  </div>
+
+  <header class="page-header">
+    <div>
+      <h1 class="page-title">Project 설정 편집</h1>
+      <p class="page-description">
+        모든 변경을 한 번의 프로비저닝으로 적용합니다. 변경된 필드만 단일 PATCH로 전송됩니다.
+      </p>
+    </div>
+  </header>
+
+  <% if @errors.present? %>
+    <ul class="error-list">
+      <% @errors.each do |error| %><li><%= error %></li><% end %>
+    </ul>
+  <% end %>
+
+  <%= form_with model: @project,
+                url: organization_project_path(@organization.slug, @project.slug),
+                method: :patch,
+                local: true,
+                html: { class: "stacked-form", data: { dirty_tracker_target: "form" } } do |f| %>
+
+    <details open class="config-section" data-dirty-tracker-target="section" data-section="meta">
+      <summary>
+        <span>메타데이터</span>
+        <span class="dirty-badge" data-dirty-tracker-target="badge" hidden>변경됨</span>
+      </summary>
+
+      <div class="field">
+        <%= f.label :name, "이름" %>
+        <%= f.text_field :name,
+              data: { original_value: @project.name, action: "input->dirty-tracker#track" } %>
+      </div>
+
+      <div class="field">
+        <%= f.label :description, "설명" %>
+        <%= f.text_area :description,
+              data: { original_value: @project.description.to_s, action: "input->dirty-tracker#track" } %>
+      </div>
+    </details>
+
+    <details open class="config-section" data-dirty-tracker-target="section" data-section="auth">
+      <summary>
+        <span>인증 설정</span>
+        <span class="dirty-badge" data-dirty-tracker-target="badge" hidden>변경됨</span>
+      </summary>
+
+      <% if @auth_config %>
+        <p class="config-summary">
+          인증 방식: <strong><%= @auth_config.auth_type.upcase %></strong> (Primary)<br>
+          Client ID: <code><%= @auth_config.keycloak_client_id %></code>
+        </p>
+
+        <div class="field">
+          <%= f.label :redirect_uris, "Redirect URIs" %>
+          <%= f.text_area :redirect_uris,
+                value: Array(@auth_config.redirect_uris).join("\n"),
+                rows: 3,
+                placeholder: "한 줄에 하나씩 입력",
+                data: {
+                  original_value: Array(@auth_config.redirect_uris).join("\n"),
+                  action: "input->dirty-tracker#track"
+                } %>
+          <small>한 줄에 하나의 URI를 입력하세요.</small>
+        </div>
+
+        <div class="field">
+          <%= f.label :post_logout_redirect_uris, "Post Logout Redirect URIs" %>
+          <%= f.text_area :post_logout_redirect_uris,
+                value: Array(@auth_config.post_logout_redirect_uris).join("\n"),
+                rows: 2,
+                data: {
+                  original_value: Array(@auth_config.post_logout_redirect_uris).join("\n"),
+                  action: "input->dirty-tracker#track"
+                } %>
+        </div>
+
+        <p class="hint">
+          ⓘ Client Secret 재발급, PAK 발급/폐기, 인증 방식 마이그레이션은
+          <%= link_to "인증 설정 상세", organization_project_auth_config_path(@organization.slug, @project.slug) %>에서
+          별도 destructive 액션으로 실행하세요.
+        </p>
+      <% else %>
+        <p>인증 설정이 아직 생성되지 않았습니다.</p>
+      <% end %>
+    </details>
+
+    <details open class="config-section" data-dirty-tracker-target="section" data-section="litellm">
+      <summary>
+        <span>LiteLLM Config</span>
+        <span class="dirty-badge" data-dirty-tracker-target="badge" hidden>변경됨</span>
+      </summary>
+
+      <fieldset class="field">
+        <legend>모델 *</legend>
+        <% @available_models.each do |model_name| %>
+          <label class="checkbox">
+            <%= check_box_tag "project[models][]",
+                  model_name,
+                  @selected_models.include?(model_name),
+                  data: {
+                    original_value: @selected_models.include?(model_name).to_s,
+                    action: "change->dirty-tracker#track"
+                  } %>
+            <%= model_name %>
+          </label>
+        <% end %>
+      </fieldset>
+
+      <fieldset class="field">
+        <legend>가드레일</legend>
+        <% @available_guardrails.each do |guardrail| %>
+          <label class="checkbox">
+            <%= check_box_tag "project[guardrails][]",
+                  guardrail,
+                  @selected_guardrails.include?(guardrail),
+                  data: {
+                    original_value: @selected_guardrails.include?(guardrail).to_s,
+                    action: "change->dirty-tracker#track"
+                  } %>
+            <%= guardrail %>
+          </label>
+        <% end %>
+      </fieldset>
+
+      <div class="field">
+        <%= f.label :s3_retention_days, "S3 Retention (일)" %>
+        <%= number_field_tag "project[s3_retention_days]",
+              @s3_retention_days,
+              min: 1,
+              max: 3650,
+              data: {
+                original_value: @s3_retention_days.to_s,
+                action: "input->dirty-tracker#track"
+              } %>
+      </div>
+    </details>
+
+    <aside class="change-summary" data-dirty-tracker-target="summary">
+      <h2>변경 요약</h2>
+      <p data-dirty-tracker-target="summaryEmpty">변경된 필드가 없습니다.</p>
+      <ul data-dirty-tracker-target="summaryList" hidden></ul>
+      <div class="actions">
+        <%= link_to "취소", organization_project_path(@organization.slug, @project.slug), class: "button" %>
+        <%= f.submit "변경 저장 및 적용", class: "button button-primary" %>
+      </div>
+    </aside>
+  <% end %>
+</section>

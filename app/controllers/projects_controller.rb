@@ -8,9 +8,9 @@ class ProjectsController < ApplicationController
   before_action :set_organization
   before_action -> { authorize_org!(@organization) }, only: [ :index ]
   before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [ :new, :create, :destroy ]
-  before_action :set_project, only: [ :show, :update, :destroy ]
+  before_action :set_project, only: [ :show, :edit, :update, :destroy ]
   before_action -> { authorize_project!(@project) }, only: [ :show ]
-  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :update ]
+  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :edit, :update ]
 
   def index
     @projects = current_authorization.accessible_projects(@organization)
@@ -86,6 +86,14 @@ class ProjectsController < ApplicationController
     end
   end
 
+  def edit
+    prepare_unified_edit
+    respond_to do |format|
+      format.html
+      format.json { render json: { project: @project, auth_config: @project.project_auth_config } }
+    end
+  end
+
   def update
     result = Projects::UpdateService.new(
       project: @project,
@@ -94,24 +102,38 @@ class ProjectsController < ApplicationController
     ).call
 
     if result.success?
+      provisioning_job = result.data[:provisioning_job]
       return render json: @project if default_json_request?
 
       respond_to do |format|
         format.html do
-          flash[:success] = "Project 정보가 저장되었습니다."
-          redirect_to organization_project_path(@organization.slug, @project.slug), status: :see_other
+          if provisioning_job
+            flash[:success] = "Project 설정 변경 프로비저닝을 시작했습니다."
+            redirect_to provisioning_job_path(provisioning_job), status: :see_other
+          else
+            flash[:success] = "Project 정보가 저장되었습니다."
+            redirect_to organization_project_path(@organization.slug, @project.slug), status: :see_other
+          end
         end
         format.json { render json: @project }
       end
     else
       @errors = [ result.error ]
-      prepare_project_show
 
       return render json: { errors: @errors }, status: :unprocessable_entity if default_json_request?
 
-      respond_to do |format|
-        format.html { render :show, status: :unprocessable_entity }
-        format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+      if unified_edit_request?
+        prepare_unified_edit
+        respond_to do |format|
+          format.html { render :edit, status: :unprocessable_entity }
+          format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+        end
+      else
+        prepare_project_show
+        respond_to do |format|
+          format.html { render :show, status: :unprocessable_entity }
+          format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+        end
       end
     end
   end
@@ -228,7 +250,40 @@ class ProjectsController < ApplicationController
     params.require(:project).permit(:name, :description, :auth_type, :s3_retention_days, models: [], guardrails: [])
   end
 
+  UNIFIED_EXTERNAL_KEYS = %i[redirect_uris post_logout_redirect_uris models guardrails s3_retention_days].freeze
+
   def project_update_params
-    params.require(:project).permit(:name, :description)
+    permitted = params.require(:project).permit(
+      :name,
+      :description,
+      :s3_retention_days,
+      redirect_uris: [],
+      post_logout_redirect_uris: [],
+      models: [],
+      guardrails: []
+    )
+
+    %i[redirect_uris post_logout_redirect_uris models guardrails].each do |key|
+      permitted[key] = Array(permitted[key]).compact_blank if permitted.key?(key)
+    end
+    if permitted.key?(:s3_retention_days)
+      permitted[:s3_retention_days] = permitted[:s3_retention_days].presence&.to_i
+    end
+
+    permitted
+  end
+
+  def unified_edit_request?
+    UNIFIED_EXTERNAL_KEYS.any? { |key| params.dig(:project, key).present? }
+  end
+
+  def prepare_unified_edit
+    @auth_config = @project.project_auth_config
+    @available_models = AVAILABLE_MODELS
+    @available_guardrails = AVAILABLE_GUARDRAILS
+    snapshot = @project.config_versions.order(created_at: :desc).first&.snapshot || {}
+    @selected_models = Array(snapshot["models"]).compact_blank
+    @selected_guardrails = Array(snapshot["guardrails"]).compact_blank
+    @s3_retention_days = snapshot["s3_retention_days"].presence || DEFAULT_S3_RETENTION_DAYS
   end
 end
