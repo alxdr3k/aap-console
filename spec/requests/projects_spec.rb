@@ -306,6 +306,269 @@ RSpec.describe "Projects", type: :request do
             params: { project: { name: "Hack" } }
       expect(response).to have_http_status(:forbidden)
     end
+
+    context "unified edit (auth + LiteLLM + metadata in one PATCH) — AC-024" do
+      before do
+        create(:project_auth_config,
+               project: project,
+               auth_type: "oidc",
+               keycloak_client_id: "aap-#{org.slug}-#{project.slug}-oidc",
+               keycloak_client_uuid: "server-owned-uuid")
+      end
+
+      it "creates a single Update provisioning job for combined dirty fields" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: {
+                  name: "Renamed",
+                  redirect_uris: [ "https://app.example.com/callback" ],
+                  models: [ "azure-gpt4", "claude-sonnet" ],
+                  s3_retention_days: 60
+                } },
+                headers: html_headers
+        }.to change(ProvisioningJob, :count).by(1)
+
+        job = project.provisioning_jobs.order(:id).last
+        expect(job.operation).to eq("update")
+        expect(job.input_snapshot).to include(
+          "redirect_uris" => [ "https://app.example.com/callback" ],
+          "models" => [ "azure-gpt4", "claude-sonnet" ],
+          "s3_retention_days" => 60
+        )
+        expect(job.provisioning_steps.pluck(:name)).to match_array(%w[
+          keycloak_client_update config_server_apply health_check
+        ])
+        expect(project.reload.name).to eq("Renamed")
+        expect(project.status).to eq("update_pending")
+        expect(response).to redirect_to(provisioning_job_path(job))
+      end
+
+      it "does not enqueue a provisioning job when only metadata is dirty" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { name: "Only Meta", description: "x" } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to redirect_to(organization_project_path(org.slug, project.slug))
+        expect(project.reload.status).to eq("active")
+      end
+
+      it "rejects unified PATCH with external fields when an active job exists" do
+        create(:provisioning_job, project: project, operation: "update", status: :in_progress)
+
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { redirect_uris: [ "https://new.example.com/cb" ] } },
+                headers: html_headers
+        }.not_to change(project.provisioning_jobs.where(status: :pending), :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
+      it "coerces newline-separated redirect_uris textarea into an array" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: {
+                  redirect_uris: "https://app.example.com/callback\nhttps://staging.example.com/callback\n"
+                } },
+                headers: html_headers
+        }.to change(ProvisioningJob, :count).by(1)
+
+        job = project.provisioning_jobs.order(:id).last
+        expect(job.input_snapshot["redirect_uris"]).to eq(
+          [ "https://app.example.com/callback", "https://staging.example.com/callback" ]
+        )
+      end
+
+      it "does not enqueue a job when submitted external values match the persisted state" do
+        project.project_auth_config.update!(redirect_uris: [ "https://app.example.com/callback" ])
+
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: {
+                  redirect_uris: [ "https://app.example.com/callback" ]
+                } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to redirect_to(organization_project_path(org.slug, project.slug))
+      end
+
+      it "rejects unknown LiteLLM models with 422 even on the unified path" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { models: [ "rogue-model" ] } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("허용되지 않은 모델")
+      end
+
+      it "rejects out-of-range S3 retention on the unified path" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { s3_retention_days: 5000 } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("S3 Retention")
+      end
+
+      it "re-renders :edit (not :show) on validation failure with blank external fields submitted" do
+        patch "/organizations/#{org.slug}/projects/#{project.slug}",
+              params: { project: { s3_retention_days: "" } },
+              headers: html_headers
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("Project 설정 편집")
+        expect(response.body).not_to include("project-detail-stub")
+      end
+
+      it "rejects insecure OAuth redirect URIs on the unified path" do
+        project.project_auth_config.update!(auth_type: "oauth")
+
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { redirect_uris: [ "http://evil.example.com/callback" ] } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("HTTPS")
+      end
+
+      it "rejects blank S3 retention on the unified path" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { s3_retention_days: "" } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("S3 Retention")
+      end
+
+      it "rejects an explicit empty model array (clearing all models) on the unified path" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { models: [ "" ] } },
+                headers: html_headers
+        }.not_to change(ProvisioningJob, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("모델을 하나 이상")
+      end
+
+      it "audits the actually-changed metadata field even when no external fields are dirty" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { name: "Audit Renamed" } },
+                headers: html_headers
+        }.to change(AuditLog, :count).by(1)
+
+        log = AuditLog.order(:id).last
+        expect(log.action).to eq("project.update")
+        expect(log.details["changed_fields"]).to eq([ "name" ])
+      end
+
+      it "skips audit and provisioning entirely for a no-op unified submission" do
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: {
+                  name: project.name,
+                  description: project.description,
+                  redirect_uris: Array(project.project_auth_config.redirect_uris)
+                } },
+                headers: html_headers
+        }.to change(AuditLog, :count).by(0).and change(ProvisioningJob, :count).by(0)
+
+        expect(response).to redirect_to(organization_project_path(org.slug, project.slug))
+      end
+
+      it "treats blank description equivalent to nil for dirty detection" do
+        project.update_columns(description: nil)
+
+        expect {
+          patch "/organizations/#{org.slug}/projects/#{project.slug}",
+                params: { project: { name: project.name, description: "" } },
+                headers: html_headers
+        }.to change(AuditLog, :count).by(0).and change(ProvisioningJob, :count).by(0)
+
+        expect(project.reload.description).to be_nil
+      end
+
+      it "returns 202 Accepted with provisioning_job_id for JSON unified PATCH that enqueues a job" do
+        patch "/organizations/#{org.slug}/projects/#{project.slug}",
+              params: { project: {
+                redirect_uris: [ "https://app.example.com/callback" ]
+              } },
+              headers: wildcard_headers
+
+        expect(response).to have_http_status(:accepted)
+        body = response.parsed_body
+        job = project.provisioning_jobs.order(:id).last
+        expect(body["provisioning_job_id"]).to eq(job.id)
+        expect(body.dig("project", "name")).to eq(project.name)
+      end
+    end
+  end
+
+  describe "GET /organizations/:org_slug/projects/:slug/edit (unified edit form) — AC-024" do
+    let!(:project) { create(:project, :active, organization: org) }
+
+    before do
+      create(:project_auth_config, project: project, auth_type: "oidc")
+    end
+
+    context "as project write+ member" do
+      before do
+        membership = create(:org_membership, organization: org, user_sub: user_sub, role: "write")
+        create(:project_permission, org_membership: membership, project: project, role: "write")
+      end
+
+      it "renders the unified edit form with all sections" do
+        get "/organizations/#{org.slug}/projects/#{project.slug}/edit", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("Project 설정 편집")
+        expect(response.body).to include("메타데이터")
+        expect(response.body).to include("인증 설정")
+        expect(response.body).to include("LiteLLM Config")
+      end
+
+      it "shows the active-provisioning banner and disables submit when a job is active" do
+        create(:provisioning_job, project: project, operation: "update", status: :in_progress)
+
+        get "/organizations/#{org.slug}/projects/#{project.slug}/edit", headers: html_headers
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("진행 중인 프로비저닝 작업")
+        expect(response.body).to match(/<input[^>]+type="submit"[^>]+disabled/)
+      end
+    end
+
+    it "returns 403 for read-only member" do
+      read_membership = create(:org_membership, organization: org, user_sub: "reader", role: "read")
+      create(:project_permission, org_membership: read_membership, project: project, role: "read")
+      login_as("reader")
+
+      get "/organizations/#{org.slug}/projects/#{project.slug}/edit", headers: html_headers
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it "does not show the LiteLLM tab edit CTA to read-only members" do
+      read_membership = create(:org_membership, organization: org, user_sub: "reader", role: "read")
+      create(:project_permission, org_membership: read_membership, project: project, role: "read")
+      login_as("reader")
+
+      get "/organizations/#{org.slug}/projects/#{project.slug}?tab=litellm", headers: html_headers
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).not_to match(/href="[^"]*\/edit"[^>]*>\s*설정 편집/)
+    end
   end
 
   describe "DELETE /organizations/:org_slug/projects/:slug" do

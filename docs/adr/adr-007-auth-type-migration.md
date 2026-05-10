@@ -96,7 +96,7 @@ auth_type 변경 불가, Project 재생성 권장. **기각**: 기존 사용자 
 
 ## 영향 범위
 
-- `docs/02_HLD.md` §5.4 — auth_type 변경 정책 업데이트 (v1.19)
+- `docs/02_HLD.md` §5.6 — Update 프로비저닝 트리거 규칙 표 갱신 (v1.19)
 - `docs/04_IMPLEMENTATION_PLAN.md` — P1-M3, AUTH-6B.1~5 등록
 - `docs/08_DECISION_REGISTER.md` — DEC-005
 - `app/models/project_auth_config.rb` — role/state 컬럼 추가

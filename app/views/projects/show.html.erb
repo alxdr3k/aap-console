@@ -116,9 +116,18 @@
             </div>
           </dl>
           <div style="display:flex;gap:8px;padding-top:6px;">
-            <%= link_to current_authorization.can?(:write_project, @project) ? "설정 편집" : "상세 보기",
-                        organization_project_auth_config_path(@organization.slug, @project.slug),
-                        class: "button button--sm" %>
+            <% if current_authorization.can?(:write_project, @project) %>
+              <%= link_to "설정 편집",
+                          edit_organization_project_path(@organization.slug, @project.slug),
+                          class: "button button--sm" %>
+              <%= link_to "인증 상세 (Secret 재발급/마이그레이션)",
+                          organization_project_auth_config_path(@organization.slug, @project.slug),
+                          class: "button button--sm button--ghost" %>
+            <% else %>
+              <%= link_to "상세 보기",
+                          organization_project_auth_config_path(@organization.slug, @project.slug),
+                          class: "button button--sm" %>
+            <% end %>
           </div>
         </div>
 
@@ -185,14 +194,19 @@
             </div>
             <div><dt>S3 Retention</dt><dd><%= project_snapshot_value(@latest_config_snapshot, "s3_retention_days") %>일</dd></div>
           </dl>
-          <div>
-            <% if @active_provisioning_job %>
-              <span class="button button--disabled" title="진행 중인 작업이 완료된 후 시도하세요">설정 편집 (작업 중)</span>
-            <% else %>
-              <%= link_to "설정 편집",
-                          organization_project_litellm_config_path(@organization.slug, @project.slug),
-                          class: "button button--sm" %>
+          <div style="display:flex;gap:8px;">
+            <% if current_authorization.can?(:write_project, @project) %>
+              <% if @active_provisioning_job %>
+                <span class="button button--disabled" title="진행 중인 작업이 완료된 후 시도하세요">설정 편집 (작업 중)</span>
+              <% else %>
+                <%= link_to "설정 편집",
+                            edit_organization_project_path(@organization.slug, @project.slug),
+                            class: "button button--sm" %>
+              <% end %>
             <% end %>
+            <%= link_to "LiteLLM 상세",
+                        organization_project_litellm_config_path(@organization.slug, @project.slug),
+                        class: "button button--sm button--ghost" %>
           </div>
         </div>
 

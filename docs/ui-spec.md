@@ -1,9 +1,9 @@
 # AAP Console — UI Specification (UI Spec)
 
-> **Version**: 1.6
-> **Date**: 2026-04-21
+> **Version**: 1.8
+> **Date**: 2026-05-09
 > **Status**: Draft
-> **References**: [PRD](./01_PRD.md) · [HLD](./02_HLD.md)
+> **References**: [PRD](./01_PRD.md) · [HLD](./02_HLD.md) · [ADR-007](./adr/adr-007-auth-type-migration.md)
 
 ---
 
@@ -78,9 +78,10 @@ AAP Console
 │   └── {Organization} (상세)
 │       ├── Projects (탭 또는 섹션)
 │       │   └── {Project} (상세)
-│       │       ├── 인증 설정
+│       │       ├── 설정 편집 (통합 — 인증 + LiteLLM + 메타 단일 PATCH)
+│       │       ├── 인증 설정 (read-only 상세, 단축 편집)
 │       │       ├── Langfuse 설정 (읽기 전용)
-│       │       ├── LiteLLM Config
+│       │       ├── LiteLLM Config (read-only 상세, 단축 편집)
 │       │       ├── 변경 이력
 │       │       ├── Playground (AI Chat, Phase 4)
 │       │       └── 프로비저닝 이력 (상세 내 섹션)
@@ -109,8 +110,10 @@ AAP Console
 |--------|---------|-----------|---------|
 | Project 생성 | `/organizations/:org_slug/projects/new` | 이름, 인증 방식, 모델 선택 | FR-3 |
 | Project 상세 | `/organizations/:org_slug/projects/:slug` | 설정 현황, 인증 정보, Config 요약 | FR-3 |
-| 인증 설정 | `/.../:slug/auth_config` | 인증 방식 상세, Client Secret 재발급 | FR-4 |
-| LiteLLM Config | `/.../:slug/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
+| **Project 설정 편집** | `/organizations/:org_slug/projects/:slug/edit` | **인증 + LiteLLM + 메타데이터 통합 편집 폼. 단일 PATCH로 변경된 필드만 단일 Update 프로비저닝 Job에 묶어 처리** | FR-3 / FR-4 / FR-6 |
+| 인증 설정 (read-only) | `/.../:slug/auth_config` | 인증 방식 상세 보기, Client Secret 재발급, 인증 방식 마이그레이션 트리거. 편집은 [설정 편집] CTA로 통합 편집 페이지 이동 | FR-4 |
+| 인증 마이그레이션 | `/.../:slug/auth_config/migration` | Dual-Client 마이그레이션 단계별 진행/롤백 (ADR-007) | FR-4 |
+| LiteLLM Config (read-only) | `/.../:slug/litellm_config` | 모델 라우팅, 가드레일, S3 설정 보기. 편집은 [설정 편집] CTA로 통합 편집 페이지 이동 | FR-6 |
 | 변경 이력 | `/.../:slug/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
 | Playground | `/.../:slug/playground` | 모델 선택, AI Chat, 요청 인스펙터. Phase 4 전까지 숨김 또는 disabled | FR-10 |
 | 프로비저닝 이력 | Project 상세의 이력 탭/섹션 | 과거 Job 요약 목록 (유형, 상태, 일시, 소요시간). 별도 목록 URL은 필요 시 추가 | FR-7.3 |
@@ -610,14 +613,99 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 
 **구성 요소**:
 - 기본 정보: 이름, 설명, App ID (클립보드 복사), 상태 배지
-- **[이름/설명 편집]**: Turbo Frame으로 인라인 편집 폼 표시 (별도 페이지 이동 없음). 저장 시 Flash 알림
-- **탭 네비게이션**: 인증 / Langfuse / LiteLLM / 이력 — 각 탭은 Turbo Frame으로 로드하여 페이지 전환 없이 탭 전환. 하위 페이지 URL(`/.../:slug/auth_config` 등)로 직접 접근도 가능
-- 인증 설정 탭: 인증 방식, Client ID, Secret 재발급 버튼, [상세 편집] 링크 (8.11로 이동)
+- **[설정 편집]** (admin/write+): 통합 편집 페이지(§8.5.1)로 이동. 인증·LiteLLM·메타데이터를 한 폼에서 변경하며 단일 PATCH로 묶어 단일 Update 프로비저닝 Job을 트리거
+- **탭 네비게이션**: 인증 / Langfuse / LiteLLM / 이력 — 각 탭은 Turbo Frame으로 로드하여 페이지 전환 없이 탭 전환. 하위 페이지 URL(`/.../:slug/auth_config` 등)로 직접 접근도 가능 (read-only 상세)
+- 인증 설정 탭: 인증 방식, Client ID, Secret 재발급 버튼(별도 destructive 액션 — §8.11 read-only 상세에서 단독 실행), 인증 방식 마이그레이션 트리거(§8.11.1). 다른 필드 편집은 상단 [설정 편집]으로 통합
 - Langfuse 탭: Langfuse Project 이름, SDK Key 발급 상태(값은 표시하지 않음), 트레이싱 연동 상태, Langfuse 대시보드 외부 링크
-- LiteLLM 탭: 모델 목록, 가드레일, S3 설정 요약, [설정 편집] 링크 (8.8로 이동)
+- LiteLLM 탭: 모델 목록, 가드레일, S3 설정 요약. 편집은 상단 [설정 편집]으로 통합 (§8.5.1)
 - 이력 탭: 변경 이력 최근 3건 + [전체 이력 보기] (8.9로 이동), 프로비저닝 이력 최근 Job + [전체 보기]
 - Playground 링크 (Phase 4) — 구현 전까지 숨김 또는 disabled 처리. 구현 후 탭 외부, 상단 우측에 별도 배치
 - 삭제 버튼: 위험 액션 확인(6.2절) → 삭제 프로비저닝 현황(8.7)으로 리다이렉트
+
+### 8.5.1 Project 설정 통합 편집 — FR-3 / FR-4 / FR-6
+
+`/organizations/:org_slug/projects/:slug/edit`. 인증 설정·LiteLLM Config·메타데이터(이름/설명)를 단일 폼으로 편집한다. 변경된 필드만 단일 PATCH로 전송되며 백엔드(`Projects::UpdateService`)가 dirty 필드 기준으로 단일 Update 프로비저닝 Job을 enqueue한다 (HLD §5.6 트리거 표 참조).
+
+**설계 원칙**:
+- **하나의 쓰기 가능한 편집 표면(single writable surface)**. §8.8/§8.11은 read-only 상세 + Client Secret 재발급/인증 마이그레이션 같은 destructive 액션 전용으로 강등. ⚠ 현재 슬라이스(`UI-5C.4`)에서는 통합 편집 + CTA 전환만 도입하고, `auth_config#update` / `litellm_config#update` 레거시 PATCH 경로는 호환을 위해 유지된다. 완전한 read-only 전환은 `UI-5C.5`(레거시 deprecation) 슬라이스에서 처리한다.
+- **탭 사용 금지**. 탭은 다른 섹션의 dirty 상태를 가려 한 폼으로 묶어 보내는 의도를 약화시킨다. 대신 collapsible sections (기본 expanded)로 모든 변경을 동시 가시화.
+- **확인 모달 없음**. Update는 가역(rollback runner)이라 §6.2 위험 액션 모달의 대상이 아니다. 폼 하단 sticky "변경 요약" 패널이 사전 검토 역할.
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Console > Acme Corp > Chatbot > 설정 편집           │
+├──────────┬──────────────────────────────────────────┤
+│ 사이드바  │                                          │
+│          │  Project 설정 편집                         │
+│          │  (모든 변경을 한 번의 프로비저닝으로 적용)  │
+│          │                                          │
+│          │  ┌─ ▼ 메타데이터 ──────────── 변경됨 ✦ ─┐ │
+│          │  │  이름                                │ │
+│          │  │  [Chatbot                       ]   │ │
+│          │  │  설명                                │ │
+│          │  │  [AI 챗봇 서비스                  ]  │ │
+│          │  └─────────────────────────────────────┘ │
+│          │                                          │
+│          │  ┌─ ▼ 인증 설정 ───────────────────────┐ │
+│          │  │  인증 방식: OIDC (Primary)           │ │
+│          │  │  Client ID: aap-acme-chatbot-oidc   │ │
+│          │  │                                      │ │
+│          │  │  Redirect URIs *                     │ │
+│          │  │  [https://app.acme.com/callback ][✕]│ │
+│          │  │  [+ URI 추가]                        │ │
+│          │  │                                      │ │
+│          │  │  Post Logout Redirect URIs           │ │
+│          │  │  [https://app.acme.com          ][✕]│ │
+│          │  │  [+ URI 추가]                        │ │
+│          │  │                                      │ │
+│          │  │  ⓘ Client Secret 재발급, PAK 발급/   │ │
+│          │  │    폐기, 인증 방식 마이그레이션은     │ │
+│          │  │    §8.11에서 별도 destructive        │ │
+│          │  │    액션으로 실행                     │ │
+│          │  └─────────────────────────────────────┘ │
+│          │                                          │
+│          │  ┌─ ▼ LiteLLM Config ─────── 변경됨 ✦ ─┐ │
+│          │  │  모델 *                              │ │
+│          │  │  ☑ azure-gpt4   ☑ claude-sonnet     │ │
+│          │  │  ☐ gemini-pro                        │ │
+│          │  │                                      │ │
+│          │  │  가드레일                             │ │
+│          │  │  ☑ content-filter  ☐ token-limit     │ │
+│          │  │                                      │ │
+│          │  │  S3 Retention (일)                   │ │
+│          │  │  [90        ]                        │ │
+│          │  └─────────────────────────────────────┘ │
+│          │                                          │
+│          │  ┌─ 변경 요약 (sticky) ────────────────┐ │
+│          │  │  변경된 필드: 2                      │ │
+│          │  │  • 메타데이터: 이름                  │ │
+│          │  │  • LiteLLM: 모델(2 → 3)              │ │
+│          │  │                                      │ │
+│          │  │  적용 시 실행되는 단계:               │ │
+│          │  │  • keycloak_client_update*           │ │
+│          │  │  • config_server_apply               │ │
+│          │  │  • health_check                      │ │
+│          │  │  *변경 없는 단계는 런타임 no-op       │ │
+│          │  │   (PROV-5C.6에서 시점 제거 예정)      │ │
+│          │  │                                      │ │
+│          │  │  [취소]  [변경 저장 및 적용]          │ │
+│          │  └─────────────────────────────────────┘ │
+└──────────┴──────────────────────────────────────────┘
+```
+
+**구성 요소**:
+- **섹션 헤더의 "변경됨 ✦" 뱃지**: 신규 Stimulus `dirty-tracker` 컨트롤러가 `data-original-value`와 현재 값을 비교해 토글. 사용자는 어느 섹션에 변경이 있는지 collapse 상태에서도 인지 가능
+- **변경 요약 패널 (sticky)**: 폼 하단에 고정. 변경 필드 목록 + 그에 따른 step 구성을 사전 표시. step 결정 로직은 클라이언트가 재구현하지 않고 서버 응답에서 받은 매핑 데이터(`data-step-map`)를 dirty 필드 기준으로 가시화
+- **확인 모달 없음**: §6.2는 destructive 액션 전용. 통합 편집의 [변경 저장 및 적용]은 sticky 패널이 사전 검토를 대체
+- **동시성 gate (§6.8)**: 활성 프로비저닝 Job이 있으면 폼 전체 disabled + 상단 노란 배너. 락은 Project-scoped이라 섹션별 분할 불가
+- **저장 후 이동**: dirty 필드에 외부 전파 대상이 있으면 프로비저닝 현황(§8.7)으로 리다이렉트. 메타만 변경된 경우 Project 상세로 복귀하며 Flash 알림
+- **검증 오류** (§9.5): inline (필드 하단 빨간 메시지) + 상단 `form.errors` 요약 + 해당 섹션 헤더에 error 뱃지 (`dirty-tracker`와 동일 컨트롤러 채널)
+- **Phase 1 제약**: SAML/OAuth/PAK 컨트롤은 disabled + "준비 중" 툴팁 (§9.2와 동일 정책). 인증 방식 라디오는 통합 편집에 포함하지 않음 — auth_type 변경은 §8.11.1 마이그레이션 플로우 단독 책임
+
+**Hotwire 통합**:
+- 폼 자체는 일반 Rails form_with → Turbo Drive submit. 검증 실패 시 422로 같은 페이지 재렌더 (§9.5).
+- 섹션 collapse/expand는 Stimulus `collapsible` 재사용 (§10).
+- "변경 요약 패널"은 Stimulus `dirty-tracker`가 `dirty-changed` 이벤트 발신, 패널은 동일 컨트롤러 target으로 구독.
 
 ### 8.6 Project 생성 — FR-3
 
@@ -672,6 +760,11 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 | **create** | Project 생성 프로비저닝 | Step 1. App Registry 등록 → Step 2a. 인증 리소스 생성 / Step 2b. Langfuse 리소스 생성 (병렬) → Step 3. Config 반영 → Step 4. Health Check | 시크릿 표시 → Project 상세 |
 | **update** | 설정 변경 프로비저닝 | Step 1. Keycloak Client 수정 (인증 설정 변경 시에만, 조건부 실행) → Step 2. Config 반영 → Step 3. Health Check | Project 상세 (시크릿 없음; Client Secret 재발급한 경우 예외) |
 | **delete** | Project 삭제 프로비저닝 | Step 1. Keycloak Client 삭제 / Langfuse 리소스 삭제 / Config Server 설정 삭제 (3개 병렬) → Step 2. App Registry 해제 → Step 3. Console DB 정리 | Org 상세 |
+| **auth_binding_add** | 인증 방식 추가 (마이그레이션 1/3) | Step 1. Keycloak Client 생성 (`aap-{org}-{proj}-{new_protocol}`) → Step 2. Config 반영 (양쪽 binding 동시 게시) → Step 3. Health Check (warning-only) | 시크릿 표시 → 인증 마이그레이션 페이지 |
+| **auth_binding_promote** | Primary 전환 (마이그레이션 2/3) | Step 1. Config 반영 (신규 binding을 primary로 게시) → Step 2. Health Check | 인증 마이그레이션 페이지 (시크릿 없음) |
+| **auth_binding_remove** | 구 binding 제거 (마이그레이션 3/3) | Step 1. Config 반영 (retiring binding 제거) → Step 2. Keycloak Client 삭제 (`aap-` prefix guard) | Project 상세 (마이그레이션 종료) |
+
+> **마이그레이션 단계의 가역성**: `auth_binding_add`와 `auth_binding_promote`는 가역(롤백 가능). `auth_binding_remove` Step 2 실패 시 Keycloak client는 이미 삭제된 상태이므로 롤백 불가 — `health_check`처럼 warning-only로 처리하고, 실패 시 운영자가 cleanup sweep으로 후속 처리한다 (ADR-007).
 
 > **삭제 프로비저닝**: Project 삭제 시에도 6.2절 위험 액션 확인 → 프로비저닝 현황 페이지로 리다이렉트 → 완료 시 Org 상세로 이동. 시크릿 표시 단계 없음.
 >
@@ -776,43 +869,37 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 - 완료 시: 시크릿 영역 인라인 표시 → 사용자 확인 후 "Project 상세로 이동" 활성화 (자동 리다이렉트 하지 않음)
 - 실패 시: "수동 재시도" 버튼 (admin 이상) + "Project 목록으로" 링크
 
-### 8.8 LiteLLM Config 편집 — FR-6
+### 8.8 LiteLLM Config — FR-6 (read-only 상세)
+
+쓰기 가능한 편집은 §8.5.1 통합 편집 폼이 단독으로 담당한다. 이 페이지는 현재 적용 중인 LiteLLM Config 값을 읽기 전용으로 표시하고, 편집 진입점만 제공한다.
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Console > Acme Corp > Chatbot > LiteLLM Config     │
 ├──────────┬──────────────────────────────────────────┤
 │ 사이드바  │                                          │
-│          │  LiteLLM Config 편집                      │
+│          │  LiteLLM Config              [설정 편집] │
+│          │  (현재 적용 값 — 읽기 전용)               │
 │          │                                          │
 │          │  ── 모델 라우팅 ──                        │
-│          │                                          │
-│          │  ☑ azure-gpt4         Rate Limit: [100/m]│
-│          │  ☑ claude-sonnet      Rate Limit: [50/m] │
-│          │  ☐ gemini-pro         Rate Limit: [    ] │
+│          │  • azure-gpt4         Rate Limit: 100/m  │
+│          │  • claude-sonnet      Rate Limit:  50/m  │
 │          │                                          │
 │          │  ── 가드레일 ──                           │
-│          │                                          │
-│          │  ☑ content-filter     (활성)              │
-│          │  ☐ token-limit        (비활성)            │
+│          │  • content-filter (활성)                  │
 │          │                                          │
 │          │  ── S3 설정 ──                            │
+│          │  S3 경로: s3://bucket/acme/chatbot/      │
+│          │  S3 Retention: 90일                       │
 │          │                                          │
-│          │  S3 경로 (prefix)                         │
-│          │  s3://bucket/acme/chatbot/    (자동 생성) │
-│          │                                          │
-│          │  S3 Retention (일)                        │
-│          │  [90                ]                     │
-│          │                                          │
-│          │  [취소]  [변경 저장 및 적용]                 │
-│          │                                          │
+│          │  최근 적용: 2026-03-11 14:30  user@       │
+│          │  [변경 이력 보기 (§8.9)]                  │
 └──────────┴──────────────────────────────────────────┘
 ```
 
-**저장 후 동작**:
-1. "변경 저장 및 적용" 클릭 → 변경 확인 모달 표시 ("설정을 변경하면 프로비저닝이 시작됩니다. 진행하시겠습니까?")
-2. 확인 → 프로비저닝 Job 자동 생성 → 프로비저닝 현황 페이지(8.7)로 리다이렉트
-3. 프로비저닝 완료 후 Project 상세로 이동 가능 (시크릿 재발급이 없으므로 시크릿 표시 단계 없음)
+- **[설정 편집]** CTA → §8.5.1 통합 편집 페이지(`/projects/:slug/edit`)로 이동.
+- LiteLLM Config 단독 변경도 통합 편집을 거친다 — `Projects::UpdateService`가 dirty 필드(`models`/`guardrails`/`s3_retention_days`만 변경된 케이스)를 인식해 `config_server_apply` + `health_check`(LiteLLM)만 실행하므로 추가 비용 없음.
+- 활성 프로비저닝 Job이 있으면 [설정 편집] CTA가 disabled + §6.8 동시성 배너 표시.
 
 ### 8.9 변경 이력 — FR-8
 
@@ -920,53 +1007,133 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 - "대화 초기화": 세션 리셋 (확인 없이 즉시 초기화)
 - 대화 이력은 브라우저 세션에서만 유지 — 서버 미저장
 
-### 8.11 인증 설정 편집 — FR-4
+### 8.11 인증 설정 — FR-4 (read-only 상세 + destructive 액션)
+
+쓰기 가능한 일반 편집(Redirect URI, post-logout URI 등)은 §8.5.1 통합 편집 폼이 단독으로 담당한다. 이 페이지는 read-only 상세를 보여주고, **단독 destructive 액션**만 트리거한다 — Client Secret 재발급, PAK 발급/폐기, 인증 방식 마이그레이션. 이들은 시크릿 일회성 노출 또는 외부 client 삭제 같은 별도 위험을 동반하므로 통합 편집 폼에 묶지 않는다.
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Console > Acme Corp > Chatbot > 인증 설정           │
 ├──────────┬──────────────────────────────────────────┤
 │ 사이드바  │                                          │
-│          │  인증 설정                                │
+│          │  인증 설정                    [설정 편집] │
+│          │  (현재 적용 값 — 읽기 전용)               │
 │          │                                          │
-│          │  인증 방식: OIDC                          │
+│          │  인증 방식: OIDC (Primary)                │
 │          │  Client ID: aap-acme-chatbot-oidc        │
+│          │  [인증 방식 변경 — 마이그레이션 시작]      │
+│          │  (§8.11.1 — admin 권한 필요)              │
 │          │                                          │
 │          │  ── OIDC 설정 ──                          │
+│          │  Redirect URIs:                           │
+│          │  • https://app.acme.com/callback         │
+│          │  • https://staging.acme.com/callback     │
+│          │  Post Logout Redirect URIs:               │
+│          │  • https://app.acme.com                  │
+│          │  (편집은 [설정 편집]으로 이동)            │
 │          │                                          │
-│          │  Redirect URIs *                          │
-│          │  [https://app.acme.com/callback   ] [✕]  │
-│          │  [https://staging.acme.com/callback] [✕]  │
-│          │  [+ URI 추가]                             │
-│          │                                          │
-│          │  Post Logout Redirect URIs                │
-│          │  [https://app.acme.com            ] [✕]  │
-│          │  [+ URI 추가]                             │
-│          │                                          │
-│          │  ── Client Secret ──                      │
-│          │                                          │
+│          │  ── Client Secret (destructive) ──        │
 │          │  마지막 재발급: 2026-03-10 10:00           │
 │          │  [Client Secret 재발급]                    │
 │          │  ⚠ 재발급 시 기존 Secret은 즉시 무효화됩니다│
 │          │                                          │
-│          │  ── PAK (별도 추가) ─────────────────      │
-│          │                                          │
+│          │  ── PAK 관리 ─────────────────             │
 │          │  발급된 PAK: 1개                           │
 │          │  ┌──────────────────────────────────────┐ │
 │          │  │  pak-****-****   2026-03-10  [폐기]  │ │
 │          │  └──────────────────────────────────────┘ │
 │          │  [+ 새 PAK 발급]                          │
-│          │                                          │
-│          │  [취소]  [저장]                            │
-│          │                                          │
 └──────────┴──────────────────────────────────────────┘
 ```
 
 **구성 요소**:
-- 인증 방식 표시 (변경은 Project 재생성 필요 — 읽기 전용)
-- 프로토콜별 설정 필드 (OIDC: Redirect URI 등, SAML: SP 메타데이터 다운로드 등)
-- Client Secret 재발급 버튼 → 위험 액션 확인(6.2절) 후 일회성 시크릿 표시(6.1절)
-- PAK 관리: 목록 + 신규 발급/폐기. 발급 시 일회성 표시(6.1절). 현재 shipped scope는 auth-config 화면에서 활성화되며, SAML/OAuth controls는 해당 leaf가 닫히기 전까지 disabled 상태를 유지
+- **[설정 편집] CTA** → §8.5.1 통합 편집 페이지로 이동. Redirect URI / post-logout URI 등 비-destructive 필드의 단독 변경도 통합 편집 경로를 거친다.
+- **현재 인증 방식 표시** — Primary binding의 protocol/Client ID. 변경은 §8.11.1 Dual-Client 마이그레이션 플로우 단독.
+- **Client Secret 재발급** — 위험 액션 확인(§6.2) 후 일회성 시크릿 표시(§6.1). 통합 편집 폼에 절대 포함하지 않는다 — 사용자가 Redirect URI를 편집하다 실수로 Secret을 회전할 위험을 차단.
+- **PAK 관리** — 목록 + 신규 발급/폐기. 발급 시 일회성 표시(§6.1). SAML/OAuth controls는 해당 leaf가 닫히기 전까지 disabled 상태를 유지.
+
+### 8.11.1 인증 방식 마이그레이션 — FR-4 (ADR-007)
+
+`auth_type`은 `auth_binding_add` → `auth_binding_promote` → `auth_binding_remove` 3단계 operator-driven 플로우로만 변경할 수 있다. 각 단계는 별도 버튼 클릭으로 실행되며, 단일 cut-over는 허용하지 않는다 (ADR-007).
+
+**진입 조건**:
+- Project에 활성 프로비저닝 Job이 없어야 한다 (§6.8 동시성 정책 적용)
+- 현재 secondary binding이 없어야 한다 (동시 마이그레이션 1개 제한)
+- `pak` ↔ Keycloak-backed 전환은 Keycloak client create/delete 중 한쪽만 실행
+- self-transition (`oidc → oidc`) Controller에서 거부
+- Phase 1에서는 SAML/OAuth가 disabled 상태이므로 마이그레이션 대상도 동일하게 제한 — UI에서 "준비 중" 툴팁으로 안내
+
+**Step 1. 신규 binding 추가** — `[인증 방식 변경] → 새 인증 방식 선택 → [추가]`:
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Console > Acme > Chatbot > 인증 설정 > 마이그레이션 │
+├──────────┬──────────────────────────────────────────┤
+│ 사이드바  │                                          │
+│          │  인증 방식 마이그레이션                    │
+│          │                                          │
+│          │  현재 Primary: OIDC                       │
+│          │  Client ID: aap-acme-chatbot-oidc        │
+│          │                                          │
+│          │  새 인증 방식 *                           │
+│          │  ○ OIDC (현재)  ● SAML  ○ OAuth  ○ PAK   │
+│          │                                          │
+│          │  ⚠ 사전 확인                              │
+│          │  ☑ downstream 앱이 마이그레이션 기간 중   │
+│          │     두 Keycloak client의 토큰을 모두      │
+│          │     신뢰할 수 있도록 구성되어 있습니다.    │
+│          │                                          │
+│          │  [취소]  [신규 binding 추가]              │
+└──────────┴──────────────────────────────────────────┘
+```
+
+→ `auth_binding_add` 프로비저닝(8.7) 트리거. 완료 시 신규 Client Secret을 일회성 시크릿(6.1절)으로 표시.
+
+**Step 2. Primary로 승격** — `[Primary로 승격]`:
+
+```
+│          │  인증 방식 마이그레이션 (2/3 단계)        │
+│          │                                          │
+│          │  Primary  : OIDC (aap-acme-chatbot-oidc) │
+│          │  Secondary: SAML (aap-acme-chatbot-saml) │
+│          │            상태: active (전환 대기)       │
+│          │                                          │
+│          │  [Primary로 승격]                         │
+│          │  [신규 binding 제거 — 롤백]                │
+│          │                                          │
+│          │  ⓘ 승격 시 Config Server가 SAML을 새      │
+│          │    Primary로 게시하고, 구 OIDC binding은  │
+│          │    retiring 상태로 전환됩니다.             │
+```
+
+→ `auth_binding_promote` 프로비저닝 트리거. DB에서 구 primary는 `role: retiring, state: retiring`, 신규는 `role: primary, state: active`로 swap. 구 client의 active session은 자연 만료에 맡기며 `logout-all`은 호출하지 않는다 (ADR-007 — 사용자 입장에서 일반 세션 만료와 동일).
+
+**Step 3. 구 binding 제거** — `[구 binding 제거]`:
+
+```
+│          │  인증 방식 마이그레이션 (3/3 단계)        │
+│          │                                          │
+│          │  Primary : SAML (aap-acme-chatbot-saml)  │
+│          │  Retiring: OIDC (aap-acme-chatbot-oidc)  │
+│          │            상태: retiring                 │
+│          │                                          │
+│          │  ⚠ 이 단계는 비가역입니다.                 │
+│          │     구 Keycloak client가 영구 삭제됩니다.  │
+│          │                                          │
+│          │  [구 binding 제거]                         │
+```
+
+→ `auth_binding_remove` 프로비저닝 트리거. 위험 액션 확인(6.2절) 후 실행. Step 2에서 Keycloak client 삭제가 실패하면 warning-only로 마이그레이션은 종료되며, 실패 사실을 배너로 표기하고 운영자에게 cleanup을 안내.
+
+**롤백 규칙**:
+- Step 1 완료 후 Step 2 시작 전: `[신규 binding 제거 — 롤백]` 버튼으로 신규 client 삭제 (`auth_binding_remove`의 secondary 변형). 가역.
+- Step 2 완료 후 Step 3 시작 전: 구 binding과 신규 binding의 role을 다시 swap하는 보상 `auth_binding_promote` 호출. 가역.
+- Step 3 진입 후: 비가역. 구 client는 복원 불가.
+
+**UI 가드**:
+- 마이그레이션이 진행 중인 동안 8.11 본문의 OIDC/SAML/Client Secret/PAK 편집 컨트롤은 disabled (배너 안내 — `진행 중인 마이그레이션이 있습니다. 완료 또는 롤백 후 시도하세요.`)
+- 마이그레이션 진행 중에는 Project slug 변경 금지 (Keycloak client ID 불변 보장)
+- 모든 단계 전이는 ActionCable로 실시간 갱신되며, 완료 시 §8.7 프로비저닝 현황 페이지에서 시크릿(있다면) 표시 후 마이그레이션 페이지로 복귀
 
 ---
 
@@ -1035,4 +1202,5 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 | `flash` | 전역 (레이아웃) | Flash 알림 자동 닫힘 타이머 + 수동 닫기 |
 | `submit-button` | 각종 폼 | 제출 시 버튼 비활성화 + "처리중..." 텍스트 변경 |
 | `member-role` | 멤버 추가 모달 | Org 권한 드롭다운 변경 시 Project 권한 체크박스 표시/숨김 토글 |
-| `uri-list` | 인증 설정 편집 | Redirect URI 동적 추가/제거 |
+| `uri-list` | Project 설정 통합 편집 (§8.5.1) | Redirect URI 동적 추가/제거 |
+| `dirty-tracker` | Project 설정 통합 편집 (§8.5.1) | `data-original-value` 비교로 섹션 헤더 "변경됨" 뱃지 토글, sticky 변경 요약 패널에 dirty 필드/예상 step 갱신 이벤트 발신 |
