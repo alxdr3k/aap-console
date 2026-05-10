@@ -1,7 +1,7 @@
 # AAP Console — Product Requirements Document (PRD)
 
-> **Version**: 1.21
-> **Date**: 2026-05-02
+> **Version**: 1.22
+> **Date**: 2026-05-09
 > **Status**: Approved
 > **References**: [HLD](./02_HLD.md) · [UI Spec](./ui-spec.md)
 
@@ -259,7 +259,7 @@ Realm: aap (단일)
 |------|------|
 | **생성** | Organization 하위에 신규 Project 등록. 이름, 설명 입력. 생성 시 App ID 자동 발급 |
 | **조회** | Project 목록 및 상세 정보 (각 서비스에 추가된 설정 현황, 발급된 App ID) 확인 |
-| **수정** | Project 설정 변경 (Redirect URI, Client Secret 재발급, 모델 라우팅, S3 Retention 등). 최초 선택한 주 인증 방식(`auth_type`)은 변경하지 않으며, 다른 방식으로 전환하려면 Project 재생성이 필요 |
+| **수정** | Project 설정 변경 (Redirect URI, Client Secret 재발급, 모델 라우팅, S3 Retention 등). 주 인증 방식(`auth_type`) 변경은 [ADR-007](./adr/adr-007-auth-type-migration.md) Dual-Client 마이그레이션 플로우(AUTH-6B)로만 가능하며, 단일 cut-over는 허용하지 않는다 |
 | **삭제** | Project 삭제 시 생성/수정 과정에서 추가된 **모든** 내역을 롤백. 아래 전체 대상 참고 |
 
 **삭제 시 롤백 대상**:
@@ -622,7 +622,7 @@ Step 5. 완료 → 프로비저닝 현황 페이지에서 결과 확인 → Proj
 | **테스트** | RSpec + FactoryBot | TDD 기반 개발. 단위/통합/시스템 테스트 |
 | **CI/CD** | (미정) | GitOps 기반 배포 파이프라인 |
 
-> **관련 ADR**: [ADR-004 인증/인가 분리](./adr/adr-004-auth-authz-separation.md) · [ADR-005 SQLite + Litestream](./adr/adr-005-sqlite-litestream.md) · [ADR-006 Hotwire vs SPA](./adr/adr-006-hotwire-server-rendering.md)
+> **관련 ADR**: [ADR-004 인증/인가 분리](./adr/adr-004-auth-authz-separation.md) · [ADR-005 SQLite + Litestream](./adr/adr-005-sqlite-litestream.md) · [ADR-006 Hotwire vs SPA](./adr/adr-006-hotwire-server-rendering.md) · [ADR-007 auth_type Dual-Client 마이그레이션](./adr/adr-007-auth-type-migration.md)
 
 ### 8.1 개발 방법론
 

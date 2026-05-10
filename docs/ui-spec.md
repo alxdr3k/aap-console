@@ -1,9 +1,9 @@
 # AAP Console — UI Specification (UI Spec)
 
-> **Version**: 1.6
-> **Date**: 2026-04-21
+> **Version**: 1.7
+> **Date**: 2026-05-09
 > **Status**: Draft
-> **References**: [PRD](./01_PRD.md) · [HLD](./02_HLD.md)
+> **References**: [PRD](./01_PRD.md) · [HLD](./02_HLD.md) · [ADR-007](./adr/adr-007-auth-type-migration.md)
 
 ---
 
@@ -109,7 +109,8 @@ AAP Console
 |--------|---------|-----------|---------|
 | Project 생성 | `/organizations/:org_slug/projects/new` | 이름, 인증 방식, 모델 선택 | FR-3 |
 | Project 상세 | `/organizations/:org_slug/projects/:slug` | 설정 현황, 인증 정보, Config 요약 | FR-3 |
-| 인증 설정 | `/.../:slug/auth_config` | 인증 방식 상세, Client Secret 재발급 | FR-4 |
+| 인증 설정 | `/.../:slug/auth_config` | 인증 방식 상세, Client Secret 재발급, 인증 방식 마이그레이션 트리거 | FR-4 |
+| 인증 마이그레이션 | `/.../:slug/auth_config/migration` | Dual-Client 마이그레이션 단계별 진행/롤백 (ADR-007) | FR-4 |
 | LiteLLM Config | `/.../:slug/litellm_config` | 모델 라우팅, 가드레일, S3 설정 편집 | FR-6 |
 | 변경 이력 | `/.../:slug/config_versions` | 버전 목록, diff 조회, 롤백 | FR-8 |
 | Playground | `/.../:slug/playground` | 모델 선택, AI Chat, 요청 인스펙터. Phase 4 전까지 숨김 또는 disabled | FR-10 |
@@ -672,6 +673,11 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 | **create** | Project 생성 프로비저닝 | Step 1. App Registry 등록 → Step 2a. 인증 리소스 생성 / Step 2b. Langfuse 리소스 생성 (병렬) → Step 3. Config 반영 → Step 4. Health Check | 시크릿 표시 → Project 상세 |
 | **update** | 설정 변경 프로비저닝 | Step 1. Keycloak Client 수정 (인증 설정 변경 시에만, 조건부 실행) → Step 2. Config 반영 → Step 3. Health Check | Project 상세 (시크릿 없음; Client Secret 재발급한 경우 예외) |
 | **delete** | Project 삭제 프로비저닝 | Step 1. Keycloak Client 삭제 / Langfuse 리소스 삭제 / Config Server 설정 삭제 (3개 병렬) → Step 2. App Registry 해제 → Step 3. Console DB 정리 | Org 상세 |
+| **auth_binding_add** | 인증 방식 추가 (마이그레이션 1/3) | Step 1. Keycloak Client 생성 (`aap-{org}-{proj}-{new_protocol}`) → Step 2. Config 반영 (양쪽 binding 동시 게시) → Step 3. Health Check (warning-only) | 시크릿 표시 → 인증 마이그레이션 페이지 |
+| **auth_binding_promote** | Primary 전환 (마이그레이션 2/3) | Step 1. Config 반영 (신규 binding을 primary로 게시) → Step 2. Health Check | 인증 마이그레이션 페이지 (시크릿 없음) |
+| **auth_binding_remove** | 구 binding 제거 (마이그레이션 3/3) | Step 1. Config 반영 (retiring binding 제거) → Step 2. Keycloak Client 삭제 (`aap-` prefix guard) | Project 상세 (마이그레이션 종료) |
+
+> **마이그레이션 단계의 가역성**: `auth_binding_add`와 `auth_binding_promote`는 가역(롤백 가능). `auth_binding_remove` Step 2 실패 시 Keycloak client는 이미 삭제된 상태이므로 롤백 불가 — `health_check`처럼 warning-only로 처리하고, 실패 시 운영자가 cleanup sweep으로 후속 처리한다 (ADR-007).
 
 > **삭제 프로비저닝**: Project 삭제 시에도 6.2절 위험 액션 확인 → 프로비저닝 현황 페이지로 리다이렉트 → 완료 시 Org 상세로 이동. 시크릿 표시 단계 없음.
 >
@@ -929,8 +935,10 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 │ 사이드바  │                                          │
 │          │  인증 설정                                │
 │          │                                          │
-│          │  인증 방식: OIDC                          │
+│          │  인증 방식: OIDC (Primary)                │
 │          │  Client ID: aap-acme-chatbot-oidc        │
+│          │  [인증 방식 변경 — 마이그레이션 시작]      │
+│          │  (8.11.1 — admin 권한 필요)               │
 │          │                                          │
 │          │  ── OIDC 설정 ──                          │
 │          │                                          │
@@ -963,10 +971,93 @@ CRUD 성공/실패 시 페이지 상단에 일시적 알림을 표시한다.
 ```
 
 **구성 요소**:
-- 인증 방식 표시 (변경은 Project 재생성 필요 — 읽기 전용)
+- 현재 인증 방식 표시 — Primary binding의 protocol/Client ID. 변경은 8.11.1 Dual-Client 마이그레이션 플로우로만 가능
 - 프로토콜별 설정 필드 (OIDC: Redirect URI 등, SAML: SP 메타데이터 다운로드 등)
 - Client Secret 재발급 버튼 → 위험 액션 확인(6.2절) 후 일회성 시크릿 표시(6.1절)
 - PAK 관리: 목록 + 신규 발급/폐기. 발급 시 일회성 표시(6.1절). 현재 shipped scope는 auth-config 화면에서 활성화되며, SAML/OAuth controls는 해당 leaf가 닫히기 전까지 disabled 상태를 유지
+
+### 8.11.1 인증 방식 마이그레이션 — FR-4 (ADR-007)
+
+`auth_type`은 `auth_binding_add` → `auth_binding_promote` → `auth_binding_remove` 3단계 operator-driven 플로우로만 변경할 수 있다. 각 단계는 별도 버튼 클릭으로 실행되며, 단일 cut-over는 허용하지 않는다 (ADR-007).
+
+**진입 조건**:
+- Project에 활성 프로비저닝 Job이 없어야 한다 (§6.8 동시성 정책 적용)
+- 현재 secondary binding이 없어야 한다 (동시 마이그레이션 1개 제한)
+- `pak` ↔ Keycloak-backed 전환은 Keycloak client create/delete 중 한쪽만 실행
+- self-transition (`oidc → oidc`) Controller에서 거부
+- Phase 1에서는 SAML/OAuth가 disabled 상태이므로 마이그레이션 대상도 동일하게 제한 — UI에서 "준비 중" 툴팁으로 안내
+
+**Step 1. 신규 binding 추가** — `[인증 방식 변경] → 새 인증 방식 선택 → [추가]`:
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Console > Acme > Chatbot > 인증 설정 > 마이그레이션 │
+├──────────┬──────────────────────────────────────────┤
+│ 사이드바  │                                          │
+│          │  인증 방식 마이그레이션                    │
+│          │                                          │
+│          │  현재 Primary: OIDC                       │
+│          │  Client ID: aap-acme-chatbot-oidc        │
+│          │                                          │
+│          │  새 인증 방식 *                           │
+│          │  ○ OIDC (현재)  ● SAML  ○ OAuth  ○ PAK   │
+│          │                                          │
+│          │  ⚠ 사전 확인                              │
+│          │  ☑ downstream 앱이 마이그레이션 기간 중   │
+│          │     두 Keycloak client의 토큰을 모두      │
+│          │     신뢰할 수 있도록 구성되어 있습니다.    │
+│          │                                          │
+│          │  [취소]  [신규 binding 추가]              │
+└──────────┴──────────────────────────────────────────┘
+```
+
+→ `auth_binding_add` 프로비저닝(8.7) 트리거. 완료 시 신규 Client Secret을 일회성 시크릿(6.1절)으로 표시.
+
+**Step 2. Primary로 승격** — `[Primary로 승격]`:
+
+```
+│          │  인증 방식 마이그레이션 (2/3 단계)        │
+│          │                                          │
+│          │  Primary  : OIDC (aap-acme-chatbot-oidc) │
+│          │  Secondary: SAML (aap-acme-chatbot-saml) │
+│          │            상태: active (전환 대기)       │
+│          │                                          │
+│          │  [Primary로 승격]                         │
+│          │  [신규 binding 제거 — 롤백]                │
+│          │                                          │
+│          │  ⓘ 승격 시 Config Server가 SAML을 새      │
+│          │    Primary로 게시하고, 구 OIDC binding은  │
+│          │    retiring 상태로 전환됩니다.             │
+```
+
+→ `auth_binding_promote` 프로비저닝 트리거. DB에서 구 primary는 `role: retiring, state: retiring`, 신규는 `role: primary, state: active`로 swap. 구 client의 active session은 자연 만료에 맡기며 `logout-all`은 호출하지 않는다 (ADR-007 — 사용자 입장에서 일반 세션 만료와 동일).
+
+**Step 3. 구 binding 제거** — `[구 binding 제거]`:
+
+```
+│          │  인증 방식 마이그레이션 (3/3 단계)        │
+│          │                                          │
+│          │  Primary : SAML (aap-acme-chatbot-saml)  │
+│          │  Retiring: OIDC (aap-acme-chatbot-oidc)  │
+│          │            상태: retiring                 │
+│          │                                          │
+│          │  ⚠ 이 단계는 비가역입니다.                 │
+│          │     구 Keycloak client가 영구 삭제됩니다.  │
+│          │                                          │
+│          │  [구 binding 제거]                         │
+```
+
+→ `auth_binding_remove` 프로비저닝 트리거. 위험 액션 확인(6.2절) 후 실행. Step 2에서 Keycloak client 삭제가 실패하면 warning-only로 마이그레이션은 종료되며, 실패 사실을 배너로 표기하고 운영자에게 cleanup을 안내.
+
+**롤백 규칙**:
+- Step 1 완료 후 Step 2 시작 전: `[신규 binding 제거 — 롤백]` 버튼으로 신규 client 삭제 (`auth_binding_remove`의 secondary 변형). 가역.
+- Step 2 완료 후 Step 3 시작 전: 구 binding과 신규 binding의 role을 다시 swap하는 보상 `auth_binding_promote` 호출. 가역.
+- Step 3 진입 후: 비가역. 구 client는 복원 불가.
+
+**UI 가드**:
+- 마이그레이션이 진행 중인 동안 8.11 본문의 OIDC/SAML/Client Secret/PAK 편집 컨트롤은 disabled (배너 안내 — `진행 중인 마이그레이션이 있습니다. 완료 또는 롤백 후 시도하세요.`)
+- 마이그레이션 진행 중에는 Project slug 변경 금지 (Keycloak client ID 불변 보장)
+- 모든 단계 전이는 ActionCable로 실시간 갱신되며, 완료 시 §8.7 프로비저닝 현황 페이지에서 시크릿(있다면) 표시 후 마이그레이션 페이지로 복귀
 
 ---
 

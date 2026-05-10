@@ -292,7 +292,8 @@ RSpec.describe "AuthConfigs", type: :request do
              auth_type: "oidc",
              keycloak_client_id: "aap-acme-chatbot-oidc",
              keycloak_client_uuid: "server-owned-uuid")
-      stub_keycloak_regenerate_client_secret(uuid: "server-owned-uuid", secret: "new-client-secret")
+      stub_keycloak_regenerate_client_secret(uuid: "server-owned-uuid", secret: "new-client-secret",
+                                             client_id: "aap-acme-chatbot-oidc")
       cache.clear
     end
 

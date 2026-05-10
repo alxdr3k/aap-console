@@ -124,6 +124,7 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
         audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
         expect(audit.details["live_client_id"]).to eq("aap-some-other-client")
         expect(audit.details["expected_client_id"]).to eq(auth_config.keycloak_client_id)
+        expect(audit.details["detection_phase"]).to eq("completion_check")
       end
     end
 
@@ -180,7 +181,8 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       uuid = stub_keycloak_create_client(client_id: auth_config.keycloak_client_id)
       stub_keycloak_get_clients(client_id: auth_config.keycloak_client_id,
                                 clients: [ { "id" => uuid, "clientId" => auth_config.keycloak_client_id } ])
-      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret",
+                                      client_id: auth_config.keycloak_client_id)
 
       step_record = create(:provisioning_step, :keycloak_client_create, provisioning_job: job)
       step = described_class.new(step_record: step_record, project: project, params: {})
@@ -205,7 +207,8 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       auth_config.update!(keycloak_client_uuid: uuid)
       stub_keycloak_get_client(uuid: uuid,
                                client: { "id" => uuid, "clientId" => auth_config.keycloak_client_id })
-      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret",
+                                      client_id: auth_config.keycloak_client_id)
 
       step_record = create(
         :provisioning_step,
@@ -233,7 +236,8 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       auth_config.update!(keycloak_client_uuid: nil)
       stub_keycloak_get_client(uuid: uuid,
                                client: { "id" => uuid, "clientId" => auth_config.keycloak_client_id })
-      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret")
+      stub_keycloak_get_client_secret(uuid: uuid, secret: "oidc-secret",
+                                      client_id: auth_config.keycloak_client_id)
 
       step_record = create(
         :provisioning_step,
@@ -297,6 +301,94 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(WebMock).not_to have_requested(:delete, %r{/clients/#{uuid}})
     end
 
+    it "audits and re-raises during rollback when snapshot UUID resolves to a different aap client" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+
+      uuid = "uuid-snapshot"
+      # Identity precheck for delete during rollback diverges.
+      stub_keycloak_get_client_by_uuid(uuid: uuid, client_id: "aap-some-other-client")
+
+      step_record = create(
+        :provisioning_step,
+        :keycloak_client_create,
+        provisioning_job: job,
+        result_snapshot: {
+          "keycloak_client_uuid" => uuid,
+          "keycloak_client_id" => auth_config.keycloak_client_id
+        }
+      )
+      step = described_class.new(step_record: step_record, project: project, params: {})
+
+      expect {
+        step.rollback
+      }.to raise_error(KeycloakClient::IdentityMismatchError)
+        .and change { AuditLog.where(action: "auth_config.keycloak_client_diverged").count }.by(1)
+
+      # Foreign client must NOT have been deleted.
+      expect(WebMock).not_to have_requested(:delete, %r{/clients/#{uuid}\b})
+
+      audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
+      expect(audit.details["detection_phase"]).to eq("create_rollback")
+      expect(audit.details["live_client_id"]).to eq("aap-some-other-client")
+    end
+
+    it "skips secret refresh when the live client identity diverges between the completion check and the secret fetch" do
+      cache = ActiveSupport::Cache::MemoryStore.new
+      allow(Rails).to receive(:cache).and_return(cache)
+      allow(Rails.logger).to receive(:warn)
+
+      uuid = "uuid-late-divergence"
+      auth_config.update!(keycloak_client_uuid: uuid)
+      stub_keycloak_token
+
+      # First GET (already_completed?) returns the expected clientId; the second
+      # GET (re-verification immediately before the secret fetch) returns a
+      # different aap-prefixed clientId, simulating a race or operator-driven
+      # client swap between checks. KeycloakClient#assert_aap_client! only
+      # enforces the aap- prefix, so without an exact-match guard the next
+      # /client-secret call would cache a foreign client's secret.
+      stub_request(:get, "#{KeycloakMock::BASE}/clients/#{uuid}").to_return(
+        {
+          status: 200,
+          body: { id: uuid, clientId: auth_config.keycloak_client_id }.to_json,
+          headers: { "Content-Type" => "application/json" }
+        },
+        {
+          status: 200,
+          body: { id: uuid, clientId: "aap-some-other-client" }.to_json,
+          headers: { "Content-Type" => "application/json" }
+        }
+      )
+
+      step_record = create(
+        :provisioning_step,
+        :keycloak_client_create,
+        provisioning_job: job,
+        result_snapshot: {
+          "keycloak_client_uuid" => uuid,
+          "keycloak_client_id" => auth_config.keycloak_client_id
+        }
+      )
+
+      runner = Provisioning::StepRunner.new(step: step_record, provisioning_job: job, params: {})
+      result = runner.execute
+
+      expect(result[:status]).to eq(:completed)
+      expect(step_record.reload).to be_skipped
+      expect(WebMock).not_to have_requested(:get, %r{/clients/#{uuid}/client-secret})
+      expect(Provisioning::SecretCache.read(job)).to eq({})
+      # Late divergence must surface as the same audit signal as completion-check
+      # divergence so operators can query the incident by project/job, with the
+      # detection_phase distinguishing where in the flow it was caught.
+      audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
+      expect(audit).to be_present
+      expect(audit.details["detection_phase"]).to eq("secret_refresh")
+      expect(audit.details["expected_client_id"]).to eq(auth_config.keycloak_client_id)
+      expect(audit.details["live_client_id"]).to eq("aap-some-other-client")
+      expect(audit.details["provisioning_job_id"]).to eq(job.id)
+    end
+
     it "does not fail provisioning when secret caching cannot fetch the client secret" do
       cache = ActiveSupport::Cache::MemoryStore.new
       allow(Rails).to receive(:cache).and_return(cache)
@@ -308,6 +400,8 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       keycloak = instance_double(KeycloakClient)
       allow(KeycloakClient).to receive(:new).and_return(keycloak)
       allow(keycloak).to receive(:create_oidc_client).and_return({ "id" => uuid })
+      allow(keycloak).to receive(:get_client).with(uuid: uuid)
+        .and_return({ "id" => uuid, "clientId" => auth_config.keycloak_client_id })
       allow(keycloak).to receive(:get_client_secret).and_raise(BaseClient::TimeoutError.new("Request timed out"))
 
       step_record = create(:provisioning_step, :keycloak_client_create, provisioning_job: job)
@@ -343,6 +437,8 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       keycloak = instance_double(KeycloakClient)
       allow(KeycloakClient).to receive(:new).and_return(keycloak)
       allow(keycloak).to receive(:create_oidc_client).and_return({ "id" => uuid })
+      allow(keycloak).to receive(:get_client).with(uuid: uuid)
+        .and_return({ "id" => uuid, "clientId" => auth_config.keycloak_client_id })
       allow(keycloak).to receive(:get_client_secret).and_raise(BaseClient::TimeoutError.new("Request timed out"))
       allow(Rails.logger).to receive(:warn)
 

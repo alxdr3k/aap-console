@@ -9,14 +9,17 @@ module Provisioning
                                          .order(step_order: :desc)
                                          .select { |s| eligible_for_rollback?(s) }
 
+      # Best-effort: continue rolling back lower-order steps even when a
+      # higher-order step's rollback raises. Halting on the first failure
+      # would leave independent external side effects (e.g. app registry
+      # entries) behind for operators to discover manually after a
+      # cross-project IdentityMismatch on Keycloak rollback.
+      any_failed = false
       candidate_steps.each do |step|
-        rollback_step(step)
+        any_failed = true unless rollback_step(step)
       end
 
-      true
-    rescue => e
-      Rails.logger.error "Rollback failed for job #{@provisioning_job.id}: #{e.message}"
-      false
+      !any_failed
     end
 
     private
@@ -43,9 +46,13 @@ module Provisioning
       step_impl = build_step_impl(step)
       step_impl.rollback
       step.update!(status: :rolled_back)
+      true
     rescue => e
+      Rails.logger.error(
+        "Rollback failed for job #{@provisioning_job.id} step #{step.id}: #{e.class}: #{e.message}"
+      )
       step.update!(status: :rollback_failed, error_message: e.message)
-      raise
+      false
     end
 
     def build_step_impl(step)

@@ -57,7 +57,7 @@ RSpec.describe Provisioning::Steps::KeycloakClientUpdate do
         stub_keycloak_get_clients(client_id: client_id,
                                   clients: [ { "id" => uuid, "clientId" => client_id,
                                                "redirectUris" => [ "https://old.example.com/cb" ] } ])
-        stub_keycloak_update_client(uuid: uuid)
+        stub_keycloak_update_client(uuid: uuid, client_id: client_id)
       end
 
       it "calls Keycloak update_client" do
@@ -224,7 +224,7 @@ RSpec.describe Provisioning::Steps::KeycloakClientUpdate do
         }
       end
 
-      before { stub_keycloak_update_client(uuid: uuid) }
+      before { stub_keycloak_update_client(uuid: uuid, client_id: auth_config.keycloak_client_id) }
 
       it "reverts Keycloak to the previous state" do
         step = build_step(result_snapshot: snapshot)
@@ -251,6 +251,28 @@ RSpec.describe Provisioning::Steps::KeycloakClientUpdate do
         stub_keycloak_token
         step = build_step(result_snapshot: snapshot)
         expect { step.rollback }.not_to raise_error
+      end
+
+      it "audits and re-raises when the live UUID resolves to a different aap client" do
+        # Identity precheck for the rollback PUT diverges. Silent return
+        # would let RollbackRunner mark the step rolled_back even though
+        # Keycloak still holds our mutation, so the rescue must re-raise.
+        stub_keycloak_token
+        stub_request(:get, "#{KeycloakMock::BASE}/clients/#{uuid}")
+          .to_return(status: 200,
+                     body: { id: uuid, clientId: "aap-some-other-client" }.to_json,
+                     headers: { "Content-Type" => "application/json" })
+
+        step = build_step(result_snapshot: snapshot)
+
+        expect {
+          step.rollback
+        }.to raise_error(KeycloakClient::IdentityMismatchError)
+          .and change { AuditLog.where(action: "auth_config.keycloak_client_diverged").count }.by(1)
+
+        audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
+        expect(audit.details["detection_phase"]).to eq("update_rollback")
+        expect(audit.details["live_client_id"]).to eq("aap-some-other-client")
       end
 
       it "still restores DB auth_config even when Keycloak returns 404" do

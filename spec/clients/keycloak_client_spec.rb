@@ -119,30 +119,198 @@ RSpec.describe KeycloakClient do
     end
   end
 
-  describe "#delete_client" do
-    it "deletes a client by uuid" do
-      stub_keycloak_delete_client(uuid: "uuid-123")
-      expect { client.delete_client(uuid: "uuid-123") }.not_to raise_error
-    end
-
-    it "raises ArgumentError if uuid is blank" do
-      expect { client.delete_client(uuid: "") }.to raise_error(ArgumentError)
-    end
-  end
-
   describe "#get_client_secret" do
     it "returns the client secret" do
-      stub_keycloak_get_client_secret(uuid: "uuid-123", secret: "my-secret")
-      result = client.get_client_secret(uuid: "uuid-123")
+      stub_keycloak_get_client_secret(uuid: "uuid-123", secret: "my-secret",
+                                      client_id: "aap-expected-client")
+      result = client.get_client_secret(uuid: "uuid-123",
+                                        expected_client_id: "aap-expected-client")
       expect(result).to eq("my-secret")
+    end
+
+    it "raises ArgumentError when expected_client_id is missing" do
+      expect {
+        client.get_client_secret(uuid: "uuid-123", expected_client_id: nil)
+      }.to raise_error(ArgumentError, /expected_client_id/)
+    end
+
+    it "raises IdentityMismatchError when expected_client_id does not match the live client" do
+      stub_keycloak_get_client_secret(uuid: "uuid-123", secret: "my-secret",
+                                      client_id: "aap-some-other-client")
+
+      expect {
+        client.get_client_secret(uuid: "uuid-123", expected_client_id: "aap-expected-client")
+      }.to raise_error(KeycloakClient::IdentityMismatchError) do |error|
+        expect(error.uuid).to eq("uuid-123")
+        expect(error.expected_client_id).to eq("aap-expected-client")
+        expect(error.live_client_id).to eq("aap-some-other-client")
+      end
+    end
+
+    it "does not call /client-secret when the identity check fails" do
+      stub_keycloak_get_client_secret(uuid: "uuid-123", secret: "my-secret",
+                                      client_id: "aap-some-other-client")
+
+      begin
+        client.get_client_secret(uuid: "uuid-123", expected_client_id: "aap-expected-client")
+      rescue KeycloakClient::IdentityMismatchError
+        # expected
+      end
+
+      expect(WebMock).not_to have_requested(:get, %r{/clients/uuid-123/client-secret})
+    end
+
+    it "raises IdentityMismatchError when the post-fetch identity revalidation diverges" do
+      # Sequence: precheck GET matches, /client-secret returns the value,
+      # then a second GET (post-fetch revalidation) reveals the record was
+      # swapped to a different aap-prefixed client. The fetched value must
+      # not be returned to the caller — otherwise it could be cached/exposed.
+      stub_keycloak_token
+      stub_request(:get, "#{KeycloakMock::BASE}/clients/uuid-late-swap").to_return(
+        {
+          status: 200,
+          body: { id: "uuid-late-swap", clientId: "aap-expected-client" }.to_json,
+          headers: { "Content-Type" => "application/json" }
+        },
+        {
+          status: 200,
+          body: { id: "uuid-late-swap", clientId: "aap-some-other-client" }.to_json,
+          headers: { "Content-Type" => "application/json" }
+        }
+      )
+      stub_request(:get, "#{KeycloakMock::BASE}/clients/uuid-late-swap/client-secret").to_return(
+        status: 200,
+        body: { type: "secret", value: "the-secret" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+      expect {
+        client.get_client_secret(uuid: "uuid-late-swap", expected_client_id: "aap-expected-client")
+      }.to raise_error(KeycloakClient::IdentityMismatchError) do |error|
+        expect(error.live_client_id).to eq("aap-some-other-client")
+      end
     end
   end
 
   describe "#regenerate_client_secret" do
     it "regenerates and returns the client secret" do
-      stub_keycloak_regenerate_client_secret(uuid: "uuid-123", secret: "new-secret")
-      result = client.regenerate_client_secret(uuid: "uuid-123")
+      stub_keycloak_regenerate_client_secret(uuid: "uuid-123", secret: "new-secret",
+                                             client_id: "aap-expected-client")
+      result = client.regenerate_client_secret(uuid: "uuid-123",
+                                               expected_client_id: "aap-expected-client")
       expect(result).to eq("new-secret")
+    end
+
+    it "raises ArgumentError when expected_client_id is missing" do
+      expect {
+        client.regenerate_client_secret(uuid: "uuid-123", expected_client_id: nil)
+      }.to raise_error(ArgumentError, /expected_client_id/)
+    end
+
+    it "raises IdentityMismatchError when the live clientId does not match" do
+      stub_keycloak_regenerate_client_secret(uuid: "uuid-123", secret: "new-secret",
+                                             client_id: "aap-some-other-client")
+
+      expect {
+        client.regenerate_client_secret(uuid: "uuid-123",
+                                        expected_client_id: "aap-expected-client")
+      }.to raise_error(KeycloakClient::IdentityMismatchError) do |error|
+        expect(error.live_client_id).to eq("aap-some-other-client")
+        expect(error.stage).to eq("pre_fetch")
+      end
+    end
+
+    it "raises IdentityMismatchError when post-rotation revalidation diverges" do
+      stub_keycloak_token
+      stub_request(:get, "#{KeycloakMock::BASE}/clients/uuid-late-swap").to_return(
+        {
+          status: 200,
+          body: { id: "uuid-late-swap", clientId: "aap-expected-client" }.to_json,
+          headers: { "Content-Type" => "application/json" }
+        },
+        {
+          status: 200,
+          body: { id: "uuid-late-swap", clientId: "aap-some-other-client" }.to_json,
+          headers: { "Content-Type" => "application/json" }
+        }
+      )
+      stub_request(:post, "#{KeycloakMock::BASE}/clients/uuid-late-swap/client-secret").to_return(
+        status: 200,
+        body: { type: "secret", value: "rotated-secret" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+      expect {
+        client.regenerate_client_secret(uuid: "uuid-late-swap",
+                                        expected_client_id: "aap-expected-client")
+      }.to raise_error(KeycloakClient::IdentityMismatchError) do |error|
+        expect(error.live_client_id).to eq("aap-some-other-client")
+        expect(error.stage).to eq("post_fetch")
+      end
+    end
+  end
+
+  describe "#update_client" do
+    it "raises ArgumentError when expected_client_id is missing" do
+      expect {
+        client.update_client(uuid: "uuid-123", attributes: {}, expected_client_id: nil)
+      }.to raise_error(ArgumentError, /expected_client_id/)
+    end
+
+    it "raises IdentityMismatchError when the live clientId does not match" do
+      stub_keycloak_get_client_by_uuid(uuid: "uuid-123", client_id: "aap-some-other-client")
+
+      expect {
+        client.update_client(uuid: "uuid-123", attributes: { redirectUris: [] },
+                             expected_client_id: "aap-expected-client")
+      }.to raise_error(KeycloakClient::IdentityMismatchError) do |error|
+        expect(error.live_client_id).to eq("aap-some-other-client")
+      end
+
+      expect(WebMock).not_to have_requested(:put, %r{/clients/uuid-123\b})
+    end
+
+    it "issues PUT when the identity matches" do
+      stub_keycloak_update_client(uuid: "uuid-123", client_id: "aap-expected-client")
+
+      expect {
+        client.update_client(uuid: "uuid-123", attributes: { redirectUris: [ "https://x" ] },
+                             expected_client_id: "aap-expected-client")
+      }.not_to raise_error
+    end
+  end
+
+  describe "#delete_client" do
+    it "raises ArgumentError when uuid is blank" do
+      expect {
+        client.delete_client(uuid: "", expected_client_id: "aap-expected-client")
+      }.to raise_error(ArgumentError, /uuid/)
+    end
+
+    it "raises ArgumentError when expected_client_id is missing" do
+      expect {
+        client.delete_client(uuid: "uuid-123", expected_client_id: nil)
+      }.to raise_error(ArgumentError, /expected_client_id/)
+    end
+
+    it "raises IdentityMismatchError when the live clientId does not match" do
+      stub_keycloak_get_client_by_uuid(uuid: "uuid-123", client_id: "aap-some-other-client")
+
+      expect {
+        client.delete_client(uuid: "uuid-123", expected_client_id: "aap-expected-client")
+      }.to raise_error(KeycloakClient::IdentityMismatchError) do |error|
+        expect(error.live_client_id).to eq("aap-some-other-client")
+      end
+
+      expect(WebMock).not_to have_requested(:delete, %r{/clients/uuid-123\b})
+    end
+
+    it "issues DELETE when the identity matches" do
+      stub_keycloak_delete_client(uuid: "uuid-123", client_id: "aap-expected-client")
+
+      expect {
+        client.delete_client(uuid: "uuid-123", expected_client_id: "aap-expected-client")
+      }.not_to raise_error
     end
   end
 end
