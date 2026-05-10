@@ -30,7 +30,26 @@ module Provisioning
         snapshot = step_record.result_snapshot
         uuid = snapshot&.dig("keycloak_client_uuid")
         client_id = snapshot&.dig("keycloak_client_id")
-        return unless uuid && client_id
+        return unless uuid
+
+        if client_id.blank?
+          AuditLog.create!(
+            organization: project.organization,
+            project: project,
+            user_sub: "system:keycloak-client-create",
+            action: "auth_config.keycloak_client_diverged",
+            resource_type: "ProjectAuthConfig",
+            resource_id: project.project_auth_config&.id&.to_s,
+            details: {
+              expected_uuid: uuid,
+              detection_phase: "create_rollback",
+              rollback_blocked: true,
+              reason: "snapshot_missing_client_id"
+            }
+          )
+          raise Provisioning::RollbackBlockedError,
+                "Cannot rollback Keycloak client create: snapshot is missing keycloak_client_id"
+        end
 
         KeycloakClient.new.delete_client(uuid: uuid, expected_client_id: client_id)
       rescue BaseClient::NotFoundError

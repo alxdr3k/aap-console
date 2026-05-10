@@ -333,6 +333,29 @@ RSpec.describe Provisioning::Steps::KeycloakClientCreate do
       expect(audit.details["live_client_id"]).to eq("aap-some-other-client")
     end
 
+    it "audits and raises RollbackBlockedError when snapshot has uuid but no client_id" do
+      # P1: UUID without client_id means we cannot safely delete — we cannot
+      # verify identity, so the revert must not silently succeed as a no-op.
+      step_record = create(
+        :provisioning_step,
+        :keycloak_client_create,
+        provisioning_job: job,
+        result_snapshot: { "keycloak_client_uuid" => "uuid-no-client-id" }
+      )
+      step = described_class.new(step_record: step_record, project: project, params: {})
+
+      expect {
+        step.rollback
+      }.to raise_error(Provisioning::RollbackBlockedError)
+        .and change { AuditLog.where(action: "auth_config.keycloak_client_diverged").count }.by(1)
+
+      audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
+      expect(audit.details["rollback_blocked"]).to be(true)
+      expect(audit.details["reason"]).to eq("snapshot_missing_client_id")
+      expect(audit.details["detection_phase"]).to eq("create_rollback")
+      expect(WebMock).not_to have_requested(:delete, /clients\/uuid-no-client-id/)
+    end
+
     it "skips secret refresh when the live client identity diverges between the completion check and the secret fetch" do
       cache = ActiveSupport::Cache::MemoryStore.new
       allow(Rails).to receive(:cache).and_return(cache)
