@@ -417,6 +417,16 @@ RSpec.describe "Projects", type: :request do
         expect(response.body).to include("S3 Retention")
       end
 
+      it "re-renders :edit (not :show) on validation failure with blank external fields submitted" do
+        patch "/organizations/#{org.slug}/projects/#{project.slug}",
+              params: { project: { s3_retention_days: "" } },
+              headers: html_headers
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.body).to include("Project 설정 편집")
+        expect(response.body).not_to include("project-detail-stub")
+      end
+
       it "rejects insecure OAuth redirect URIs on the unified path" do
         project.project_auth_config.update!(auth_type: "oauth")
 

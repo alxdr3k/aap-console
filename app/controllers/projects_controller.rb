@@ -328,7 +328,10 @@ class ProjectsController < ApplicationController
   end
 
   def unified_edit_request?
-    UNIFIED_EXTERNAL_KEYS.any? { |key| params.dig(:project, key).present? }
+    project_params = params[:project]
+    return false unless project_params.respond_to?(:key?)
+
+    UNIFIED_EXTERNAL_KEYS.any? { |key| project_params.key?(key.to_s) || project_params.key?(key) }
   end
 
   def prepare_unified_edit
