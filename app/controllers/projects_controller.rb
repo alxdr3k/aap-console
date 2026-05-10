@@ -346,18 +346,27 @@ class ProjectsController < ApplicationController
     snapshot = @project.config_versions.order(created_at: :desc).first&.snapshot || {}
 
     if submitted_attrs
-      @selected_models    = Array(submitted_attrs[:models]).compact_blank.presence ||
+      # Use key? (not .presence) so intentionally-cleared arrays like
+      # `models: []` or `guardrails: []` are preserved as empty rather than
+      # silently falling back to the last-saved snapshot values.
+      @selected_models    = submitted_attrs.key?(:models) ?
+                            Array(submitted_attrs[:models]).compact_blank :
                             Array(snapshot["models"]).compact_blank
-      @selected_guardrails = Array(submitted_attrs[:guardrails]).compact_blank.presence ||
+      @selected_guardrails = submitted_attrs.key?(:guardrails) ?
+                             Array(submitted_attrs[:guardrails]).compact_blank :
                              Array(snapshot["guardrails"]).compact_blank
-      @s3_retention_days  = submitted_attrs[:s3_retention_days].presence ||
-                            snapshot["s3_retention_days"].presence ||
-                            DEFAULT_S3_RETENTION_DAYS
-      if @auth_config && submitted_attrs.key?(:redirect_uris)
+      @s3_retention_days  = submitted_attrs.key?(:s3_retention_days) ?
+                            (submitted_attrs[:s3_retention_days].presence || DEFAULT_S3_RETENTION_DAYS) :
+                            (snapshot["s3_retention_days"].presence || DEFAULT_S3_RETENTION_DAYS)
+
+      if @auth_config && (submitted_attrs.key?(:redirect_uris) || submitted_attrs.key?(:post_logout_redirect_uris))
         @auth_config = @auth_config.dup
-        @auth_config.redirect_uris = Array(submitted_attrs[:redirect_uris]).compact_blank
-        @auth_config.post_logout_redirect_uris =
-          Array(submitted_attrs[:post_logout_redirect_uris]).compact_blank if submitted_attrs.key?(:post_logout_redirect_uris)
+        if submitted_attrs.key?(:redirect_uris)
+          @auth_config.redirect_uris = Array(submitted_attrs[:redirect_uris]).compact_blank
+        end
+        if submitted_attrs.key?(:post_logout_redirect_uris)
+          @auth_config.post_logout_redirect_uris = Array(submitted_attrs[:post_logout_redirect_uris]).compact_blank
+        end
       end
     else
       @selected_models    = Array(snapshot["models"]).compact_blank
