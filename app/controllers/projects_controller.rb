@@ -88,9 +88,11 @@ class ProjectsController < ApplicationController
 
   def edit
     prepare_unified_edit
+    return render json: { project: @project, auth_config: @auth_config } if default_json_request?
+
     respond_to do |format|
       format.html
-      format.json { render json: { project: @project, auth_config: @project.project_auth_config } }
+      format.json { render json: { project: @project, auth_config: @auth_config } }
     end
   end
 
@@ -104,7 +106,7 @@ class ProjectsController < ApplicationController
       return render json: { errors: @errors }, status: :unprocessable_entity if default_json_request?
 
       if unified_edit_request?
-        prepare_unified_edit
+        prepare_unified_edit(submitted_attrs: attributes)
         respond_to do |format|
           format.html { render :edit, status: :unprocessable_entity }
           format.json { render json: { errors: @errors }, status: :unprocessable_entity }
@@ -159,7 +161,7 @@ class ProjectsController < ApplicationController
       return render json: { errors: @errors }, status: :unprocessable_entity if default_json_request?
 
       if unified_edit_request?
-        prepare_unified_edit
+        prepare_unified_edit(submitted_attrs: attributes)
         respond_to do |format|
           format.html { render :edit, status: :unprocessable_entity }
           format.json { render json: { errors: @errors }, status: :unprocessable_entity }
@@ -334,14 +336,35 @@ class ProjectsController < ApplicationController
     UNIFIED_EXTERNAL_KEYS.any? { |key| project_params.key?(key.to_s) || project_params.key?(key) }
   end
 
-  def prepare_unified_edit
+  # Prepare view state for the unified edit form.
+  # Pass submitted_attrs on a validation failure to restore the user's input
+  # so they don't have to re-enter unchanged fields after fixing one error.
+  def prepare_unified_edit(submitted_attrs: nil)
     @auth_config = @project.project_auth_config
     @available_models = AVAILABLE_MODELS
     @available_guardrails = AVAILABLE_GUARDRAILS
     snapshot = @project.config_versions.order(created_at: :desc).first&.snapshot || {}
-    @selected_models = Array(snapshot["models"]).compact_blank
-    @selected_guardrails = Array(snapshot["guardrails"]).compact_blank
-    @s3_retention_days = snapshot["s3_retention_days"].presence || DEFAULT_S3_RETENTION_DAYS
+
+    if submitted_attrs
+      @selected_models    = Array(submitted_attrs[:models]).compact_blank.presence ||
+                            Array(snapshot["models"]).compact_blank
+      @selected_guardrails = Array(submitted_attrs[:guardrails]).compact_blank.presence ||
+                             Array(snapshot["guardrails"]).compact_blank
+      @s3_retention_days  = submitted_attrs[:s3_retention_days].presence ||
+                            snapshot["s3_retention_days"].presence ||
+                            DEFAULT_S3_RETENTION_DAYS
+      if @auth_config && submitted_attrs.key?(:redirect_uris)
+        @auth_config = @auth_config.dup
+        @auth_config.redirect_uris = Array(submitted_attrs[:redirect_uris]).compact_blank
+        @auth_config.post_logout_redirect_uris =
+          Array(submitted_attrs[:post_logout_redirect_uris]).compact_blank if submitted_attrs.key?(:post_logout_redirect_uris)
+      end
+    else
+      @selected_models    = Array(snapshot["models"]).compact_blank
+      @selected_guardrails = Array(snapshot["guardrails"]).compact_blank
+      @s3_retention_days  = snapshot["s3_retention_days"].presence || DEFAULT_S3_RETENTION_DAYS
+    end
+
     @active_provisioning_job = @project.provisioning_jobs
                                        .where(status: ProvisioningJob::ACTIVE_STATUSES)
                                        .order(created_at: :desc)
