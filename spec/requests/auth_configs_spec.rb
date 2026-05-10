@@ -165,6 +165,8 @@ RSpec.describe "AuthConfigs", type: :request do
     end
 
     it "normalizes blank URI rows to an explicit empty array so users can clear values" do
+      project.project_auth_config.update!(redirect_uris: [ "https://existing.example.com/callback" ])
+
       patch "/organizations/#{org.slug}/projects/#{project.slug}/auth_config",
             params: { auth_config: { redirect_uris: [ "" ] } },
             headers: wildcard_headers

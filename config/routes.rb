@@ -22,7 +22,7 @@ Rails.application.routes.draw do
 
     resources :members, param: :user_sub, only: [ :index, :create, :update, :destroy ]
 
-    resources :projects, param: :slug, only: [ :index, :new, :create, :show, :update, :destroy ] do
+    resources :projects, param: :slug, only: [ :index, :new, :create, :show, :edit, :update, :destroy ] do
       resource :auth_config, only: [ :show, :update ] do
         post :regenerate_secret
       end

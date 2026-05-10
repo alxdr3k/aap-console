@@ -1,7 +1,7 @@
 # AAP Console — High-Level Design (HLD)
 
-> **Version**: 1.19
-> **Date**: 2026-05-03
+> **Version**: 1.20
+> **Date**: 2026-05-09
 > **Status**: Approved
 > **References**: [PRD](./01_PRD.md) · [UI Spec](./ui-spec.md)
 
@@ -639,7 +639,8 @@ SolidQueue는 Rails 주 DB(SQLite)에 Job을 저장하므로, 트랜잭션 **내
 | GET | `/organizations/:org_slug/projects` | 목록 조회 | Org `read`+ |
 | POST | `/organizations/:org_slug/projects` | 생성 (→ 프로비저닝 시작) | Org `admin` |
 | GET | `/organizations/:org_slug/projects/:slug` | 상세 조회 | Project `read`+ |
-| PATCH | `/organizations/:org_slug/projects/:slug` | 수정 | Project `write`+ |
+| GET | `/organizations/:org_slug/projects/:slug/edit` | 통합 편집 폼 (auth + LiteLLM + 메타) | Project `write`+ |
+| PATCH | `/organizations/:org_slug/projects/:slug` | 수정 — 메타(`name`, `description`) + 인증 설정(`redirect_uris`, `post_logout_redirect_uris`) + LiteLLM(`models`, `guardrails`, `s3_retention_days`) 단일 PATCH 허용. dirty 필드 기준 단일 Update 프로비저닝 Job 트리거 (§5.6 참조) | Project `write`+ |
 | DELETE | `/organizations/:org_slug/projects/:slug` | 삭제 (→ 프로비저닝 시작) | Org `admin` |
 
 #### 인증 설정 — FR-4
@@ -993,6 +994,7 @@ Orchestrator.run(job)
 | `project_auth_configs.*` (Redirect URI, Protocol Mapper 등) | **Update 프로비저닝 트리거** — `keycloak_client_update` + `config_server_apply` + `health_check` | Keycloak Client 동기화 필요 |
 | `auth_type` 변경 (예: OIDC → SAML) | **`AUTH-6B` dual-client 마이그레이션 플로우를 통해 허용** (`auth_binding_add` → `auth_binding_promote` → `auth_binding_remove` 3단계 순서 필수; 단일 cut-over 금지) | Keycloak client 재생성이 필요; in-place 프로토콜 전환은 안전하지 않음 — `docs/adr/adr-007-auth-type-migration.md` 참조 |
 | LiteLLM Config (모델, 가드레일, S3 Retention) | **Update 프로비저닝 트리거** — `config_server_apply` + `health_check` | Config Server 반영 필요 |
+| `project_auth_configs.*` + LiteLLM Config 동시 dirty (통합 편집) | **단일 Update 프로비저닝 Job** — `keycloak_client_update` + `config_server_apply` + `health_check` (변경된 외부 서비스만 검증) | 운영자가 두 설정을 한 PATCH에 묶어 보낸 경우. 별도 Job 두 개로 쪼개면 §5.5 동시성 정책상 두 번째가 거부되어 의미 없음. UI는 [ui-spec §8.5.1 통합 편집](./ui-spec.md#851-project-설정-통합-편집--fr-346) 참조 |
 | `project_permissions` (멤버 권한) | **프로비저닝 없음** — DB만 갱신 | Console DB 내부 인가만 사용 |
 
 변경 유형 판별은 `Projects::UpdateService`가 담당한다. `dirty_attributes`에 외부 전파 대상 필드가 포함된 경우에만 ProvisioningJob(`operation: update`)을 enqueue한다.

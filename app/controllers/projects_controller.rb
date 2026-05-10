@@ -8,9 +8,9 @@ class ProjectsController < ApplicationController
   before_action :set_organization
   before_action -> { authorize_org!(@organization) }, only: [ :index ]
   before_action -> { authorize_org!(@organization, minimum_role: :admin) }, only: [ :new, :create, :destroy ]
-  before_action :set_project, only: [ :show, :update, :destroy ]
+  before_action :set_project, only: [ :show, :edit, :update, :destroy ]
   before_action -> { authorize_project!(@project) }, only: [ :show ]
-  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :update ]
+  before_action -> { authorize_project!(@project, minimum_role: :write) }, only: [ :edit, :update ]
 
   def index
     @projects = current_authorization.accessible_projects(@organization)
@@ -86,32 +86,92 @@ class ProjectsController < ApplicationController
     end
   end
 
+  def edit
+    prepare_unified_edit
+    return render json: { project: @project, auth_config: @auth_config } if default_json_request?
+
+    respond_to do |format|
+      format.html
+      format.json { render json: { project: @project, auth_config: @auth_config } }
+    end
+  end
+
   def update
+    attributes = project_update_params.to_h.symbolize_keys
+    validation_errors = unified_edit_errors(attributes)
+
+    if validation_errors.any?
+      @errors = validation_errors
+
+      return render json: { errors: @errors }, status: :unprocessable_entity if default_json_request?
+
+      if unified_edit_request?
+        prepare_unified_edit(submitted_attrs: attributes)
+        respond_to do |format|
+          format.html { render :edit, status: :unprocessable_entity }
+          format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+        end
+      else
+        prepare_project_show
+        respond_to do |format|
+          format.html { render :show, status: :unprocessable_entity }
+          format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+        end
+      end
+      return
+    end
+
     result = Projects::UpdateService.new(
       project: @project,
-      params: project_update_params.to_h.symbolize_keys,
+      params: attributes,
       current_user_sub: Current.user_sub
     ).call
 
     if result.success?
-      return render json: @project if default_json_request?
+      provisioning_job = result.data[:provisioning_job]
+      if default_json_request?
+        if provisioning_job
+          return render json: { project: @project, provisioning_job_id: provisioning_job.id }, status: :accepted
+        else
+          return render json: @project
+        end
+      end
 
       respond_to do |format|
         format.html do
-          flash[:success] = "Project 정보가 저장되었습니다."
-          redirect_to organization_project_path(@organization.slug, @project.slug), status: :see_other
+          if provisioning_job
+            flash[:success] = "Project 설정 변경 프로비저닝을 시작했습니다."
+            redirect_to provisioning_job_path(provisioning_job), status: :see_other
+          else
+            flash[:success] = "Project 정보가 저장되었습니다."
+            redirect_to organization_project_path(@organization.slug, @project.slug), status: :see_other
+          end
         end
-        format.json { render json: @project }
+        format.json do
+          if provisioning_job
+            render json: { project: @project, provisioning_job_id: provisioning_job.id }, status: :accepted
+          else
+            render json: @project
+          end
+        end
       end
     else
       @errors = [ result.error ]
-      prepare_project_show
 
       return render json: { errors: @errors }, status: :unprocessable_entity if default_json_request?
 
-      respond_to do |format|
-        format.html { render :show, status: :unprocessable_entity }
-        format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+      if unified_edit_request?
+        prepare_unified_edit(submitted_attrs: attributes)
+        respond_to do |format|
+          format.html { render :edit, status: :unprocessable_entity }
+          format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+        end
+      else
+        prepare_project_show
+        respond_to do |format|
+          format.html { render :show, status: :unprocessable_entity }
+          format.json { render json: { errors: @errors }, status: :unprocessable_entity }
+        end
       end
     end
   end
@@ -228,7 +288,150 @@ class ProjectsController < ApplicationController
     params.require(:project).permit(:name, :description, :auth_type, :s3_retention_days, models: [], guardrails: [])
   end
 
+  UNIFIED_EXTERNAL_KEYS = %i[redirect_uris post_logout_redirect_uris models guardrails s3_retention_days].freeze
+  URI_TEXTAREA_KEYS = %i[redirect_uris post_logout_redirect_uris].freeze
+
   def project_update_params
-    params.require(:project).permit(:name, :description)
+    coerce_uri_textareas!
+    permitted = params.require(:project).permit(
+      :name,
+      :description,
+      :s3_retention_days,
+      redirect_uris: [],
+      post_logout_redirect_uris: [],
+      models: [],
+      guardrails: []
+    )
+
+    %i[redirect_uris post_logout_redirect_uris models guardrails].each do |key|
+      permitted[key] = Array(permitted[key]).compact_blank if permitted.key?(key)
+    end
+    if permitted.key?(:s3_retention_days)
+      permitted[:s3_retention_days] = permitted[:s3_retention_days].presence&.to_i
+    end
+
+    permitted
+  end
+
+  # Convert newline-separated strings from the unified edit textareas
+  # (`project[redirect_uris]` etc.) into array form so the strong-params
+  # `key: []` filter retains them. Without this, scalar values are dropped
+  # silently and the unified PATCH would never reach the auth provisioning step.
+  def coerce_uri_textareas!
+    project_params = params[:project]
+    return unless project_params.respond_to?(:[])
+
+    URI_TEXTAREA_KEYS.each do |key|
+      raw = project_params[key]
+      next unless raw.is_a?(String)
+
+      project_params[key] = raw.split(/\r?\n/).map(&:strip).reject(&:blank?)
+    end
+  end
+
+  def unified_edit_request?
+    project_params = params[:project]
+    return false unless project_params.respond_to?(:key?)
+
+    UNIFIED_EXTERNAL_KEYS.any? { |key| project_params.key?(key.to_s) || project_params.key?(key) }
+  end
+
+  # Prepare view state for the unified edit form.
+  # Pass submitted_attrs on a validation failure to restore the user's input
+  # so they don't have to re-enter unchanged fields after fixing one error.
+  def prepare_unified_edit(submitted_attrs: nil)
+    @auth_config = @project.project_auth_config
+    @available_models = AVAILABLE_MODELS
+    @available_guardrails = AVAILABLE_GUARDRAILS
+    snapshot = @project.config_versions.order(created_at: :desc).first&.snapshot || {}
+
+    if submitted_attrs
+      # Use key? (not .presence) so intentionally-cleared arrays like
+      # `models: []` or `guardrails: []` are preserved as empty rather than
+      # silently falling back to the last-saved snapshot values.
+      @selected_models    = submitted_attrs.key?(:models) ?
+                            Array(submitted_attrs[:models]).compact_blank :
+                            Array(snapshot["models"]).compact_blank
+      @selected_guardrails = submitted_attrs.key?(:guardrails) ?
+                             Array(submitted_attrs[:guardrails]).compact_blank :
+                             Array(snapshot["guardrails"]).compact_blank
+      @s3_retention_days  = submitted_attrs.key?(:s3_retention_days) ?
+                            (submitted_attrs[:s3_retention_days].presence || DEFAULT_S3_RETENTION_DAYS) :
+                            (snapshot["s3_retention_days"].presence || DEFAULT_S3_RETENTION_DAYS)
+
+      if @auth_config && (submitted_attrs.key?(:redirect_uris) || submitted_attrs.key?(:post_logout_redirect_uris))
+        @auth_config = @auth_config.dup
+        if submitted_attrs.key?(:redirect_uris)
+          @auth_config.redirect_uris = Array(submitted_attrs[:redirect_uris]).compact_blank
+        end
+        if submitted_attrs.key?(:post_logout_redirect_uris)
+          @auth_config.post_logout_redirect_uris = Array(submitted_attrs[:post_logout_redirect_uris]).compact_blank
+        end
+      end
+    else
+      @selected_models    = Array(snapshot["models"]).compact_blank
+      @selected_guardrails = Array(snapshot["guardrails"]).compact_blank
+      @s3_retention_days  = snapshot["s3_retention_days"].presence || DEFAULT_S3_RETENTION_DAYS
+    end
+
+    @active_provisioning_job = @project.provisioning_jobs
+                                       .where(status: ProvisioningJob::ACTIVE_STATUSES)
+                                       .order(created_at: :desc)
+                                       .first
+  end
+
+  # Mirror the validation rules of the legacy AuthConfigsController and
+  # LitellmConfigsController so the unified PATCH cannot bypass them. Without this,
+  # a write user could push e.g. an OAuth redirect_uri without HTTPS, an unknown
+  # LiteLLM model, or an out-of-range retention through the new endpoint.
+  def unified_edit_errors(attributes)
+    errors = []
+
+    if attributes.key?(:models)
+      errors << "모델을 하나 이상 선택하세요." if Array(attributes[:models]).compact_blank.empty?
+      unknown_models = Array(attributes[:models]).compact_blank - AVAILABLE_MODELS
+      errors << "허용되지 않은 모델: #{unknown_models.join(', ')}" if unknown_models.any?
+    end
+
+    if attributes.key?(:guardrails)
+      unknown_guardrails = Array(attributes[:guardrails]).compact_blank - AVAILABLE_GUARDRAILS
+      errors << "허용되지 않은 가드레일: #{unknown_guardrails.join(', ')}" if unknown_guardrails.any?
+    end
+
+    if attributes.key?(:s3_retention_days)
+      raw = params.dig(:project, :s3_retention_days)
+      raw = raw.respond_to?(:strip) ? raw.strip : raw
+      coerced = attributes[:s3_retention_days]
+      if coerced.nil? || raw.to_s.empty?
+        errors << "S3 Retention은 1일부터 3650일 사이여야 합니다."
+      else
+        errors << "S3 Retention은 1일부터 3650일 사이여야 합니다." unless coerced.is_a?(Integer) && coerced.between?(1, 3650)
+      end
+    end
+
+    if attributes.key?(:redirect_uris) && @project.project_auth_config&.auth_type == "oauth"
+      errors.concat(pkce_redirect_uri_errors(attributes[:redirect_uris]))
+    end
+
+    errors
+  end
+
+  def pkce_redirect_uri_errors(uris)
+    Array(uris).compact_blank.flat_map do |uri|
+      errors = []
+      begin
+        parsed = URI.parse(uri)
+        errors << "OAuth Redirect URI에 fragment(#)를 포함할 수 없습니다: #{uri}" if parsed.fragment.present?
+        if parsed.host.blank?
+          errors << "OAuth Redirect URI에 유효한 호스트가 없습니다: #{uri}"
+        else
+          localhost = parsed.scheme == "http" && %w[localhost 127.0.0.1 [::1]].include?(parsed.host)
+          errors << "OAuth Redirect URI는 HTTPS를 사용해야 합니다 (localhost 제외): #{uri}" unless parsed.scheme == "https" || localhost
+        end
+      rescue URI::InvalidURIError
+        errors << "유효하지 않은 URI 형식입니다: #{uri}"
+      end
+      errors
+    end
   end
 end
