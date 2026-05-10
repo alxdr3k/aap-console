@@ -53,10 +53,30 @@ module Provisioning
         previous = snapshot["previous_state"]
 
         if uuid && previous
+          expected = project.project_auth_config&.keycloak_client_id
+
+          if expected.blank?
+            AuditLog.create!(
+              organization: project.organization,
+              project: project,
+              user_sub: "system:keycloak-client-update",
+              action: "auth_config.keycloak_client_diverged",
+              resource_type: "ProjectAuthConfig",
+              resource_id: project.project_auth_config&.id&.to_s,
+              details: {
+                expected_uuid: uuid,
+                detection_phase: "update_rollback",
+                rollback_blocked: true,
+                reason: "auth_config_missing"
+              }
+            )
+            raise Provisioning::RollbackBlockedError,
+                  "Cannot rollback Keycloak update: auth_config or keycloak_client_id is missing"
+          end
+
           begin
-            expected = project.project_auth_config&.keycloak_client_id
             KeycloakClient.new.update_client(uuid: uuid, attributes: previous,
-                                             expected_client_id: expected) if expected
+                                             expected_client_id: expected)
           rescue BaseClient::NotFoundError
             # Client already deleted — Keycloak rollback is implicitly done
           rescue KeycloakClient::IdentityMismatchError => e

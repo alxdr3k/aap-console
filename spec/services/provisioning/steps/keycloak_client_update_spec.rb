@@ -286,6 +286,28 @@ RSpec.describe Provisioning::Steps::KeycloakClientUpdate do
         expect(config.redirect_uris).to eq([ "https://old.example.com/cb" ])
         expect(config.post_logout_redirect_uris).to eq([ "https://old.example.com" ])
       end
+
+      context "when auth_config is missing at rollback time" do
+        it "audits and raises RollbackBlockedError instead of silently skipping the Keycloak revert" do
+          # P1: if expected_client_id is blank the Keycloak revert must NOT be
+          # silently skipped — the caller must know the mutation was not reverted.
+          bare_project = create(:project, :active, organization: organization)
+          step_record = create(:provisioning_step, :keycloak_client_update,
+                               provisioning_job: job, result_snapshot: snapshot)
+          step = described_class.new(step_record: step_record, project: bare_project, params: {})
+
+          expect {
+            step.rollback
+          }.to raise_error(Provisioning::RollbackBlockedError)
+            .and change { AuditLog.where(action: "auth_config.keycloak_client_diverged").count }.by(1)
+
+          audit = AuditLog.where(action: "auth_config.keycloak_client_diverged").last
+          expect(audit.details["rollback_blocked"]).to be(true)
+          expect(audit.details["reason"]).to eq("auth_config_missing")
+          expect(audit.details["detection_phase"]).to eq("update_rollback")
+          expect(WebMock).not_to have_requested(:put, /clients\/#{uuid}/)
+        end
+      end
     end
   end
 end

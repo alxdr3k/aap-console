@@ -172,5 +172,19 @@ RSpec.describe Provisioning::RollbackRunner do
         expect(step.reload.status).to eq("rolled_back")
       end
     end
+
+    context "when step.update! raises inside rollback_step (P2: top-level safety net)" do
+      it "returns false instead of propagating, preserving the boolean API for callers" do
+        step = create(:provisioning_step, :config_server_apply, :completed, provisioning_job: job,
+                      result_snapshot: nil)
+
+        allow_any_instance_of(Provisioning::Steps::ConfigServerApply).to receive(:rollback)
+        allow_any_instance_of(ProvisioningStep).to receive(:update!).and_raise(ActiveRecord::StatementInvalid, "DB error")
+
+        result = described_class.new(provisioning_job: job).run
+
+        expect(result).to be(false)
+      end
+    end
   end
 end

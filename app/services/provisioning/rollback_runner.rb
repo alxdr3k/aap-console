@@ -1,4 +1,6 @@
 module Provisioning
+  class RollbackBlockedError < StandardError; end
+
   class RollbackRunner
     def initialize(provisioning_job:)
       @provisioning_job = provisioning_job
@@ -20,6 +22,10 @@ module Provisioning
       end
 
       !any_failed
+    rescue => e
+      Rails.logger.error("Rollback runner uncaught exception for job #{@provisioning_job.id}: #{e.class}: #{e.message}")
+      false
+
     end
 
     private
