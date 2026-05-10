@@ -20,6 +20,10 @@ module Provisioning
       end
 
       !any_failed
+    rescue => e
+      Rails.logger.error("Rollback runner uncaught exception for job #{@provisioning_job.id}: #{e.class}: #{e.message}")
+      false
+
     end
 
     private

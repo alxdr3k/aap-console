@@ -10,6 +10,7 @@ module AuthConfigs
       return Result.failure("인증 설정을 찾을 수 없습니다.") unless auth_config
       return Result.failure("OIDC Project에서만 Client Secret을 재발급할 수 있습니다.") unless auth_config.auth_type == "oidc"
       return Result.failure("Keycloak client가 아직 준비되지 않았습니다.") if auth_config.keycloak_client_uuid.blank?
+      return Result.failure("Keycloak client ID가 아직 설정되지 않았습니다.") if auth_config.keycloak_client_id.blank?
       return Result.failure("Another provisioning job is in progress") if active_job_exists?
 
       secret = KeycloakClient.new.regenerate_client_secret(

@@ -267,6 +267,18 @@ RSpec.describe AuthConfigs::RegenerateClientSecretService do
     expect(result.error).to include("OIDC")
   end
 
+  it "returns failure when keycloak_client_id is blank to prevent uncaught ArgumentError" do
+    # P2: ArgumentError from KeycloakClient would bypass Result.failure and
+    # return 500. The guard must fire before hitting the client.
+    auth_config.update!(keycloak_client_id: "")
+
+    result = described_class.new(project: project, current_user_sub: "user-sub-123").call
+
+    expect(result).to be_failure
+    expect(result.error).to include("client ID")
+    expect(WebMock).not_to have_requested(:post, /client-secret/)
+  end
+
   it "clears any stale cache entry from a prior rotation without writing a new one" do
     stub_keycloak_regenerate_client_secret(uuid: "uuid-123", secret: "new-client-secret",
                                            client_id: "aap-acme-chatbot-oidc")
