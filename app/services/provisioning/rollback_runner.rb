@@ -1,6 +1,4 @@
 module Provisioning
-  class RollbackBlockedError < StandardError; end
-
   class RollbackRunner
     def initialize(provisioning_job:)
       @provisioning_job = provisioning_job
